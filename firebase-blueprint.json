@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "User": {
+      "properties": {
+        "userId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "fullName", "role"]
+    },
+    "Patient": {
+      "properties": {
+        "userId": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "phone": { "type": "string" },
+        "nationalId": { "type": "string" },
+        "medicalHistory": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "firstName", "lastName"]
+    },
+    "Appointment": {
+      "properties": {
+        "userId": { "type": "string" },
+        "patientId": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "title", "date", "time"]
+    },
+    "Treatment": {
+      "properties": {
+        "userId": { "type": "string" },
+        "patientId": { "type": "string" },
+        "doctorName": { "type": "string" },
+        "toothNumber": { "type": "string" },
+        "diagnosis": { "type": "string" },
+        "cost": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "patientId", "diagnosis"]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "firestore": [
+    {
+      "database": "ai-studio-android-dentalca-9b0f7fb9-bf47-4620-80f8-580b5b1d709f",
+      "rules": "firestore.rules"
+    }
+  ]
+}

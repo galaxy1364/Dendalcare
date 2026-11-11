@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#2E1065" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="مینادنتال" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="./apple-touch-icon.png" />
+    <meta name="description" content="مینادنتال - سیستم هوشمند مدیریت کلینیک دندانپزشکی، نوبت‌دهی، بیماران، درمان، لابراتوار، ایمپلنت، مالی و انبار" />
+    <link rel="manifest" href="./manifest.json" />
+    <title>مینادنتال | سیستم هوشمند مدیریت دندانپزشکی</title>
+    <script type="module" crossorigin src="./assets/index-9PBdGgVe.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CnAn4YYk.css">
+  </head>
+  <body style="margin: 0; background-color: #0A0E27;">
+    <div id="root">
+      <div id="app-splash" style="position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 30%, #2E1065 0%, #0A0E27 100%); z-index: 9999; font-family: system-ui, -apple-system, sans-serif;">
+        <div style="width: 84px; height: 84px; border-radius: 26px; background: linear-gradient(135deg, #6D28D9, #EC4899); display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 34px rgba(139,92,246,0.55); margin-bottom: 18px; border: 2px solid rgba(255,255,255,0.25); position: relative; overflow: hidden;">
+          <!-- Instant inline SVG Tooth Logo so it renders in 0ms before any PNG decodes -->
+          <svg width="46" height="46" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: absolute; z-index: 1;">
+            <path d="M20 10C13 10 9 16 9 24C9 31 12 37 15 44C17 49 18 55 22 55C26 55 27 46 32 46C37 46 38 55 42 55C46 55 47 49 49 44C52 37 55 31 55 24C55 16 51 10 44 10C38 10 35 13 32 13C29 13 26 10 20 10Z" fill="white" fill-opacity="0.95"/>
+          </svg>
+          <img src="./logo.png" alt="مینادنتال" style="width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 2;" onerror="this.style.display='none'" />
+        </div>
+        <div style="color: #FFFFFF; font-size: 22px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 6px;">مینادنتال</div>
+        <div style="color: #E9D5FF; font-size: 12px; font-weight: 600; margin-bottom: 24px;">سیستم هوشمند مدیریت دندانپزشکی • نسخه ۴.۸</div>
+        <div style="width: 140px; height: 5px; background: rgba(255,255,255,0.12); border-radius: 999px; overflow: hidden; position: relative;">
+          <div style="position: absolute; inset: 0; width: 45%; background: linear-gradient(90deg, #A855F7, #EC4899, #38BDF8); border-radius: 999px; animation: splashPulse 1.1s ease-in-out infinite alternate;"></div>
+        </div>
+      </div>
+      <style>@keyframes splashPulse{0%{transform:translate(-50%)}to{transform:translate(180%)}}</style>
+    </div>
+    <script>
+      // Safe ServiceWorker management:
+      // Inside native Android APK (127.0.0.1:8765 / localhost), unregister ServiceWorker & clear CacheStorage
+      // so local asset updates in assets/www/ load immediately without stale cache!
+      if ('serviceWorker' in navigator) {
+        var isLocalNative = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+        if (isLocalNative) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            for (var i = 0; i < regs.length; i++) {
+              regs[i].unregister();
+            }
+          }).catch(function() {});
+          if (window.caches) {
+            caches.keys().then(function(keys) {
+              keys.forEach(function(k) { caches.delete(k); });
+            }).catch(function() {});
+          }
+        } else if (window.location.protocol === 'https:') {
+          // On live PWA over HTTPS, register latest Service Worker
+          window.addEventListener('load', function() {
+            navigator.serviceWorker.register('./sw.js').then(function(reg) {
+              reg.update();
+            }).catch(function() {});
+          });
+        }
+      }
+    </script>
+  </body>
+</html>

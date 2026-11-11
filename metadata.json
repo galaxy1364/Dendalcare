@@ -1,0 +1,6 @@
+{
+  "name": "مینادنتال",
+  "description": "سیستم مدیریت جامع کلینیک دندانپزشکی با قابلیت PWA، APK و API واقعی سوپابیس",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
