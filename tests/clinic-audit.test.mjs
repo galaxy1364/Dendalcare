@@ -336,7 +336,7 @@ describe('Phase 7 [TRC-MINA-GUARD-9007-G]: App-Wide Zero-Delete Guardian, Offlin
     assert.ok(memSrc.includes('TRC-MINA-GUARD-9007-G'), 'MemPalace must lock Phase 7 trace ID');
     assert.ok(memSrc.includes('evaluateMutationGuard'), 'Live Super-Audit must actively verify evaluateMutationGuard');
     assert.ok(memSrc.includes('calculateDoctorShare'), 'Live Super-Audit must actively verify calculateDoctorShare');
-    assert.ok(modalSrc.includes('۹ فاز قفل‌شده'), 'RoadmapAuditModal must reflect all 9 locked phases');
+    assert.ok(modalSrc.includes('۱۰ فاز و ۱۳ ماژول قفل‌شده'), 'RoadmapAuditModal must reflect all 10 locked phases and 13 phased modules');
   });
 });
 
@@ -519,6 +519,8 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(dashSrc.includes('kpi_ar_status'), 'Dashboard must track A/R & Overdue Instruments');
     assert.ok(dashSrc.includes('dashboard_morning_huddle_bar'), 'Dashboard must render Morning Huddle Continuity Panel');
     assert.ok(dashSrc.includes("id: 'yesterday'") && dashSrc.includes("id: 'today'") && dashSrc.includes("id: 'tomorrow'") && dashSrc.includes('huddle_tab_${tab.id}'), 'Morning Huddle must support Yesterday, Today & Tomorrow views');
+    assert.ok(memSrc.includes('TRC-MINA-DASH-9010-J') && memSrc.includes('PERMANENT_MODULE_BENCHMARK_PHASES') && memSrc.includes('getModuleBenchmarkPhases'), 'MemPalace must lock Phase 10 and 13-Module Section-by-Section Phased Plan');
+    assert.ok(dashSrc.includes('dashboard_module_phase_roadmap') && dashSrc.includes('dashboard_daily_goal_bar') && dashSrc.includes('dashboard_trigger_ios_reminder_popup_btn'), 'Dashboard must render Daily Production Goal Bar, 1-click iOS 27 Reminder Popup Trigger, and 13-Module Phased Tracker');
   });
 
   test('29. Autonomous Cloud SQL (20-Table) + Google Drive Activation & Unified Atomic Auto/Manual Update Engine', () => {

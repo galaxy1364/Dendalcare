@@ -80,7 +80,7 @@ export function RoadmapAuditModal({ open, onClose }: Props) {
                 </h3>
                 <p className="text-[11px] text-emerald-300">
                   شناسه نسخه:{' '}
-                  <strong className="font-mono">{liveReport?.traceId || 'TRC-MINA-XPLAT-9009-I'}</strong>
+                  <strong className="font-mono">{liveReport?.traceId || 'TRC-MINA-DASH-9010-J'}</strong>
                 </p>
               </div>
             </div>
@@ -91,7 +91,7 @@ export function RoadmapAuditModal({ open, onClose }: Props) {
           </div>
 
           <p className="text-[11px] text-gray-300 leading-relaxed">
-            پایش خودکار ۹ لایه معماری شامل تایپوگرافی فارسی، پرونده و چارت پالمر، تقویم شمسی و یادآوری، خزانه‌داری و کنترل دسترسی، پشتیبانی چندپلتفرمی (آیفون، اندروید، آیپد و ویندوز)، گاوصندوق ضدحذف و پشتیبان ابری.
+            پایش خودکار ۱۰ فاز معماری و ۱۳ ماژول کلینیک شامل پروتکل دائمی بنچمارک جهانی، یادآوری سراسری بدون از دست رفتن (پاپ‌آپ iOS 27 + نوتیف گوشی)، داشبورد اجرایی CareStack/Archy/QBank، خزانه‌داری و کنترل دسترسی، Cloud SQL (۲۰ جدول)، گوگل درایو و آپدیت اتمیک.
           </p>
 
           <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-white/10 text-[11px]">
@@ -133,7 +133,7 @@ export function RoadmapAuditModal({ open, onClose }: Props) {
             }`}
           >
             <FileText size={14} />
-            ۹ فاز قفل‌شده
+            ۱۰ فاز و ۱۳ ماژول قفل‌شده
           </button>
           <button
             onClick={() => {
@@ -212,9 +212,31 @@ export function RoadmapAuditModal({ open, onClose }: Props) {
           </div>
         )}
 
-        {/* Tab 2: 6 Locked Phased Roadmap Milestones */}
+        {/* Tab 2: 10 Locked Phased Roadmap Milestones + 13-Module Section-by-Section Phased Plan */}
         {activeTab === 'roadmap' && (
           <div className="space-y-3">
+            {/* Permanent 4-Stage Global Benchmark Protocol Banner */}
+            <div className="p-3 rounded-2xl bg-indigo-50/80 border border-indigo-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-indigo-900">
+                  پروتکل دائمی ۴ مرحله‌ای بنچمارک جهانی (PERMANENT_GLOBAL_BENCHMARK_PROTOCOL)
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-600 text-white">
+                  قفل دائمی در حافظه
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {MemPalace.getGlobalBenchmarkProtocol().map((rule) => (
+                  <div key={rule.code} className="p-2 rounded-xl bg-white border border-indigo-100 text-[10.5px]">
+                    <p className="font-extrabold text-indigo-900">
+                      گام {rule.step.toLocaleString('fa-IR')}: {rule.title}
+                    </p>
+                    <p className="text-slate-600 mt-0.5 leading-snug">{rule.mandatoryAction}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {roadmap.map((m: RoadmapMilestone) => (
               <div
                 key={m.id}

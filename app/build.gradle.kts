@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.auditpro.kxmfzq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 63
-    versionName = "6.3.63"
+    versionCode = 64
+    versionName = "6.4.64"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -142,20 +142,8 @@ dependencies {
   "ksp"(libs.moshi.kotlin.codegen)
 }
 
-afterEvaluate {
-  tasks.matching { it.name == "packageDebug" || it.name == "assembleDebug" }.configureEach {
-    doLast {
-      val apkFile = layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile
-      if (apkFile.exists()) {
-        apkFile.copyTo(file("${rootDir}/DentalCare.apk"), overwrite = true)
-        apkFile.copyTo(file("${rootDir}/MinaDental.apk"), overwrite = true)
-        val publicDir = file("${rootDir}/public")
-        if (publicDir.exists()) {
-          apkFile.copyTo(file("${rootDir}/public/DentalCare.apk"), overwrite = true)
-          apkFile.copyTo(file("${rootDir}/public/MinaDental.apk"), overwrite = true)
-        }
-      }
-    }
-  }
-}
+
+
+
+
 

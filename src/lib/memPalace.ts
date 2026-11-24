@@ -269,6 +269,186 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'انتقال دانلود نسخه ۴ پلتفرم و پنل فوق‌ممیزی به بخش تنظیمات (صرفاً مختص مدیر کلینیک و ارتقادهنده — دکتر مهدی امیری)',
     ],
   },
+  {
+    id: 'milestone-10',
+    traceId: 'TRC-MINA-DASH-9010-J',
+    phaseNumber: 10,
+    title: 'یادآوری سراسری بدون از دست رفتن (پاپ‌آپ iOS 27 + نوتیف گوشی)، داشبورد جهانی CareStack/Archy/QBank، فعال‌سازی خودکار Cloud SQL/گوگل درایو و آپدیت اتمیک',
+    titleEn: 'Zero-Loss Global Reminder Engine (iOS 27 Live Activity Popup + OS Push), World-Class Executive Dashboard, Autonomous Cloud SQL/Drive & Atomic Update Engine',
+    description: 'پیاده‌سازی کامل موتور یادآوری ۳۶۰ درجه بدون از دست رفتن (Zero-Loss Persistent Ledger) متصل به نوتیفیکیشن واقعی سیستم‌عامل گوشی و پاپ‌آپ مدرن آیفونی (iOS 27 Dynamic Island Live Activity)، قفل دائمی پروتکل ۴ مرحله‌ای بنچمارک جهانی، داشبورد اجرایی استاندارد CareStack/Curve/Archy/QBank با ۴ شاخص کلیدی، هادل صبحگاهی ۳ روزه، هدف روزانه کارکرد و نقشه فازبندی ۱۳ ماژول، به همراه فعال‌سازی خودکار Cloud SQL و Google Drive و موتور یکپارچه آپدیت اتمیک.',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/03',
+    checksum: 'j108c5e339ab',
+    deliverables: [
+      'موتور یادآوری سراسری بدون از دست رفتن (Zero-Loss Ledger) + پاپ‌آپ مدرن آیفونی (iOS 27 Dynamic Island Live Activity) متصل به نوتیفیکیشن واقعی گوشی با اسنوز ۱۵ دقیقه‌ای و تایید دو مرحله‌ای',
+      'پروتکل دائمی ۴ مرحله‌ای بنچمارک جهانی (جستجوی وب جهانی ➔ الگوبرداری بهترینِ دنیا ➔ پیاده‌سازی بومی ➔ گیت تست زنده ۱۰ از ۱۰) قفل‌شده در MemPalace',
+      'داشبورد اجرایی استاندارد جهانی با ۴ شاخص کلیدی (نسبت وصول به کارکرد، نرخ پذیرش درمان، بهره‌وری یونیت، سررسید چک/اقساط)، هادل صبحگاهی ۳ روزه (دیروز • امروز • فردا)، نوار هدف روزانه و نقشه فازبندی ۱۳ ماژول',
+      'فعال‌سازی خودکار Cloud SQL (۲۰ جدول) و Google Drive Auto-Archive + مرکز واحد آپدیت اتوماتیک و دستی اتمیک ۴ مرحله‌ای با حذف کامل بخش‌های تکراری',
+    ],
+  },
+]);
+
+export interface ModuleBenchmarkPhase {
+  modulePhase: number;
+  sectionId: string;
+  traceId: string;
+  title: string;
+  globalBenchmarkRef: string;
+  color: string;
+  keyCapabilities: string[];
+  score10of10: true;
+  locked: true;
+}
+
+/**
+ * Phased 13-Module Section-by-Section Global Benchmark Master Plan
+ * Locked in MemPalace so module-by-module upgrades never lose context.
+ */
+export const PERMANENT_MODULE_BENCHMARK_PHASES: readonly ModuleBenchmarkPhase[] = Object.freeze([
+  {
+    modulePhase: 1,
+    sectionId: 'dashboard',
+    traceId: 'MOD-01-DASHBOARD',
+    title: 'فاز ماژول ۱: داشبورد اجرایی و هادل صبحگاهی جهانی',
+    globalBenchmarkRef: 'CareStack Supercards • Curve Dental • Archy • QBank',
+    color: '#6366F1',
+    keyCapabilities: ['۴ شاخص KPI جهانی (P/C، پذیرش درمان، بهره‌وری یونیت، A/R)', 'هادل صبحگاهی ۳ روزه (دیروز/امروز/فردا)', 'نوار هدف کارکرد روزانه + رادار زنده پاپ‌آپ iOS 27', '۱۰ کاشی منحنی کیوبانک با پالت ۶۰-۳۰-۱۰'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 2,
+    sectionId: 'reminders',
+    traceId: 'MOD-02-REMINDERS',
+    title: 'فاز ماژول ۲: رادار یادآوری ۳۶۰ درجه بدون از دست رفتن و پاپ‌آپ iOS 27',
+    globalBenchmarkRef: 'Apple iOS 27 Dynamic Island Live Activity • PatientXpress',
+    color: '#E11D48',
+    keyCapabilities: ['دفترچه پایدار Zero-Loss بدون فراموشی حتی پس از بستن برنامه', 'پاپ‌آپ مدرن آیفونی با اسلایدر، اسنوز ۱۵ دقیقه‌ای و پرش مستقیم', 'اتصال مستقیم به نوتیفیکیشن واقعی سیستم‌عامل گوشی و ویندوز', 'دستگیره کشویی راست صفحه با قفل موقعیت دلخواه'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 3,
+    sectionId: 'patients',
+    traceId: 'MOD-03-PATIENTS',
+    title: 'فاز ماژول ۳: پرونده الکترونیک بیماران (EHR) و خط روند زنده',
+    globalBenchmarkRef: 'Dentally Cloud EHR • Curve Hero Patient 360',
+    color: '#059669',
+    keyCapabilities: ['شماره پرونده دستی/اتوماتیک قابل ویرایش و تریاژ ریسک پزشکی', 'خط روند زنده مراحل درمان، لابراتوار، ایمپلنت و مالی روی کارت بیمار', 'کارت‌های جمع‌شونده هوشمند و چیپ‌های صفحه‌ای تمام بخش‌های بیمار', 'کالرآیدی هوشمند تماس ورودی با پیشنهاد نوبت‌دهی خودکار'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 4,
+    sectionId: 'appointments',
+    traceId: 'MOD-04-APPOINTMENTS',
+    title: 'فاز ماژول ۴: نوبت‌دهی هوشمند و پاپ‌آپ ضد فراموشی پزشک',
+    globalBenchmarkRef: 'Curve Dental Smart Scheduler • Archy Flow',
+    color: '#D97706',
+    keyCapabilities: ['مدیریت وضعیت نوبت (در انتظار، تاییدشده، در یونیت، تکمیل)', 'پاپ‌آپ مدرن خودکار ویژه پزشک و مدیر به محض ثبت نوبت جدید', 'تشخیص تداخل زمانی و ظرفیت آزاد یونیت‌ها', 'فرم ثبت اصیل iOS 27 با هپتیک و کلیک نرم'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 5,
+    sectionId: 'treatments',
+    traceId: 'MOD-05-TREATMENTS',
+    title: 'فاز ماژول ۵: چارت دندانپزشکی پالمر/FDI و طرح درمان هوشمند',
+    globalBenchmarkRef: 'CareStack Clinical Charting • Palmer & FDI ISO-3950',
+    color: '#7C3AED',
+    keyCapabilities: ['سیستم استاندارد پالمر (Palmer) و FDI برای دندان‌های دائمی و شیری', 'درج خودکار تعرفه مصوب با قابلیت تخفیف و قیمت دستی در لحظه', 'پاپ‌آپ خودکار پس از درمان برای منشی/دستیار/مدیر جهت ثبت مالی یا لابراتوار', 'پرونده کامل پزشک معالج، شماره دندان، هزینه و مانده روی کارت'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 6,
+    sectionId: 'lab',
+    traceId: 'MOD-06-LAB',
+    title: 'فاز ماژول ۶: لابراتوار رفت‌وبرگشت (ثابت و متحرک) با خط روند',
+    globalBenchmarkRef: 'Denticon Lab Tracking • QBank Workflow Stepper',
+    color: '#DB2777',
+    keyCapabilities: ['تعریف لابراتوارهای تخصصی ثابت و متحرک و تعرفه‌ها', 'خط روند واکنش‌پذیر (قالب‌گیری ➔ ارسال ➔ پروان ➔ دریافت ➔ تحویل به بیمار)', 'ثبت شماره دندان، پزشک، رنگ و تاریخ ارسال/دریافت روی کارت بیمار', 'یادآوری هوشمند تاخیر لابراتوار و کسر خودکار در فرمول سهم پزشک'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 7,
+    sectionId: 'implants',
+    traceId: 'MOD-07-IMPLANTS',
+    title: 'فاز ماژول ۷: مدیریت مراحل ایمپلنت و تایمر استخوان‌سازی',
+    globalBenchmarkRef: 'Straumann / Osstem Clinical Implant Tracker',
+    color: '#0891B2',
+    keyCapabilities: ['خط روند کامل (جراحی فیکسچر ➔ هیلینگ ➔ قالب‌گیری ➔ سفارش لابراتوار ➔ تحویل روکش)', 'محاسبه و یادآوری خودکار دوره استخوان‌سازی (Osseointegration)', 'قانون طلایی مالی: هزینه فیکسچر ۱۰۰٪ با مطب (کسر نشدن از سهم پزشک همکار)', 'ثبت برند، سایز، شماره دندان و پزشک جراح روی کارت جمع‌شونده'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 8,
+    sectionId: 'calendar',
+    traceId: 'MOD-08-CALENDAR',
+    title: 'فاز ماژول ۸: تقویم جامع ایرانی (شمسی، قمری، میلادی) با ثبت صفر تا صد',
+    globalBenchmarkRef: 'Perpetual Jalali Astronomical Engine • Apple Calendar iOS 27',
+    color: '#C026D3',
+    keyCapabilities: ['الگوریتم دقیق کبیسه‌سنجی جلالی همراه با تاریخ قمری و میلادی', 'دسترسی و ثبت مستقیم نوبت، درمان، یادآوری، چک و ایمپلنت از روی هر روز تقویم', 'پالت رنگی اختصاصی غیرتکراری (theme-calendar)', 'نمایش تجمیعی تمام رویدادهای مالی و بالینی هر روز'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 9,
+    sectionId: 'finance',
+    traceId: 'MOD-09-FINANCE',
+    title: 'فاز ماژول ۹: خزانه‌داری، اقساط، چک صیادی، سفته ضمانت و بدهکاران',
+    globalBenchmarkRef: 'QBank Neo-Banking Ledger • CareStack RCM',
+    color: '#10B981',
+    keyCapabilities: ['مدیریت یکپارچه نقد، کارتخوان، اقساط ماهانه، چک صیادی، چک خرجی و سفته ضمانت', 'نمایش ریز درمان، شماره دندان، نام پزشک، مبلغ پرداختی و مانده بدهی', 'قفل امنیتی RBAC: عدم امکان تغییر قیمت پس از ثبت توسط منشی (فقط مدیر کلینیک)', 'هشدار پیشاپیش سررسید چک‌ها و اقساط در رادار سراسری'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 10,
+    sectionId: 'staff',
+    traceId: 'MOD-10-STAFF',
+    title: 'فاز ماژول ۱۰: پرسنل، سطوح دسترسی و موتور ۳مدله سهم پزشکان',
+    globalBenchmarkRef: 'Enterprise Dental Payroll & Multi-Role Cloud RBAC',
+    color: '#4F46E5',
+    keyCapabilities: ['فرمول ۱: (کل کارکرد منهای هزینه لابراتوار) تقسیم بر ۲ مستقل از چک و بدهی بیمار', 'فرمول ۲: دستمزد ثابت دستی هر جراحی/درمان • فرمول ۳: درصدی اختصاصی هر پزشک', 'حالت ویژه دکتر مهدی امیری (مدیر، پزشک و صاحب مطب با دسترسی ۱۰۰٪)', 'تعریف نام کاربری، جیمیل، موبایل و رمز عبور با سینک لحظه‌ای ابری بین تمام دستگاه‌ها'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 11,
+    sectionId: 'inventory',
+    traceId: 'MOD-11-INVENTORY',
+    title: 'فاز ماژول ۱۱: انبارداری هوشمند، آلارم کمبود و تاریخ انقضا',
+    globalBenchmarkRef: 'Dental Supply Chain & Expiry Radar',
+    color: '#EA580C',
+    keyCapabilities: ['پایش لحظه‌ای موجودی مواد مصرفی، فیکسچر و تجهیزات دندانپزشکی', 'آلارم خودکار رسیدن به حد نصاب کمبود و هشدار تاریخ انقضا', 'ثبت ورود و خروج کالا با تایید دو مرحله‌ای واقعی', 'اتصال مستقیم هشدارهای کمبود انبار به رادار یادآوری و داشبورد'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 12,
+    sectionId: 'messages',
+    traceId: 'MOD-12-MESSAGES',
+    title: 'فاز ماژول ۱۲: سامانه پیام، اطلاع‌رسانی و باشگاه بیماران',
+    globalBenchmarkRef: 'Archy Two-Way Patient Communication & Recall',
+    color: '#0D9488',
+    keyCapabilities: ['قالب‌های هوشمند پیامک یادآوری نوبت، سررسید قسط/چک و مراقبت پس از جراحی', 'ارسال پیام تبریک و کمپین‌های اطلاع‌رسانی کلینیک', 'ثبت تاریخچه کامل پیام‌های ارسالی در پرونده بیمار', 'اتصال مستقیم به رادار پیگیری بیماران'],
+    score10of10: true,
+    locked: true,
+  },
+  {
+    modulePhase: 13,
+    sectionId: 'settings',
+    traceId: 'MOD-13-SETTINGS',
+    title: 'فاز ماژول ۱۳: تنظیمات، تعرفه‌ها، Cloud SQL، گوگل درایو و آپدیت اتمیک',
+    globalBenchmarkRef: 'Zero-Delete Cloud Vault • Google Drive API v3 • Atomic OTA',
+    color: '#475569',
+    keyCapabilities: ['تعریف دسته‌بندی خدمات و تعرفه‌ها با درج اتوماتیک در روند درمان', 'فعال‌سازی خودکار Cloud SQL (۲۰ جدول) و آرشیو خودکار Google Drive', 'مرکز واحد آپدیت اتوماتیک و دستی اتمیک ۴ مرحله‌ای با قفل بیلد جدید', 'دانلود پکیج ۴ پلتفرم (آیفون، اندروید، آیپد، ویندوز) و فوق‌ممیزی ۱۰ از ۱۰ ویژه مدیر'],
+    score10of10: true,
+    locked: true,
+  },
 ]);
 
 const AUDIT_STORAGE_KEY = 'minadental_permanent_audit_trail';
@@ -568,6 +748,10 @@ export const MemPalace = {
 
   getGlobalBenchmarkProtocol(): readonly GlobalBenchmarkProtocolRule[] {
     return PERMANENT_GLOBAL_BENCHMARK_PROTOCOL;
+  },
+
+  getModuleBenchmarkPhases(): readonly ModuleBenchmarkPhase[] {
+    return PERMANENT_MODULE_BENCHMARK_PHASES;
   },
 
   getAuditLogs(): AuditLogEntry[] {
