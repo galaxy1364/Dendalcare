@@ -99,7 +99,7 @@ fun MainAppHost(
     var showAuditScreen by remember { mutableStateOf(false) }
     var showInstallMenu by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
-    val localAppUrl = "http://127.0.0.1:8765/index.html?v=52"
+    val localAppUrl = "http://127.0.0.1:8765/index.html?v=63"
 
     if (showAuditScreen) {
         BackHandler {

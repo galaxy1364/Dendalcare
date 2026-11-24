@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "AuditPro"
+rootProject.name = "مینادنتال"
 
 include(":app")

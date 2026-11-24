@@ -148,9 +148,11 @@ afterEvaluate {
       val apkFile = layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile
       if (apkFile.exists()) {
         apkFile.copyTo(file("${rootDir}/DentalCare.apk"), overwrite = true)
+        apkFile.copyTo(file("${rootDir}/MinaDental.apk"), overwrite = true)
         val publicDir = file("${rootDir}/public")
         if (publicDir.exists()) {
           apkFile.copyTo(file("${rootDir}/public/DentalCare.apk"), overwrite = true)
+          apkFile.copyTo(file("${rootDir}/public/MinaDental.apk"), overwrite = true)
         }
       }
     }
