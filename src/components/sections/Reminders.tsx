@@ -25,6 +25,11 @@ import {
   type SmartReminderRules,
   type LiveSmartAlert,
 } from '@/lib/smartReminderEngine';
+import {
+  sendRealDeviceNotification,
+  resetAllZeroLossAlertsForToday,
+} from '@/lib/deviceNotifications';
+import { playTactileFeedback } from '@/lib/hapticsAudio';
 
 const CATEGORIES = [
   { value: 'appointment', label: 'نوبت و ویزیت' },
@@ -555,15 +560,37 @@ export function Reminders() {
             </p>
           </div>
 
-          <button
-            onClick={handleSyncToDatabase}
-            disabled={scanningAll}
-            data-testid="smart_auto_scan_reminders_button"
-            className="px-3.5 py-2 rounded-xl bg-white text-rose-900 hover:bg-rose-50 text-xs font-extrabold shadow-lg flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
-          >
-            <Sparkles size={14} className="text-rose-600" />
-            {scanningAll ? 'در حال ثبت در دیتابیس...' : 'ثبت خودکار همه در دیتابیس یادآوری'}
-          </button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={() => {
+                playTactileFeedback('tap');
+                resetAllZeroLossAlertsForToday();
+                window.dispatchEvent(new Event('minadental-trigger-ios-reminder-popup'));
+                const topAlert = liveAlerts[0];
+                sendRealDeviceNotification({
+                  title: topAlert ? `مینادنتال — ${topAlert.title}` : 'مینادنتال — رادار هوشمند ۳۶۰ درجه',
+                  body: topAlert ? topAlert.subtitle : `${radarCounts.total.toLocaleString('fa-IR')} یادآوری فعال در کل مطب آماده بررسی است.`,
+                  tag: 'minadental-reminders-radar-push',
+                  urgent: topAlert?.urgency === 'critical',
+                });
+              }}
+              data-testid="reminders_section_trigger_ios_popup_btn"
+              className="px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-950/80 text-white border border-white/25 text-xs font-extrabold shadow-lg flex items-center gap-1.5 transition-all active:scale-95"
+            >
+              <BellRing size={14} className="text-amber-300" />
+              <span>پاپ‌آپ مدرن آیفونی + اعلان گوشی</span>
+            </button>
+
+            <button
+              onClick={handleSyncToDatabase}
+              disabled={scanningAll}
+              data-testid="smart_auto_scan_reminders_button"
+              className="px-3.5 py-2 rounded-xl bg-white text-rose-900 hover:bg-rose-50 text-xs font-extrabold shadow-lg flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+            >
+              <Sparkles size={14} className="text-rose-600" />
+              {scanningAll ? 'در حال ثبت در دیتابیس...' : 'ثبت خودکار همه در دیتابیس یادآوری'}
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-4 gap-2 mt-3 pt-2.5 border-t border-white/15 text-center">

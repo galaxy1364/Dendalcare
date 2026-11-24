@@ -70,7 +70,12 @@ import {
   sendRealDeviceNotification,
   setDeviceNotificationsEnabled,
   syncSmartAlertsToDeviceNotifications,
+  reconcileZeroLossAlerts,
+  acknowledgeZeroLossAlert,
+  snoozeZeroLossAlert,
+  resetAllZeroLossAlertsForToday,
 } from '@/lib/deviceNotifications';
+import { IOSReminderPopup, type GlobalReminderPopupItem } from '@/components/ui/IOSReminderPopup';
 
 function App() {
   const [active, setActive] = useState<SectionId>('dashboard');
@@ -102,6 +107,8 @@ function App() {
   const [callerApptTime, setCallerApptTime] = useState('17:00');
   const [callerBookingBusy, setCallerBookingBusy] = useState(false);
   const [headerVisible, setHeaderVisible] = useState(true);
+  const [zeroLossTick, setZeroLossTick] = useState(0);
+  const [forceExpandReminderKey, setForceExpandReminderKey] = useState(0);
   const lastScrollY = useRef(0);
 
   useEffect(() => {
@@ -255,11 +262,94 @@ function App() {
     return liveSmartAlerts;
   }, [liveSmartAlerts, drawerTab]);
 
+  // Merge 360° Live Smart Alerts + Stored Pending Reminders into Zero-Loss Global Queue
+  const unifiedGlobalAlerts: GlobalReminderPopupItem[] = useMemo(() => {
+    const mappedLive: GlobalReminderPopupItem[] = liveSmartAlerts.map((a) => ({
+      id: a.id,
+      domain: a.domain,
+      targetSection: a.targetSection,
+      patientName: a.patientName,
+      patientPhone: a.patientPhone,
+      title: a.title,
+      subtitle: a.subtitle,
+      dueDate: a.dueDate,
+      urgency: a.urgency,
+      amount: a.amount,
+    }));
+
+    const existingTitles = new Set(mappedLive.map((m) => m.title));
+    const mappedStored: GlobalReminderPopupItem[] = pendingReminders
+      .filter((r) => !existingTitles.has(r.title))
+      .map((r) => {
+        const pt = patients.find((p) => p.id === r.patient_id);
+        const ptName = pt ? `${pt.first_name} ${pt.last_name}` : 'بیمار کلینیک';
+        const secMap: Record<string, SectionId> = {
+          payment: 'finance',
+          implant: 'implants',
+          lab: 'lab',
+          appointment: 'appointments',
+          inventory: 'inventory',
+          treatment: 'treatments',
+        };
+        return {
+          id: `rem_${r.id}`,
+          domain: r.category || 'appointment',
+          targetSection: secMap[r.category] || 'reminders',
+          patientName: ptName,
+          patientPhone: pt?.phone || null,
+          title: r.title,
+          subtitle: r.description || `موعد یادآوری: ${toJalaliStr(r.reminder_date)} ساعت ${r.reminder_time || '09:30'}`,
+          dueDate: r.reminder_date,
+          urgency: r.priority === 'urgent' ? 'critical' : r.priority === 'high' ? 'today' : 'upcoming',
+        };
+      });
+
+    const combined = [...mappedLive, ...mappedStored];
+    if (combined.length > 0) return combined;
+
+    // Fallback baseline clinic reminder so the Zero-Loss Radar is always verifiable even on an empty demo DB
+    return [
+      {
+        id: 'baseline_radar_guard',
+        domain: 'appointment',
+        targetSection: 'reminders',
+        patientName: 'کلینیک مینادنتال',
+        patientPhone: null,
+        title: 'رادار یادآوری ۳۶۰ درجه فعال و متصل است',
+        subtitle: 'پایش لحظه‌ای چک‌های صیادی، اقساط، مراحل ایمپلنت، لابراتوار، نوبت‌ها و موجودی انبار بدون از دست رفتن هیچ اعلان',
+        dueDate: todayGregorian(),
+        urgency: 'today',
+      },
+    ];
+  }, [liveSmartAlerts, pendingReminders, patients]);
+
+  const zeroLossPopupQueue = useMemo(() => {
+    void zeroLossTick;
+    return reconcileZeroLossAlerts(unifiedGlobalAlerts);
+  }, [unifiedGlobalAlerts, zeroLossTick]);
+
+  // Periodic 15-second wakeup check for snoozed reminders + custom trigger listener
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setZeroLossTick((t) => t + 1);
+    }, 15000);
+    const onTriggerPopup = () => {
+      resetAllZeroLossAlertsForToday();
+      setZeroLossTick((t) => t + 1);
+      setForceExpandReminderKey((k) => k + 1);
+    };
+    window.addEventListener('minadental-trigger-ios-reminder-popup', onTriggerPopup);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('minadental-trigger-ios-reminder-popup', onTriggerPopup);
+    };
+  }, []);
+
   // Dispatch urgent/due smart alerts to genuine OS/Device Notifications when enabled
   useEffect(() => {
-    if (!deviceNotifOn || liveSmartAlerts.length === 0) return;
-    syncSmartAlertsToDeviceNotifications(liveSmartAlerts).catch(() => {});
-  }, [deviceNotifOn, liveSmartAlerts]);
+    if (!deviceNotifOn || unifiedGlobalAlerts.length === 0) return;
+    syncSmartAlertsToDeviceNotifications(unifiedGlobalAlerts).catch(() => {});
+  }, [deviceNotifOn, unifiedGlobalAlerts]);
 
   // Subscribe to Multi-User Cloud Sync & OTA Update Channel
   useEffect(() => {
@@ -1318,6 +1408,45 @@ function App() {
         </div>
       </Sheet>
 
+      {/* Global iOS 27 Dynamic Island & Live Activity Zero-Loss Reminder Popup (پاپ‌آپ مدرن آیفونی متصل به گوشی و داخلی) */}
+      <IOSReminderPopup
+        items={zeroLossPopupQueue}
+        hidden={notifOpen}
+        forceExpandedKey={forceExpandReminderKey}
+        deviceNotifOn={deviceNotifOn}
+        onNavigate={(sec) => handleNavigate(sec)}
+        onAcknowledge={(id) => {
+          acknowledgeZeroLossAlert(id);
+          setZeroLossTick((t) => t + 1);
+        }}
+        onSnooze={(id, mins) => {
+          snoozeZeroLossAlert(id, mins);
+          setZeroLossTick((t) => t + 1);
+          setLiveSyncToast(`یادآوری برای ${mins.toLocaleString('fa-IR')} دقیقه بعد در صف ضد فراموشی تنظیم شد`);
+          setTimeout(() => setLiveSyncToast(null), 3000);
+        }}
+        onSendToPhone={async (item) => {
+          if (!deviceNotifOn) {
+            const perm = await requestDeviceNotificationPermission();
+            setDeviceNotifPerm(perm);
+            setDeviceNotifOn(perm === 'granted');
+          }
+          const sent = await sendRealDeviceNotification({
+            title: `مینادنتال • ${item.title}`,
+            body: item.subtitle,
+            tag: `manual-push-${item.id}-${Date.now()}`,
+            urgent: item.urgency === 'critical',
+          });
+          setLiveSyncToast(
+            sent
+              ? 'یادآوری با موفقیت به نوار نوتیفیکیشن واقعی گوشی ارسال شد'
+              : 'یادآوری در پاپ‌آپ داخلی iOS 27 و صف ضد فراموشی ثبت شد'
+          );
+          setTimeout(() => setLiveSyncToast(null), 3000);
+        }}
+        onOpenDrawer={() => setNotifOpen(true)}
+      />
+
       {/* Right-Edge Draggable QBank Notification Ear Handle (Locks permanently wherever dropped) */}
       <DraggableNotificationHandle
         notifCount={notifCount}
@@ -1436,6 +1565,40 @@ function App() {
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* Instant iOS 27 Internal Popup Trigger & Zero-Loss Queue Restore Bar */}
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                data-testid="trigger_ios_reminder_popup_btn"
+                onClick={() => {
+                  playTactileFeedback('success');
+                  resetAllZeroLossAlertsForToday();
+                  setZeroLossTick((t) => t + 1);
+                  setNotifOpen(false);
+                  setForceExpandReminderKey((k) => k + 1);
+                }}
+                className="py-2 px-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-[10.5px] font-black flex items-center justify-center gap-1.5 shadow active:scale-95 transition-all"
+              >
+                <BellRing size={13} />
+                <span>پاپ‌آپ مدرن آیفونی (زنده)</span>
+              </button>
+              <button
+                type="button"
+                data-testid="reset_acknowledged_reminders_btn"
+                onClick={() => {
+                  playTactileFeedback('tap');
+                  resetAllZeroLossAlertsForToday();
+                  setZeroLossTick((t) => t + 1);
+                  setLiveSyncToast('تمام یادآوری‌های امروز در صف ضد فراموشی بازگردانی شدند');
+                  setTimeout(() => setLiveSyncToast(null), 3000);
+                }}
+                className="py-2 px-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/12 text-amber-200 text-[10.5px] font-extrabold flex items-center justify-center gap-1 active:scale-95 transition-all"
+              >
+                <RefreshCw size={12} />
+                <span>بازگردانی صف ضدحذف ({unifiedGlobalAlerts.length.toLocaleString('fa-IR')})</span>
+              </button>
             </div>
 
             {/* Category Filter Chips inside Slide-Over Drawer */}

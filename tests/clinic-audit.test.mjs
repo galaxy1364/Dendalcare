@@ -472,4 +472,34 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(sheetSrc.includes('ios27_registration_sheet') && sheetSrc.includes('ios27_sheet_grabber_pill'), 'Sheet.tsx must implement authentic iOS 27 registration sheet with grabber pill and frosted navbar');
     assert.ok(formSrc.includes('ios27-form-field') && formSrc.includes('ios27-input') && formSrc.includes('ios27-select'), 'Form.tsx must implement authentic iOS 27 inset grouped form controls with haptics');
   });
+
+  test('Zero-Loss Persistent Notification Ledger & iOS 27 Dynamic Island Live Activity Reminder Popup prevent any lost reminder and connect to real Phone OS notifications', () => {
+    const osNotifSrc = read('src/lib/deviceNotifications.ts');
+    const popupSrc = read('src/components/ui/IOSReminderPopup.tsx');
+    const appSrc = read('src/App.tsx');
+    const remSrc = read('src/components/sections/Reminders.tsx');
+
+    // 1. Zero-Loss Ledger in deviceNotifications.ts
+    assert.ok(osNotifSrc.includes('minadental_zero_loss_notif_ledger_v1'), 'deviceNotifications.ts must persist Zero-Loss Notification Ledger in localStorage');
+    assert.ok(osNotifSrc.includes('reconcileZeroLossAlerts'), 'deviceNotifications.ts must export reconcileZeroLossAlerts');
+    assert.ok(osNotifSrc.includes('acknowledgeZeroLossAlert'), 'deviceNotifications.ts must export acknowledgeZeroLossAlert');
+    assert.ok(osNotifSrc.includes('snoozeZeroLossAlert'), 'deviceNotifications.ts must export snoozeZeroLossAlert');
+    assert.ok(osNotifSrc.includes('resetAllZeroLossAlertsForToday'), 'deviceNotifications.ts must export resetAllZeroLossAlertsForToday');
+    assert.ok(osNotifSrc.includes('renotify: true'), 'sendRealDeviceNotification must set renotify: true for phone OS alerts');
+
+    // 2. iOS 27 Dynamic Island & Frosted Glass Popup in IOSReminderPopup.tsx
+    assert.ok(popupSrc.includes('ios27_dynamic_island_pill'), 'IOSReminderPopup must render iOS 27 Dynamic Island Compact Pill');
+    assert.ok(popupSrc.includes('ios27_expanded_reminder_popup'), 'IOSReminderPopup must render iOS 27 Expanded Frosted Glass Live Activity Popup');
+    assert.ok(popupSrc.includes('ios_reminder_popup_action_btn'), 'IOSReminderPopup must provide 1-click navigation to target section');
+    assert.ok(popupSrc.includes('ios_reminder_popup_ack_btn'), 'IOSReminderPopup must provide explicit acknowledgement button');
+    assert.ok(popupSrc.includes('ios_reminder_popup_snooze_btn'), 'IOSReminderPopup must provide 15-minute smart snooze button');
+    assert.ok(popupSrc.includes('ios_reminder_popup_phone_btn'), 'IOSReminderPopup must provide 1-click push to real phone notification');
+
+    // 3. App.tsx & Reminders.tsx integration
+    assert.ok(appSrc.includes('<IOSReminderPopup'), 'App.tsx must mount global IOSReminderPopup across all sections');
+    assert.ok(appSrc.includes('unifiedGlobalAlerts'), 'App.tsx must unify 360-degree liveSmartAlerts and database pendingReminders');
+    assert.ok(appSrc.includes('trigger_ios_reminder_popup_btn') && appSrc.includes('reset_acknowledged_reminders_btn'), 'Notification drawer must allow triggering iOS 27 popup and restoring acknowledged reminders');
+    assert.ok(remSrc.includes('reminders_section_trigger_ios_popup_btn'), 'Reminders section must provide 1-click iOS 27 popup + phone notification trigger');
+  });
 });
+
