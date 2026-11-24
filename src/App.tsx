@@ -15,7 +15,7 @@ import { StaffSection } from '@/components/sections/StaffSection';
 import { Messages } from '@/components/sections/Messages';
 import { SettingsSection } from '@/components/sections/SettingsSection';
 import {
-  Bell, Cloud, Sparkles, X, Keyboard, WifiOff, Download,
+  Bell, Cloud, Sparkles, X, Keyboard, WifiOff, Download, ShieldAlert, Archive, UploadCloud,
   BellRing, ArrowLeft, User, ShieldCheck, RefreshCw, Plus, CheckCircle2, LogOut, CalendarRange, PhoneIncoming, PhoneCall,
 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -50,6 +50,7 @@ import { MascotTooth, type MascotMood } from '@/components/ui/MascotTooth';
 import { RoadmapAuditModal } from '@/components/ui/RoadmapAuditModal';
 import { MemPalace, OmniRoute } from '@/lib/memPalace';
 import { broadcastNewAppBuild, checkForAppUpdates } from '@/lib/updateManager';
+import { getOfflineQueue, processOfflineQueue } from '@/lib/offlineQueue';
 
 function App() {
   const [active, setActive] = useState<SectionId>('dashboard');
@@ -135,6 +136,13 @@ function App() {
   const [addingNewUser, setAddingNewUser] = useState(false);
   const [onlinePeersCount, setOnlinePeersCount] = useState(1);
   const [liveSyncToast, setLiveSyncToast] = useState<string | null>(null);
+  const [guardianToast, setGuardianToast] = useState<{
+    message: string;
+    severity: 'security' | 'offline' | 'vault';
+    traceId: string;
+  } | null>(null);
+  const [offlineQueueCount, setOfflineQueueCount] = useState<number>(() => getOfflineQueue().length);
+  const [flushingQueue, setFlushingQueue] = useState(false);
   const [newUserForm, setNewUserForm] = useState({
     name: '',
     role: 'secretary' as UserRole,
@@ -256,6 +264,67 @@ function App() {
 
     return () => clearInterval(checkTimer);
   }, []);
+
+  // Listen to App-Wide Zero-Delete / RBAC / Offline Guardian events (TRC-MINA-GUARD-9007-G)
+  useEffect(() => {
+    let toastTimer: ReturnType<typeof setTimeout> | null = null;
+    const onGuardianToast = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      if (!detail?.message) return;
+      setGuardianToast({
+        message: detail.message,
+        severity: detail.severity || 'security',
+        traceId: detail.traceId || 'TRC-MINA-GUARD',
+      });
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => setGuardianToast(null), 5500);
+    };
+    const onQueueChanged = () => {
+      setOfflineQueueCount(getOfflineQueue().length);
+    };
+    const onBackOnline = async () => {
+      const count = getOfflineQueue().length;
+      if (count > 0) {
+        setFlushingQueue(true);
+        const res = await processOfflineQueue();
+        const remaining = getOfflineQueue().length;
+        setFlushingQueue(false);
+        setOfflineQueueCount(remaining);
+        if (res.processed > 0) {
+          setLiveSyncToast(`${res.processed.toLocaleString('fa-IR')} تغییر آفلاین با موفقیت به Cloud SQL ارسال شد`);
+          setTimeout(() => setLiveSyncToast(null), 4000);
+        }
+      }
+    };
+    window.addEventListener('minadental-guardian-toast', onGuardianToast);
+    window.addEventListener('minadental-offline-queue-changed', onQueueChanged);
+    window.addEventListener('online', onBackOnline);
+    return () => {
+      if (toastTimer) clearTimeout(toastTimer);
+      window.removeEventListener('minadental-guardian-toast', onGuardianToast);
+      window.removeEventListener('minadental-offline-queue-changed', onQueueChanged);
+      window.removeEventListener('online', onBackOnline);
+    };
+  }, []);
+
+  const handleFlushOfflineQueue = async () => {
+    if (flushingQueue) return;
+    setFlushingQueue(true);
+    const res = await processOfflineQueue();
+    const remaining = getOfflineQueue().length;
+    setFlushingQueue(false);
+    setOfflineQueueCount(remaining);
+    if (res.processed > 0) {
+      setLiveSyncToast(`${res.processed.toLocaleString('fa-IR')} تغییر صف آفلاین با موفقیت همگام‌سازی شد`);
+      setTimeout(() => setLiveSyncToast(null), 4000);
+    } else if (remaining > 0) {
+      setGuardianToast({
+        message: `اتصال به Cloud SQL برقرار نشد؛ ${remaining.toLocaleString('fa-IR')} تغییر همچنان در صف امن محفوظ است.`,
+        severity: 'offline',
+        traceId: 'TRC-MINA-GUARD-9007-G',
+      });
+    }
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -645,6 +714,64 @@ function App() {
             <div className="mt-2 px-3 py-2 rounded-2xl bg-slate-900/95 border border-emerald-400/40 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2 shadow-xl animate-fade-in">
               <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
               <span>{liveSyncToast}</span>
+            </div>
+          )}
+
+          {/* App-Wide Zero-Delete / RBAC / Offline Guardian Toast (TRC-MINA-GUARD-9007-G) */}
+          {guardianToast && (
+            <div
+              data-testid="guardian_security_toast"
+              className={`mt-2 px-3 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-xl border animate-fade-in ${
+                guardianToast.severity === 'security'
+                  ? 'bg-rose-950/95 border-rose-400/50 text-rose-100'
+                  : guardianToast.severity === 'offline'
+                  ? 'bg-amber-950/95 border-amber-400/50 text-amber-100'
+                  : 'bg-emerald-950/95 border-emerald-400/50 text-emerald-100'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                {guardianToast.severity === 'security' ? (
+                  <ShieldAlert size={16} className="text-rose-400 shrink-0" />
+                ) : guardianToast.severity === 'offline' ? (
+                  <WifiOff size={16} className="text-amber-400 shrink-0" />
+                ) : (
+                  <Archive size={16} className="text-emerald-400 shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <span className="leading-snug block">{guardianToast.message}</span>
+                  <span className="text-[9px] font-mono opacity-75">{guardianToast.traceId}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setGuardianToast(null)}
+                aria-label="بستن هشدار"
+                className="p-1 rounded-lg bg-white/10 hover:bg-white/20 shrink-0"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )}
+
+          {/* Pending Offline Write-Ahead Queue Pill */}
+          {offlineQueueCount > 0 && (
+            <div
+              data-testid="offline_queue_pending_pill"
+              className="mt-2 px-3 py-2 rounded-2xl bg-amber-500/15 border border-amber-400/45 text-amber-100 text-[11px] font-bold flex items-center justify-between gap-2 shadow-lg animate-fade-in"
+            >
+              <div className="flex items-center gap-2">
+                <UploadCloud size={15} className="text-amber-300 shrink-0" />
+                <span>
+                  {offlineQueueCount.toLocaleString('fa-IR')} تغییر در صف آفلاین آماده ارسال به Cloud SQL است
+                </span>
+              </div>
+              <button
+                onClick={handleFlushOfflineQueue}
+                disabled={flushingQueue}
+                data-testid="flush_offline_queue_button"
+                className="px-2.5 py-1 rounded-xl bg-amber-400 text-slate-950 font-black text-[10px] hover:bg-amber-300 active:scale-95 transition-all shrink-0 disabled:opacity-60"
+              >
+                {flushingQueue ? 'در حال ارسال...' : 'ارسال آنی'}
+              </button>
             </div>
           )}
 

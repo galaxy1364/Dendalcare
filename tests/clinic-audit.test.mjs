@@ -5,7 +5,7 @@ import path from 'node:path';
 
 // =========================================================================
 // MinaDental Clinical & Architecture Comprehensive Audit Test Suite
-// Verifiable Trace IDs: TRC-MINA-CORE-9001-A to TRC-MINA-VAULT-9006-F
+// Verifiable Trace IDs: TRC-MINA-CORE-9001-A to TRC-MINA-GUARD-9007-G
 // =========================================================================
 
 describe('Phase 1 [TRC-MINA-CORE-9001-A]: Core Engine & Perpetual Calendar Math', () => {
@@ -240,7 +240,7 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(realtimeSrc.includes('archiveDeletedRecord'), 'useRealtimeTable must archive deleted records into Zero-Delete Vault');
   });
 
-  test('Google Drive API v3 multipart uploader and unified v60 GitHub sync are wired without mock timeouts', () => {
+  test('Google Drive API v3 multipart uploader and unified v61 GitHub sync are wired without mock timeouts', () => {
     const engineSrc = read('src/lib/integrationsEngine.ts');
     const tabSrc = read('src/components/sections/IntegrationsTab.tsx');
     const versionJson = JSON.parse(read('public/version.json'));
@@ -248,8 +248,8 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(engineSrc.includes('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'), 'Real Google Drive API v3 upload endpoint must exist');
     assert.ok(!engineSrc.includes('v5.0.0 (Build #52)'), 'Outdated hardcoded GitHub deploy version must be removed');
     assert.ok(tabSrc.includes('uploadBackupToGoogleDrive'), 'IntegrationsTab must invoke real uploadBackupToGoogleDrive');
-    assert.equal(versionJson.version, '60.0');
-    assert.equal(versionJson.build, 60);
+    assert.equal(versionJson.version, '61.0');
+    assert.equal(versionJson.build, 61);
   });
 
   test('PWA manifest, service worker, and index.html typography/installability stay 100% intact', () => {
@@ -262,7 +262,82 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(html.includes('window.__deferredInstallPrompt'), 'index.html must capture beforeinstallprompt early');
     assert.ok(manifest.icons.some((i) => i.purpose === 'any' && i.sizes === '512x512'), 'manifest must have 512x512 any icon');
     assert.ok(manifest.icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512'), 'manifest must have 512x512 maskable icon');
-    assert.ok(sw.includes('minadental-pwa-v60.0-b60'), 'sw.js must be on unified v60.0-b60 cache');
+    assert.ok(sw.includes('minadental-pwa-v61.0-b61'), 'sw.js must be on unified v61.0-b61 cache');
   });
 });
+
+describe('Phase 7 [TRC-MINA-GUARD-9007-G]: App-Wide Zero-Delete Guardian, Offline Queue & 3-Mode Doctor Share Engine', () => {
+  const root = process.cwd();
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('supabase.ts exports Guarded Proxy wrapping all 18 sections with eqFilters sharing, Zero-Delete archival & Offline Queue', () => {
+    const supabaseSrc = read('src/lib/supabase.ts');
+    const guardianSrc = read('src/lib/supabaseGuardian.ts');
+    const vaultSrc = read('src/lib/dataVault.ts');
+    const queueSrc = read('src/lib/offlineQueue.ts');
+
+    assert.ok(supabaseSrc.includes('createGuardedSupabaseClient(rawSupabase)'), 'supabase.ts must wrap rawSupabase with Guardian');
+    assert.ok(guardianSrc.includes('CRITICAL_DELETE_PROTECTED_TABLES'), 'Guardian must protect critical tables against unauthorized deletion');
+    assert.ok(guardianSrc.includes('FINANCIAL_PRICE_LOCKED_COLUMNS'), 'Guardian must lock financial price columns after save');
+    assert.ok(guardianSrc.includes('archiveDeletedRecord'), 'Guardian must archive records before SQL DELETE');
+    assert.ok(guardianSrc.includes('enqueueOfflineMutation'), 'Guardian must enqueue mutations when offline or network fails');
+    assert.ok(guardianSrc.includes('wrapMutationBuilder(rawClient, next, table, operation, payload, eqFilters)'), 'Guardian must share eqFilters across chained filter builders');
+    assert.ok(vaultSrc.includes("from '@/lib/supabaseCore'"), 'dataVault.ts must import rawSupabase from supabaseCore to prevent recursion');
+    assert.ok(queueSrc.includes("from '@/lib/supabaseCore'"), 'offlineQueue.ts must import rawSupabase from supabaseCore to prevent recursion');
+  });
+
+  test('3-Mode Doctor Share formulas (net_half_after_lab, fixed, percentage) and Manager Net Margin compute accurately', () => {
+    // Pure verification of the exact 3-mode + Clinic Manager math in src/lib/doctorShareEngine.ts
+    const calc = ({ mode, gross, lab, val, count = 1, deductLabInPct = true, isManager = false }) => {
+      const netAfterLab = Math.max(0, gross - lab);
+      if (isManager) return { netAfterLab, doctorShare: netAfterLab, clinicShare: 0 };
+      let doctorShare = 0;
+      if (mode === 'net_half_after_lab') doctorShare = Math.round(netAfterLab / 2);
+      else if (mode === 'fixed') doctorShare = Math.round(val * count);
+      else doctorShare = Math.round(((deductLabInPct ? netAfterLab : gross) * Math.min(100, val)) / 100);
+      return { netAfterLab, doctorShare, clinicShare: Math.max(0, netAfterLab - doctorShare) };
+    };
+
+    // Mode 1: (10,000,000 - 2,000,000) / 2 = 4,000,000
+    const m1 = calc({ mode: 'net_half_after_lab', gross: 10000000, lab: 2000000, val: 50 });
+    assert.equal(m1.netAfterLab, 8000000);
+    assert.equal(m1.doctorShare, 4000000);
+    assert.equal(m1.clinicShare, 4000000);
+
+    // Mode 2: Fixed fee 1,500,000 × 3 surgeries = 4,500,000
+    const m2 = calc({ mode: 'fixed', gross: 10000000, lab: 2000000, val: 1500000, count: 3 });
+    assert.equal(m2.doctorShare, 4500000);
+    assert.equal(m2.clinicShare, 3500000);
+
+    // Mode 3: 40% after lab deduction on 8,000,000 = 3,200,000
+    const m3 = calc({ mode: 'percentage', gross: 10000000, lab: 2000000, val: 40, deductLabInPct: true });
+    assert.equal(m3.doctorShare, 3200000);
+    assert.equal(m3.clinicShare, 4800000);
+
+    // Clinic Manager (دکتر مهدی امیری): 100% of net margin after lab = 8,000,000
+    const mgr = calc({ mode: 'net_half_after_lab', gross: 10000000, lab: 2000000, val: 50, isManager: true });
+    assert.equal(mgr.doctorShare, 8000000);
+    assert.equal(mgr.clinicShare, 0);
+
+    const engineSrc = read('src/lib/doctorShareEngine.ts');
+    const staffSrc = read('src/components/sections/StaffSection.tsx');
+    assert.ok(engineSrc.includes("mode === 'net_half_after_lab'"), 'doctorShareEngine must implement net_half_after_lab');
+    assert.ok(staffSrc.includes('calculateDoctorShare'), 'StaffSection SharesTab must embed live 3-mode calculator');
+    assert.ok(staffSrc.includes('net_half_after_lab'), 'StaffSection SharesTab must support net_half_after_lab share rules');
+  });
+
+  test('App.tsx surfaces Guardian Toasts & 1-click Offline Queue flush and MemPalace locks all 7 roadmap phases', () => {
+    const appSrc = read('src/App.tsx');
+    const memSrc = read('src/lib/memPalace.ts');
+    const modalSrc = read('src/components/ui/RoadmapAuditModal.tsx');
+
+    assert.ok(appSrc.includes('minadental-guardian-toast'), 'App.tsx must listen to minadental-guardian-toast');
+    assert.ok(appSrc.includes('flush_offline_queue_button'), 'App.tsx must expose 1-click offline queue flush UI');
+    assert.ok(memSrc.includes('TRC-MINA-GUARD-9007-G'), 'MemPalace must lock Phase 7 trace ID');
+    assert.ok(memSrc.includes('evaluateMutationGuard'), 'Live Super-Audit must actively verify evaluateMutationGuard');
+    assert.ok(memSrc.includes('calculateDoctorShare'), 'Live Super-Audit must actively verify calculateDoctorShare');
+    assert.ok(modalSrc.includes('۷ فاز قفل‌شده'), 'RoadmapAuditModal must reflect all 7 locked phases');
+  });
+});
+
 

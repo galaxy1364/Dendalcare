@@ -11,7 +11,7 @@
  *    shared across Local JSON, Supabase Cloud, Google Drive, and GitHub Backup.
  */
 
-import { supabase, type TableName } from '@/lib/supabase';
+import { rawSupabase as supabase, type TableName } from '@/lib/supabaseCore';
 
 export const ALL_CLINIC_TABLES: TableName[] = [
   'patients',

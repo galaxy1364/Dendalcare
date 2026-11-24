@@ -8,6 +8,8 @@ import { ALL_CLINIC_TABLES, computeIntegrityChecksum, getVaultStats } from '@/li
 import { CURRENT_APP_BUILD, CURRENT_APP_VERSION, canUserEditFinancials } from '@/lib/cloudSyncEngine';
 import { gregorianToJalali } from '@/lib/jalali';
 import { supabaseUrl } from '@/lib/supabase';
+import { evaluateMutationGuard } from '@/lib/supabaseGuardian';
+import { calculateDoctorShare } from '@/lib/doctorShareEngine';
 
 export interface RoadmapMilestone {
   id: string;
@@ -168,11 +170,29 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'سینک دائمی دیتابیس و بیلد وب روی مخزن رسمی GitHub (galaxy1364/Dendalcare)',
     ],
   },
+  {
+    id: 'milestone-7',
+    traceId: 'TRC-MINA-GUARD-9007-G',
+    phaseNumber: 7,
+    title: 'سپر سراسری ضدحذف و قفل قیمت RBAC، صف آفلاین Write-Ahead و موتور ۳مدله سهم پزشکان',
+    titleEn: 'App-Wide Zero-Delete/RBAC Guardian Proxy, Offline Write-Ahead Queue & 3-Mode Doctor Share Engine',
+    description: 'لایه محافظ سراسری (Supabase Guardian Proxy) روی تمام ۱۸ ماژول برای جلوگیری از حذف غیرمجاز و دستکاری قیمت پس از ثبت توسط غیرمدیر، بایگانی خودکار پیش‌ازحذف در IndexedDB، صف Write-Ahead آفلاین با ارسال تک‌کلیکی، و موتور کامل ۳مدله سهم پزشکان به همراه حالت ویژه مدیر کلینیک (دکتر مهدی امیری).',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/03',
+    checksum: 'g709d4e812fa',
+    deliverables: [
+      'سپر سراسری supabaseGuardian روی تمام ۱۸ ماژول (قفل حذف ۱۳ جدول بحرانی و قفل ۱۰ ستون مالی)',
+      'بایگانی پیشگیرانه Zero-Delete قبل از اجرای SQL DELETE و نمایش اعلان امنیتی با شناسه رهگیری',
+      'صف Write-Ahead آفلاین خودکار هنگام قطعی اینترنت یا خطای شبکه همراه با دکمه ارسال آنی در هدر',
+      'موتور ۳مدله سهم پزشک: (کارکرد − لابراتوار) ÷ ۲، مبلغ ثابت هر جراحی، درصدی + حالت مدیر کلینیک',
+    ],
+  },
 ]);
 
 const AUDIT_STORAGE_KEY = 'minadental_permanent_audit_trail';
 const ROUTE_STORAGE_KEY = 'minadental_omniroute_active_route';
-const LAST_SUPER_AUDIT_KEY = 'minadental_last_super_audit_v60';
+const LAST_SUPER_AUDIT_KEY = 'minadental_last_super_audit_v61';
 
 function generateHash(str: string): string {
   let hash = 0;
@@ -280,20 +300,59 @@ export async function runLiveSuperAudit(actor: string = 'دکتر مهدی ام�
     score: clinicalOk ? 1 : 0,
   });
 
-  // 6. Financial RBAC Lock (Only Manager Can Edit Prices/Financials)
+  // 6. Financial RBAC Lock + App-Wide Guardian Shield + 3-Mode Doctor Share Engine
+  const secretaryActor = {
+    role: 'secretary',
+    fullName: 'منشی مطب',
+    canEditPricesAfterSave: false,
+    canDeleteCriticalRecords: false,
+  };
+  const managerActor = {
+    role: 'manager',
+    fullName: 'دکتر مهدی امیری',
+    canEditPricesAfterSave: true,
+    canDeleteCriticalRecords: true,
+  };
+  const guardBlocksSecretaryDelete = !evaluateMutationGuard({
+    table: 'patients',
+    operation: 'DELETE',
+    actor: secretaryActor,
+  }).allowed;
+  const guardBlocksSecretaryPriceEdit = !evaluateMutationGuard({
+    table: 'treatments',
+    operation: 'UPDATE',
+    payload: { total_cost: 1000 },
+    actor: secretaryActor,
+  }).allowed;
+  const guardAllowsManager = evaluateMutationGuard({
+    table: 'treatments',
+    operation: 'UPDATE',
+    payload: { total_cost: 5000000 },
+    actor: managerActor,
+  }).allowed;
+  const halfAfterLab = calculateDoctorShare({
+    mode: 'net_half_after_lab',
+    grossWorkAmount: 10000000,
+    labCostAmount: 2000000,
+    shareValue: 50,
+  });
   const rbacOk =
     canUserEditFinancials('manager') === true &&
     canUserEditFinancials('dentist') === false &&
     canUserEditFinancials('secretary') === false &&
-    canUserEditFinancials('assistant') === false;
+    canUserEditFinancials('assistant') === false &&
+    guardBlocksSecretaryDelete &&
+    guardBlocksSecretaryPriceEdit &&
+    guardAllowsManager &&
+    halfAfterLab.doctorShare === 4000000;
   checks.push({
     id: 'chk-rbac-lock',
-    traceId: 'TRC-MINA-FINSEC-9004-D',
-    phase: 4,
-    title: 'قفل امنیتی RBAC و انحصار ویرایش قیمت برای مدیر کلینیک',
+    traceId: 'TRC-MINA-GUARD-9007-G',
+    phase: 7,
+    title: 'سپر سراسری RBAC، قفل قیمت و موتور ۳مدله سهم پزشکان',
     detail: rbacOk
-      ? 'فقط مدیر کلینیک (دکتر مهدی امیری) مجاز به ویرایش مبالغ و تعرفه‌ها است.'
-      : 'نقض سیاست دسترسی RBAC شناسایی شد.',
+      ? 'سپر ضدحذف/قفل قیمت روی هر ۱۸ ماژول + فرمول (کارکرد − لاب) ÷ ۲ و حالت مدیر کلینیک تایید شد.'
+      : 'نقض سیاست امنیتی Guardian یا محاسبه سهم پزشک شناسایی شد.',
     passed: rbacOk,
     score: rbacOk ? 1 : 0,
   });

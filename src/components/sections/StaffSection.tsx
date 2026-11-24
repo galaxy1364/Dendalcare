@@ -22,6 +22,11 @@ import {
   type ClinicUserAccount,
   type ClinicUserRole,
 } from '@/lib/cloudSyncEngine';
+import {
+  calculateDoctorShare,
+  SHARE_MODE_LABELS,
+  type DoctorShareMode,
+} from '@/lib/doctorShareEngine';
 
 const ROLES = [
   { value: 'manager', label: 'مدیر کلینیک (پزشک ارشد)' },
@@ -875,27 +880,51 @@ function SalariesTab({ salaries, staff }: { salaries: StaffSalary[]; staff: Staf
   );
 }
 
-// ==================== SHARES TAB ====================
+// ==================== SHARES TAB (3-Mode Engine + Manager Net Formula) ====================
 function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; finance: FinanceTransaction[] }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     staff_id: '',
-    share_type: 'percentage',
-    share_value: '',
+    share_type: 'net_half_after_lab' as DoctorShareMode,
+    share_value: '50',
     applies_to: 'treatment',
     min_amount: '',
     notes: '',
   });
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  // Interactive 3-Mode Doctor Share & Clinic Manager Live Calculator State
+  const [calcMode, setCalcMode] = useState<DoctorShareMode>('net_half_after_lab');
+  const [calcGross, setCalcGross] = useState('12000000');
+  const [calcLab, setCalcLab] = useState('2000000');
+  const [calcValue, setCalcValue] = useState('40');
+  const [calcCount, setCalcCount] = useState('1');
+  const [calcDeductLabInPct, setCalcDeductLabInPct] = useState(true);
+  const [calcIsManager, setCalcIsManager] = useState(false);
+
+  const calcResult = useMemo(
+    () =>
+      calculateDoctorShare({
+        mode: calcMode,
+        grossWorkAmount: Number(calcGross) || 0,
+        labCostAmount: Number(calcLab) || 0,
+        shareValue: calcMode === 'net_half_after_lab' ? 50 : Number(calcValue) || 0,
+        procedureCount: Number(calcCount) || 1,
+        deductLabInPercentageMode: calcDeductLabInPct,
+        isClinicManager: calcIsManager,
+      }),
+    [calcMode, calcGross, calcLab, calcValue, calcCount, calcDeductLabInPct, calcIsManager]
+  );
+
   const save = async () => {
-    if (!form.staff_id || !form.share_value) return;
+    const resolvedVal = form.share_type === 'net_half_after_lab' ? 50 : Number(form.share_value);
+    if (!form.staff_id || !resolvedVal) return;
     setSaving(true);
     await supabase.from('staff_shares').insert({
       staff_id: form.staff_id,
-      share_type: form.share_type as 'percentage' | 'fixed',
-      share_value: Number(form.share_value),
+      share_type: form.share_type,
+      share_value: resolvedVal,
       applies_to: form.applies_to,
       min_amount: Number(form.min_amount) || 0,
       active: true,
@@ -903,7 +932,14 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
     });
     setSaving(false);
     setShowForm(false);
-    setForm({ staff_id: '', share_type: 'percentage', share_value: '', applies_to: 'treatment', min_amount: '', notes: '' });
+    setForm({
+      staff_id: '',
+      share_type: 'net_half_after_lab',
+      share_value: '50',
+      applies_to: 'treatment',
+      min_amount: '',
+      notes: '',
+    });
   };
   const toggleActive = async (id: string, active: boolean) => {
     await supabase.from('staff_shares').update({ active: !active }).eq('id', id);
@@ -914,12 +950,162 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
 
   return (
     <div className="space-y-3 animate-fade-in">
-      <div className="flex items-center justify-between">
+      {/* Live 3-Mode Doctor Share & Manager Net Margin Calculator (TRC-MINA-GUARD-9007-G) */}
+      <div className="rounded-3xl p-4 bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 text-white border border-indigo-400/30 shadow-xl space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-2xl bg-indigo-500/25 border border-indigo-400/40 flex items-center justify-center text-indigo-300 shrink-0">
+              <Calculator size={18} />
+            </div>
+            <div>
+              <h3 className="text-xs font-black text-white">ماشین‌حساب هوشمند ۳مدله سهم پزشکان</h3>
+              <p className="text-[10px] text-indigo-200/80">
+                نصف خالص پس از کسر لابراتوار • ثابت هر جراحی • درصدی • حالت مدیر کلینیک
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            data-testid="share_calc_manager_toggle"
+            onClick={() => setCalcIsManager(!calcIsManager)}
+            className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black transition-all border ${
+              calcIsManager
+                ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-lg'
+                : 'bg-white/10 text-indigo-100 border-white/15 hover:bg-white/15'
+            }`}
+          >
+            {calcIsManager ? '✓ حالت دکتر مهدی امیری' : 'حالت مدیر کلینیک'}
+          </button>
+        </div>
+
+        {!calcIsManager && (
+          <div className="grid grid-cols-3 gap-1.5">
+            {(
+              [
+                { id: 'net_half_after_lab', label: '(کارکرد − لاب) ÷ ۲' },
+                { id: 'fixed', label: 'ثابت هر جراحی' },
+                { id: 'percentage', label: 'درصدی پزشک' },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                data-testid={`share_calc_mode_${opt.id}`}
+                onClick={() => {
+                  setCalcMode(opt.id);
+                  if (opt.id === 'fixed' && Number(calcValue) <= 100) setCalcValue('1500000');
+                  if (opt.id === 'percentage' && Number(calcValue) > 100) setCalcValue('40');
+                }}
+                className={`py-2 px-1.5 rounded-xl text-[10px] font-extrabold transition-all border ${
+                  calcMode === opt.id
+                    ? 'bg-indigo-500 text-white border-indigo-300 shadow'
+                    : 'bg-white/5 text-indigo-200 border-white/10 hover:bg-white/10'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className="text-[10px] text-indigo-200 block mb-1">کل کارکرد (تومان)</span>
+            <input
+              type="number"
+              value={calcGross}
+              onChange={(e) => setCalcGross(e.target.value)}
+              className="w-full rounded-xl bg-white/10 border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-indigo-400"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[10px] text-indigo-200 block mb-1">کل هزینه لابراتوار (تومان)</span>
+            <input
+              type="number"
+              value={calcLab}
+              onChange={(e) => setCalcLab(e.target.value)}
+              className="w-full rounded-xl bg-white/10 border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-indigo-400"
+            />
+          </label>
+          {!calcIsManager && calcMode === 'fixed' && (
+            <>
+              <label className="block">
+                <span className="text-[10px] text-indigo-200 block mb-1">دستمزد ثابت هر درمان/جراحی</span>
+                <input
+                  type="number"
+                  value={calcValue}
+                  onChange={(e) => setCalcValue(e.target.value)}
+                  className="w-full rounded-xl bg-white/10 border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-indigo-400"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] text-indigo-200 block mb-1">تعداد درمان/جراحی</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={calcCount}
+                  onChange={(e) => setCalcCount(e.target.value)}
+                  className="w-full rounded-xl bg-white/10 border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-indigo-400"
+                />
+              </label>
+            </>
+          )}
+          {!calcIsManager && calcMode === 'percentage' && (
+            <>
+              <label className="block">
+                <span className="text-[10px] text-indigo-200 block mb-1">درصد سهم پزشک (٪)</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={calcValue}
+                  onChange={(e) => setCalcValue(e.target.value)}
+                  className="w-full rounded-xl bg-white/10 border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-indigo-400"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setCalcDeductLabInPct(!calcDeductLabInPct)}
+                className="self-end py-2 px-2.5 rounded-xl bg-white/10 border border-white/15 text-[10px] font-bold text-indigo-100 hover:bg-white/15"
+              >
+                {calcDeductLabInPct ? '✓ پس از کسر لابراتوار' : 'روی کل کارکرد ناخالص'}
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10 text-center">
+          <div className="bg-white/5 rounded-2xl p-2 border border-white/10">
+            <span className="text-[9px] text-indigo-200 block">خالص پس از لابراتوار</span>
+            <span className="text-xs font-black text-sky-300 tabular-nums">
+              {calcResult.netAfterLab.toLocaleString('fa-IR')} ت
+            </span>
+          </div>
+          <div className="bg-emerald-500/15 rounded-2xl p-2 border border-emerald-400/35">
+            <span className="text-[9px] text-emerald-200 block">
+              {calcIsManager ? 'سهم دکتر مهدی امیری' : 'سهم پزشک'}
+            </span>
+            <span className="text-xs font-black text-emerald-300 tabular-nums" data-testid="share_calc_doctor_result">
+              {calcResult.doctorShare.toLocaleString('fa-IR')} ت
+            </span>
+          </div>
+          <div className="bg-purple-500/15 rounded-2xl p-2 border border-purple-400/35">
+            <span className="text-[9px] text-purple-200 block">سهم کلینیک</span>
+            <span className="text-xs font-black text-purple-200 tabular-nums">
+              {calcResult.clinicShare.toLocaleString('fa-IR')} ت
+            </span>
+          </div>
+        </div>
+        <p className="text-[10px] text-indigo-200/85 text-center">{calcResult.formulaDescription}</p>
+      </div>
+
+      <div className="flex items-center justify-between pt-1">
         <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-          <Percent size={16} className="text-indigo-500" /> قوانین سهم‌بندی درآمد پزشکان
+          <Percent size={16} className="text-indigo-500" /> قوانین سهم‌بندی ثبت‌شده پزشکان
         </h3>
         <button
           onClick={() => setShowForm(true)}
+          data-testid="add_share_rule_button"
           className="w-9 h-9 rounded-xl bg-indigo-500 text-white flex items-center justify-center shadow haptic"
         >
           <Plus size={20} />
@@ -928,7 +1114,7 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
       <Sheet
         open={showForm}
         onClose={() => setShowForm(false)}
-        title="قانون سهم‌بندی جدید"
+        title="قانون سهم‌بندی جدید (۳ مدله)"
         icon={<Percent size={20} />}
         color="#6366F1"
       >
@@ -940,26 +1126,34 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
               options={[{ value: '', label: 'انتخاب...' }, ...staff.map(s => ({ value: s.id, label: `${s.first_name} ${s.last_name}` }))]}
             />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="مدل سهم">
-              <Select
-                value={form.share_type}
-                onChange={e => setForm({ ...form, share_type: e.target.value })}
-                options={[
-                  { value: 'percentage', label: 'درصدی از کارکرد' },
-                  { value: 'fixed', label: 'مبلغ ثابت هر درمان/جراحی' },
-                ]}
-              />
-            </Field>
-            <Field label="مقدار (درصد یا مبلغ)">
+          <Field label="مدل محاسبه سهم پزشک">
+            <Select
+              value={form.share_type}
+              onChange={e => {
+                const nextType = e.target.value as DoctorShareMode;
+                setForm({
+                  ...form,
+                  share_type: nextType,
+                  share_value: nextType === 'net_half_after_lab' ? '50' : '',
+                });
+              }}
+              options={[
+                { value: 'net_half_after_lab', label: 'روش اول: (کل کارکرد − هزینه لابراتوار) ÷ ۲' },
+                { value: 'fixed', label: 'روش دوم: دستمزد ثابت دستی هر درمان/جراحی' },
+                { value: 'percentage', label: 'روش سوم: درصدی اختصاصی هر پزشک' },
+              ]}
+            />
+          </Field>
+          {form.share_type !== 'net_half_after_lab' && (
+            <Field label={form.share_type === 'percentage' ? 'درصد سهم پزشک (۰ تا ۱۰۰)' : 'مبلغ ثابت هر درمان / جراحی (تومان)'}>
               <Input
                 type="number"
                 value={form.share_value}
                 onChange={e => setForm({ ...form, share_value: e.target.value })}
-                placeholder={form.share_type === 'percentage' ? 'مثلاً 50' : 'مثلاً 1500000'}
+                placeholder={form.share_type === 'percentage' ? 'مثلاً 40' : 'مثلاً 1500000'}
               />
             </Field>
-          </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Field label="اعمال روی">
               <Select value={form.applies_to} onChange={e => setForm({ ...form, applies_to: e.target.value })} options={SHARE_APPLIES} />
@@ -968,7 +1162,12 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
               <Input type="number" value={form.min_amount} onChange={e => setForm({ ...form, min_amount: e.target.value })} placeholder="اختیاری" />
             </Field>
           </div>
-          <Button color="#6366F1" disabled={saving || !form.staff_id || !form.share_value} className="w-full" onClick={save}>
+          <Button
+            color="#6366F1"
+            disabled={saving || !form.staff_id || (form.share_type !== 'net_half_after_lab' && !form.share_value)}
+            className="w-full"
+            onClick={save}
+          >
             {saving ? 'در حال ذخیره...' : 'ثبت قانون سهم'}
           </Button>
         </div>
@@ -979,6 +1178,7 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
         shares.map(sh => {
           const s = staff.find(st => st.id === sh.staff_id);
           const appliesLabel = SHARE_APPLIES.find(a => a.value === sh.applies_to)?.label ?? sh.applies_to;
+          const modeLabel = SHARE_MODE_LABELS[sh.share_type as DoctorShareMode] || sh.share_type;
           return (
             <div key={sh.id} className="glass-card p-3.5">
               <div className="flex items-center justify-between mb-1">
@@ -999,9 +1199,14 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
                   </button>
                 </div>
               </div>
-              <div className="flex items-center gap-3 text-xs">
+              <p className="text-[10px] font-bold text-indigo-500 mb-1">{modeLabel}</p>
+              <div className="flex items-center gap-3 text-xs flex-wrap">
                 <span className="text-indigo-600 font-black">
-                  {sh.share_type === 'percentage' ? `${Number(sh.share_value)}%` : `${Number(sh.share_value).toLocaleString('fa-IR')} ت`}
+                  {sh.share_type === 'net_half_after_lab'
+                    ? '(کارکرد − لاب) ÷ ۲'
+                    : sh.share_type === 'percentage'
+                    ? `${Number(sh.share_value)}%`
+                    : `${Number(sh.share_value).toLocaleString('fa-IR')} ت`}
                 </span>
                 <span className="text-gray-400">از {appliesLabel}</span>
                 {Number(sh.min_amount) > 0 && (
@@ -1018,7 +1223,7 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
         onClose={() => setDeleteId(null)}
         onConfirm={() => deleteId && del(deleteId)}
         title="حذف قانون سهم"
-        message="آیا مطمئن هستید؟"
+        message="آیا مطمئن هستید؟ نسخه پشتیبان در گاوصندوق ضدحذف ذخیره می‌شود."
         confirmLabel="حذف"
       />
     </div>

@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { rawSupabase as supabase } from '@/lib/supabaseCore';
 
 export interface OfflineMutationItem {
   id: string;
@@ -12,6 +12,12 @@ export interface OfflineMutationItem {
 }
 
 const STORAGE_KEY = 'minadental_offline_queue_v1';
+
+function emitQueueChanged(count: number) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('minadental-offline-queue-changed', { detail: { count } }));
+  }
+}
 
 export function getOfflineQueue(): OfflineMutationItem[] {
   if (typeof window === 'undefined') return [];
@@ -28,6 +34,7 @@ export function saveOfflineQueue(queue: OfflineMutationItem[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
+    emitQueueChanged(queue.length);
   } catch (err) {
     console.error('Failed to write offline queue:', err);
   }
@@ -57,9 +64,7 @@ export function enqueueOfflineMutation(
       .then((reg: any) => {
         return reg.sync.register('sync-dental-offline-queue');
       })
-      .catch((err) => {
-        console.warn('BackgroundSync registration failed or omitted:', err);
-      });
+      .catch(() => {});
   }
 
   return newItem;
@@ -68,6 +73,7 @@ export function enqueueOfflineMutation(
 export function clearOfflineQueue(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(STORAGE_KEY);
+  emitQueueChanged(0);
 }
 
 export async function processOfflineQueue(): Promise<{
@@ -106,7 +112,7 @@ export async function processOfflineQueue(): Promise<{
       const errMsg = err?.message || String(err);
       errors.push(`${item.table}:${item.type} - ${errMsg}`);
 
-      if (item.retryCount < 3) {
+      if (item.retryCount < 5) {
         remainingQueue.push({
           ...item,
           retryCount: item.retryCount + 1,
@@ -124,7 +130,6 @@ export async function processOfflineQueue(): Promise<{
 // Auto-listen to window 'online' event to process queue automatically
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
-    console.log('[OfflineQueue] Device came online, auto-flushing offline queue...');
-    processOfflineQueue().catch(console.error);
+    processOfflineQueue().catch(() => {});
   });
 }

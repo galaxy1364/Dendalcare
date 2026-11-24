@@ -1,4 +1,4 @@
-const CACHE_NAME = 'minadental-pwa-v60.0-b60';
+const CACHE_NAME = 'minadental-pwa-v61.0-b61';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -25,7 +25,7 @@ function broadcastLog(message, type = 'info') {
 
 // Resilient install: never fail SW installation if a single asset is temporarily unreachable
 self.addEventListener('install', (event) => {
-  broadcastLog('Installing ServiceWorker cache v60...');
+  broadcastLog('Installing ServiceWorker cache v61...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
       Promise.allSettled(
