@@ -454,9 +454,11 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(settingsSrc.includes('مختص مدیر و ارتقادهنده'), 'Super-Audit section must explicitly enforce Manager & Upgrader exclusivity');
   });
 
-  test('Smart Cross-Role Real-Time Workflow Popup triggers on Appointment booking (for Dentist/Manager) and Treatment completion (for Secretary/Assistant/Manager)', () => {
+  test('Smart Cross-Role Real-Time Workflow Popup, iOS 27 Registration Sheets & QBank Project Folder Cards work with rich data', () => {
     const appSrc = read('src/App.tsx');
     const guardianSrc = read('src/lib/supabaseGuardian.ts');
+    const sheetSrc = read('src/components/ui/Sheet.tsx');
+    const formSrc = read('src/components/ui/Form.tsx');
 
     assert.ok(guardianSrc.includes("new CustomEvent('minadental-table-mutated'"), 'supabaseGuardian must emit minadental-table-mutated with payload');
     assert.ok(appSrc.includes('smart_workflow_popup'), 'App.tsx must render Smart Cross-Role Workflow Popup');
@@ -464,5 +466,10 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(appSrc.includes("detail.table === 'treatments' && (detail.operation === 'INSERT' || detail.operation === 'UPDATE')"), 'App.tsx must trigger anti-forgetting popup for Secretary/Assistant/Manager when a treatment is recorded');
     assert.ok(appSrc.includes('smart_popup_open_treatment_btn'), 'Appointment popup must allow Dentist/Manager 1-click jump to treatment chart');
     assert.ok(appSrc.includes('smart_popup_open_finance_btn'), 'Treatment popup must allow Secretary/Manager 1-click jump to billing/installments/cheques');
+    assert.ok(appSrc.includes('suggestedNextStep') && appSrc.includes('doctorSharePreview'), 'Workflow popup must provide rich next-step checklist and 50% work-based doctor share preview');
+    assert.ok(appSrc.includes('simulate_appt_popup_btn') && appSrc.includes('simulate_treat_popup_btn'), 'Project folder must provide live test triggers for both workflow popups');
+    assert.ok(appSrc.includes('testId="folder_caller_id_btn"') && appSrc.includes('<QBankTile'), 'Project folder cards must use authentic QBankTile curved-notch geometry');
+    assert.ok(sheetSrc.includes('ios27_registration_sheet') && sheetSrc.includes('ios27_sheet_grabber_pill'), 'Sheet.tsx must implement authentic iOS 27 registration sheet with grabber pill and frosted navbar');
+    assert.ok(formSrc.includes('ios27-form-field') && formSrc.includes('ios27-input') && formSrc.includes('ios27-select'), 'Form.tsx must implement authentic iOS 27 inset grouped form controls with haptics');
   });
 });

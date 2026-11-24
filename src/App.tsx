@@ -1143,12 +1143,12 @@ function App() {
           {/* Authentic QBank Curved-Notch Cards Inside Project Folder (۱۰۰٪ مطابق هندسه کیوبانک) */}
           <div className="grid grid-cols-2 gap-2.5">
             <QBankTile
-              title="کالر آیدی هوشمند"
-              subtitle="تشخیص تماس بیمار و نوبت خودکار"
-              accentColor="#10B981"
-              cardBg="linear-gradient(145deg, #FFFFFF 0%, #ECFDF5 100%)"
-              iconBg="linear-gradient(135deg, #10B981, #059669)"
-              icon={<PhoneIncoming size={19} className="text-white" />}
+              label="کالر آیدی هوشمند"
+              sub="تشخیص تماس بیمار و نوبت خودکار"
+              color="#10B981"
+              surfaceBg="#FFFFFF"
+              surfaceBgEnd="#ECFDF5"
+              icon={<PhoneIncoming size={19} />}
               testId="folder_caller_id_btn"
               onClick={() => {
                 setProjectFolderOpen(false);
@@ -1157,12 +1157,12 @@ function App() {
             />
 
             <QBankTile
-              title="نصب ۴ پلتفرم"
-              subtitle="آیفون، اندروید، آیپد و ویندوز"
-              accentColor="#7C3AED"
-              cardBg="linear-gradient(145deg, #FFFFFF 0%, #F5F3FF 100%)"
-              iconBg="linear-gradient(135deg, #8B5CF6, #6D28D9)"
-              icon={<Download size={19} className="text-white" />}
+              label="نصب ۴ پلتفرم"
+              sub="آیفون، اندروید، آیپد و ویندوز"
+              color="#7C3AED"
+              surfaceBg="#FFFFFF"
+              surfaceBgEnd="#F5F3FF"
+              icon={<Download size={19} />}
               testId="folder_install_pwa_btn"
               onClick={() => {
                 setProjectFolderOpen(false);
@@ -1171,12 +1171,12 @@ function App() {
             />
 
             <QBankTile
-              title="تنظیمات و نسخه‌ها"
-              subtitle="تعرفه‌ها، بکاپ ابری و مدیریت"
-              accentColor="#4F46E5"
-              cardBg="linear-gradient(145deg, #FFFFFF 0%, #EEF2FF 100%)"
-              iconBg="linear-gradient(135deg, #6366F1, #4338CA)"
-              icon={<Keyboard size={19} className="text-white" />}
+              label="تنظیمات و نسخه‌ها"
+              sub="تعرفه‌ها، بکاپ ابری و مدیریت"
+              color="#4F46E5"
+              surfaceBg="#FFFFFF"
+              surfaceBgEnd="#EEF2FF"
+              icon={<Keyboard size={19} />}
               testId="folder_settings_shortcut_btn"
               onClick={() => {
                 setProjectFolderOpen(false);
@@ -1185,12 +1185,12 @@ function App() {
             />
 
             <QBankTile
-              title="سینک ابری و لوکال"
-              subtitle="پشتیبان ابری + گاوصندوق ضدحذف"
-              accentColor="#0284C7"
-              cardBg="linear-gradient(145deg, #FFFFFF 0%, #F0F9FF 100%)"
-              iconBg="linear-gradient(135deg, #0EA5E9, #0369A1)"
-              icon={<Cloud size={19} className={`text-white ${syncing ? 'animate-pulse' : ''}`} />}
+              label="سینک ابری و لوکال"
+              sub="پشتیبان ابری + گاوصندوق ضدحذف"
+              color="#0284C7"
+              surfaceBg="#FFFFFF"
+              surfaceBgEnd="#F0F9FF"
+              icon={<Cloud size={19} className={syncing ? 'animate-pulse' : ''} />}
               testId="folder_cloud_sync_btn"
               onClick={() => {
                 handleSync();
