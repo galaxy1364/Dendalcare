@@ -859,9 +859,9 @@ export function Dashboard({ onNavigate }: Props) {
         </div>
       )}
 
-      {/* ── 5. Phased 13-Module Section-by-Section Global Benchmark Tracker (10/10 Locked) ── */}
-      <div className="glass-card p-3.5" data-testid="dashboard_module_phase_roadmap">
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-2.5">
+      {/* ── 5. Phased 13-Module Section-by-Section Global Benchmark Tracker + 8 UI Libraries & 7 Skills Engine (10/10 Locked) ── */}
+      <div className="glass-card manus-ui-card p-3.5 space-y-2.5" data-testid="dashboard_module_phase_roadmap">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center">
               <ShieldCheck size={15} className="text-emerald-600" />
@@ -880,6 +880,37 @@ export function Dashboard({ onNavigate }: Props) {
           </span>
         </div>
 
+        {/* Active 8 UI Libraries & 7 Simultaneous Project Skills Ribbon */}
+        {(() => {
+          const uiSummary = MemPalace.getUILibrariesAndSkills();
+          return (
+            <div
+              data-testid="dashboard_active_ui_libs_strip"
+              className="rounded-2xl bg-gradient-to-r from-indigo-950 via-violet-950 to-slate-900 p-2.5 text-white border border-violet-400/30 space-y-1.5"
+            >
+              <div className="flex items-center justify-between flex-wrap gap-1.5">
+                <span className="text-[10.5px] font-black text-amber-300 flex items-center gap-1.5">
+                  <Sparkles size={13} />
+                  موتور همزمان ۸ کتابخانه UI و ۷ اسکیل پروژه (فعال روی تمام ۱۳ ماژول)
+                </span>
+                <span className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+                  {fmt(uiSummary.totalLibraries)} کتابخانه + {fmt(uiSummary.totalSkills)} اسکیل فعال
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                {uiSummary.libraries.map((lib) => (
+                  <span
+                    key={lib.id}
+                    className="skiper-ui-pill smooth-ui-spring px-2 py-0.5 rounded-lg text-[9.5px] font-extrabold text-violet-100 whitespace-nowrap shrink-0"
+                  >
+                    ✓ {lib.name.split(' ')[0]} {lib.name.split(' ')[1] || ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
           {MemPalace.getModuleBenchmarkPhases().map((mp) => (
             <button
@@ -890,7 +921,7 @@ export function Dashboard({ onNavigate }: Props) {
                 playTactileFeedback('tap');
                 onNavigate(mp.sectionId as SectionId);
               }}
-              className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-2xl bg-white/90 hover:bg-indigo-50/50 border border-slate-200/80 text-right transition-all"
+              className="vengeance-ui-hover smooth-ui-spring flex items-center justify-between gap-2 px-2.5 py-2 rounded-2xl bg-white/90 hover:bg-indigo-50/50 border border-slate-200/80 text-right transition-all"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span
@@ -904,7 +935,7 @@ export function Dashboard({ onNavigate }: Props) {
                   <p className="text-[9.5px] text-slate-500 truncate">{mp.globalBenchmarkRef}</p>
                 </div>
               </div>
-              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+              <span className="daisy-badge text-[9px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                 ۱۰/۱۰
               </span>
             </button>

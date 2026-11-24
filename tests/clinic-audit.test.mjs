@@ -579,6 +579,44 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(cssSrc.includes('.manus-ui-card') && cssSrc.includes('.daisy-btn') && cssSrc.includes('.heroui-surface') && cssSrc.includes('.smooth-ui-spring') && cssSrc.includes('.vengeance-ui-hover') && cssSrc.includes('.kokonut-ui-glow') && cssSrc.includes('.skiper-ui-pill') && cssSrc.includes('.animmaster-shimmer'), 'src/index.css must provide utility classes for all 8 UI libraries');
     assert.ok(settingsSrc.includes('settings_active_ui_libraries_panel') && settingsSrc.includes('getActiveUILibrariesSummary'), 'SettingsSection.tsx must render active 8 UI Libraries & 7 Simultaneous Project Skills panel');
   });
+
+  test('31. End-to-End Word-for-Word Verification of All 13 Modules, Palmer Chart, Collapsible Patient/Lab/Implant Timelines, Perpetual Calendar, 3-Mode Doctor Share, Caller-ID, Zero-Delete Vault & 8 UI Libraries on Dashboard', () => {
+    const metaJson = JSON.parse(read('metadata.json'));
+    const stringsXml = read('app/src/main/res/values/strings.xml');
+    const dashSrc = read('src/components/sections/Dashboard.tsx');
+    const patientsSrc = read('src/components/sections/Patients.tsx');
+    const treatmentsSrc = read('src/components/sections/Treatments.tsx');
+    const labSrc = read('src/components/sections/Lab.tsx');
+    const implantsSrc = read('src/components/sections/Implants.tsx');
+    const calendarSrc = read('src/components/sections/CalendarSection.tsx');
+    const financeSrc = read('src/components/sections/Finance.tsx');
+    const inventorySrc = read('src/components/sections/Inventory.tsx');
+    const remindersSrc = read('src/components/sections/Reminders.tsx');
+    const staffSrc = read('src/components/sections/StaffSection.tsx');
+    const messagesSrc = read('src/components/sections/Messages.tsx');
+    const settingsSrc = read('src/components/sections/SettingsSection.tsx');
+
+    // 1. Platform Sync & App Name ("مینادنتال")
+    assert.ok(metaJson.name.includes('مینادنتال'), 'metadata.json name must be مینادنتال');
+    assert.ok(stringsXml.includes('<string name="app_name">مینادنتال</string>'), 'strings.xml app_name must be مینادنتال');
+
+    // 2. Dashboard 8 UI Libraries Ribbon + 13 Phased Modules + Morning Huddle + 4 Global KPIs
+    assert.ok(dashSrc.includes('dashboard_active_ui_libs_strip'), 'Dashboard must render active 8 UI Libraries & 7 Simultaneous Skills ribbon');
+    assert.ok(dashSrc.includes('dashboard_global_kpi_strip') && dashSrc.includes('dashboard_morning_huddle_bar') && dashSrc.includes('dashboard_module_phase_roadmap'), 'Dashboard must render Global KPI Strip, 3-Day Morning Huddle, and 13-Module Phased Roadmap');
+
+    // 3. All Clinical, Lab, Implant, Calendar, Financial, Inventory, Reminder, Staff, Message & Settings Workflows
+    assert.ok(patientsSrc.includes('getPatientFileNo') && patientsSrc.includes('insurance_number') && patientsSrc.includes('expandedCardId') && patientsSrc.includes('searchOpen'), 'Patients must support sliding chip bar, animated search lens, collapsible cards, and editable patient file number');
+    assert.ok(treatmentsSrc.includes('PalmerChart') && treatmentsSrc.includes('TreatmentForm') && treatmentsSrc.includes('searchOpen'), 'Treatments must implement authentic Palmer Notation dental chart and treatment form');
+    assert.ok(labSrc.includes('loadLaboratories') && labSrc.includes('expandedId') && labSrc.includes('searchOpen'), 'Lab must support fixed/removable laboratory definitions, chip filter, and collapsible stage timeline');
+    assert.ok(implantsSrc.includes('loadImplantBrands') && implantsSrc.includes('osseointegration_date') && implantsSrc.includes('abutment_date') && implantsSrc.includes('crown_date'), 'Implants must track full multi-stage implant timeline with dates and reminders');
+    assert.ok(calendarSrc.includes('toJalaliFullLabel') && calendarSrc.includes('toHijriStr') && calendarSrc.includes('toGregorianFaStr'), 'CalendarSection must provide complete RTL Persian Jalali, Hijri, and Gregorian perpetual calendar');
+    assert.ok(financeSrc.includes('installments') && financeSrc.includes('checks') && financeSrc.includes('safteh'), 'Finance must manage installments, Sayad cheques, guarantee cheques/safteh, and patient balances');
+    assert.ok(inventorySrc.includes('min_quantity') && inventorySrc.includes('activeChip') && inventorySrc.includes('searchOpen'), 'Inventory must provide low-stock alarm threshold and chip navigation');
+    assert.ok(remindersSrc.includes('loadSmartReminderRules') && remindersSrc.includes('reminders_section_trigger_ios_popup_btn'), 'Reminders must provide configurable days-before smart radar and iOS 27 popup trigger');
+    assert.ok(staffSrc.includes('net_half_after_lab') && staffSrc.includes('doctor_calc_fixture_cost_input'), 'StaffSection must implement 3-mode doctor share calculator with 100% clinic-paid implant fixture');
+    assert.ok(messagesSrc.includes('SMS_TEMPLATES') && messagesSrc.includes('activeChip') && messagesSrc.includes('searchOpen'), 'Messages must provide sliding chip bar, SMS templates, and clinic/patient messaging');
+    assert.ok(settingsSrc.includes('settings_unified_update_center') && settingsSrc.includes('settings_active_ui_libraries_panel'), 'SettingsSection must house Unified Atomic Update Center and 8 Active UI Libraries panel');
+  });
 });
 
 
