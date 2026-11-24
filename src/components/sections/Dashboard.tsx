@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import {
   Users, CalendarDays, Stethoscope, FlaskConical, Anchor,
   Wallet, Package, BellRing, TrendingUp,
   AlertTriangle, Sparkles, Clock,
-  UserCog, CreditCard, Activity, CheckCircle2, ArrowUpLeft, Smartphone, ShieldCheck,
+  UserCog, CreditCard, Activity, CheckCircle2, ArrowUpLeft, Smartphone, ShieldCheck, Search,
 } from 'lucide-react';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import type {
@@ -48,6 +48,10 @@ export function Dashboard({ onNavigate }: Props) {
   const { data: safteh,       loading: lsaf } = useRealtimeTable<Safteh>('safteh');
 
   const [huddleDay, setHuddleDay] = useState<HuddleDayKey>('today');
+  const [bannerSlide, setBannerSlide] = useState(0);
+  const [bannerDragX, setBannerDragX] = useState(0);
+  const [bannerDragging, setBannerDragging] = useState(false);
+  const bannerSwipeRef = useRef<{ id: number | null; x: number; moved: boolean }>({ id: null, x: 0, moved: false });
 
   const today = todayGregorian();
   const yesterday = useMemo(() => shiftIsoDate(today, -1), [today]);
@@ -419,6 +423,158 @@ export function Dashboard({ onNavigate }: Props) {
           </button>
         </div>
       </div>
+
+      {/* ── 1.5 Authentic QBank Touch-Swipeable Service Slide Banner (Screenshots 3 & 4) ── */}
+      {(() => {
+        const slides = [
+          {
+            id: 'huddle',
+            title: 'خدمات و پوشه‌های کلینیک',
+            subtitle: `${fmt(s.todayAppts)} نوبت امروز • ${fmt(s.confirmedAppts)} تاییدشده • ${fmt(s.activeTreat)} طرح درمان فعال`,
+            cta: 'مشاهده نوبت‌ها',
+            color: '#2563EB',
+            bgStart: '#EEF2FF',
+            bgEnd: '#DBEAFE',
+            border: '#BFDBFE',
+            icon: CalendarDays,
+            onAction: () => onNavigate('appointments'),
+          },
+          {
+            id: 'finance_alerts',
+            title: 'مدیریت چک صیادی و اقساط',
+            subtitle: s.totalOverdueFin > 0
+              ? `${fmt(s.totalOverdueFin)} مورد سررسید گذشته (${fmt(s.overdueChecks)} چک • ${fmt(s.overdueInstallments)} قسط)`
+              : `تمام چک‌ها و اقساط بدون معوقه • دریافتی ماه ${fmt(s.monthIncome)} تومان`,
+            cta: 'ورود به مالی',
+            color: '#16A34A',
+            bgStart: '#ECFDF5',
+            bgEnd: '#DCFCE7',
+            border: '#BBF7D0',
+            icon: CreditCard,
+            onAction: () => onNavigate('finance'),
+          },
+          {
+            id: 'lab_implant',
+            title: 'زنجیره لابراتوار و ایمپلنت',
+            subtitle: `${fmt(s.pendingLab)} سفارش لابراتوار در جریان • ${fmt(s.activeImp)} پرونده فعال ایمپلنت`,
+            cta: 'پیگیری مراحل',
+            color: '#DB2777',
+            bgStart: '#FDF2F8',
+            bgEnd: '#FCE7F3',
+            border: '#FBCFE8',
+            icon: FlaskConical,
+            onAction: () => onNavigate('lab'),
+          },
+          {
+            id: 'global_search',
+            title: 'جستجوی سراسری و پوشه‌ها',
+            subtitle: 'دسترسی تک‌لمسی به تمام ۱۳ بخش، پرونده بیماران و ابزارهای مطب',
+            cta: 'باز کردن جستجو',
+            color: '#7C3AED',
+            bgStart: '#F5F3FF',
+            bgEnd: '#EDE9FE',
+            border: '#DDD6FE',
+            icon: Search,
+            onAction: () => {
+              window.dispatchEvent(new CustomEvent('minadental-open-qbank-menu', { detail: { focusSearch: true } }));
+            },
+          },
+        ];
+        const currentSlide = slides[bannerSlide % slides.length];
+        const SIcon = currentSlide.icon;
+        return (
+          <div
+            data-testid="dashboard_qbank_slide_banner"
+            className="rounded-[24px] p-3 border shadow-sm overflow-hidden relative select-none touch-pan-y cursor-pointer"
+            style={{
+              background: `linear-gradient(125deg, ${currentSlide.bgStart} 0%, #FFFFFF 55%, ${currentSlide.bgEnd} 100%)`,
+              borderColor: currentSlide.border,
+              transform: `translateX(${bannerDragX}px)`,
+              transition: bannerDragging ? 'none' : 'transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            }}
+            onPointerDown={(e) => {
+              if ((e.target as HTMLElement)?.closest('button')) return;
+              bannerSwipeRef.current = { id: e.pointerId, x: e.clientX, moved: false };
+              setBannerDragging(true);
+            }}
+            onPointerMove={(e) => {
+              const st = bannerSwipeRef.current;
+              if (st.id !== e.pointerId) return;
+              const dx = e.clientX - st.x;
+              if (Math.abs(dx) > 6) st.moved = true;
+              setBannerDragX(Math.max(-70, Math.min(70, dx * 0.5)));
+            }}
+            onPointerUp={(e) => {
+              const st = bannerSwipeRef.current;
+              if (st.id !== e.pointerId) return;
+              const dx = e.clientX - st.x;
+              st.id = null;
+              setBannerDragging(false);
+              setBannerDragX(0);
+              if (Math.abs(dx) > 36) {
+                playTactileFeedback('soft');
+                setBannerSlide((prev) =>
+                  dx < 0 ? (prev + 1) % slides.length : (prev - 1 + slides.length) % slides.length
+                );
+              } else if (!st.moved) {
+                playTactileFeedback('tap');
+                currentSlide.onAction();
+              }
+            }}
+          >
+            <div className="flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-sm"
+                  style={{ background: currentSlide.color }}
+                >
+                  <SIcon size={19} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-slate-900 truncate">{currentSlide.title}</p>
+                  <p className="text-[10.5px] font-semibold text-slate-600 truncate mt-0.5">{currentSlide.subtitle}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  playTactileFeedback('tap');
+                  currentSlide.onAction();
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border text-[10px] font-black shrink-0 shadow-sm transition-all"
+                style={{ color: currentSlide.color, borderColor: currentSlide.border }}
+              >
+                {currentSlide.cta}
+              </button>
+            </div>
+
+            {/* QBank Slide Pagination Dots (• ▬▬ • •) */}
+            <div className="flex items-center justify-center gap-1.5 mt-2">
+              {slides.map((sl, idx) => {
+                const isAct = idx === bannerSlide % slides.length;
+                return (
+                  <button
+                    key={sl.id}
+                    type="button"
+                    aria-label={sl.title}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playTactileFeedback('soft');
+                      setBannerSlide(idx);
+                    }}
+                    className="h-1.5 rounded-full transition-all duration-200"
+                    style={{
+                      width: isAct ? '22px' : '6px',
+                      background: isAct ? currentSlide.color : '#CBD5E1',
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── 2. Authentic QBank Curved-Notch Module Grid (60-30-10 Calibrated Pastel Surfaces + Colored Spring Chevrons) ── */}
       <div className="bento gap-2.5">

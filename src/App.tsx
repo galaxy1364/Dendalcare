@@ -19,7 +19,7 @@ import { SettingsSection } from '@/components/sections/SettingsSection';
 import {
   Cloud, Sparkles, X, Keyboard, WifiOff, Download, ShieldAlert, Archive, UploadCloud,
   BellRing, ArrowLeft, User, ShieldCheck, RefreshCw, Plus, CheckCircle2, LogOut, PhoneIncoming, PhoneCall,
-  FolderKanban, Volume2, Vibrate, Smartphone,
+  FolderKanban, Volume2, Vibrate, Smartphone, Search, ChevronRight, Clock,
 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
@@ -117,6 +117,17 @@ function App() {
   const [headerVisible, setHeaderVisible] = useState(true);
   const [zeroLossTick, setZeroLossTick] = useState(0);
   const [forceExpandReminderKey, setForceExpandReminderKey] = useState(0);
+  const [navHistory, setNavHistory] = useState<SectionId[]>([]);
+  const [drawerDragX, setDrawerDragX] = useState(0);
+  const [drawerDragging, setDrawerDragging] = useState(false);
+  const [drawerSlideIdx, setDrawerSlideIdx] = useState(0);
+  const [drawerCarouselDragX, setDrawerCarouselDragX] = useState(0);
+  const [drawerCarouselDragging, setDrawerCarouselDragging] = useState(false);
+  const [swipedAlertId, setSwipedAlertId] = useState<string | null>(null);
+  const [swipedAlertDx, setSwipedAlertDx] = useState(0);
+  const drawerSwipeRef = useRef<{ id: number | null; x: number; y: number }>({ id: null, x: 0, y: 0 });
+  const carouselSwipeRef = useRef<{ id: number | null; x: number; moved: boolean }>({ id: null, x: 0, moved: false });
+  const rowSwipeRef = useRef<{ id: number | null; alertId: string | null; x: number; y: number }>({ id: null, alertId: null, x: 0, y: 0 });
   const lastScrollY = useRef(0);
 
   useEffect(() => {
@@ -144,6 +155,9 @@ function App() {
   }, []);
 
   const handleNavigate = (newSection: SectionId) => {
+    if (newSection !== active) {
+      setNavHistory((prev) => [...prev.slice(-9), active]);
+    }
     setActive(newSection);
     OmniRoute.navigate(newSection);
     MemPalace.recordAudit({
@@ -153,6 +167,22 @@ function App() {
       details: `تغییر بخش به ماژول: ${newSection}`,
       actor: currentUser?.fullName || 'کاربر',
       status: 'pass',
+    });
+  };
+
+  const handleGoBack = () => {
+    playTactileFeedback('soft');
+    setNavHistory((prev) => {
+      if (prev.length > 0) {
+        const nextHistory = [...prev];
+        const target = nextHistory.pop() || 'dashboard';
+        setActive(target);
+        OmniRoute.navigate(target);
+        return nextHistory;
+      }
+      setActive('dashboard');
+      OmniRoute.navigate('dashboard');
+      return prev;
     });
   };
 
@@ -880,8 +910,20 @@ function App() {
               boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08), inset 0 1px 0 #FFFFFF',
             }}
           >
-            {/* Right Side (RTL Start): Mascot Logo + Brand Name + Active User */}
+            {/* Right Side (RTL Start): Contextual Back Pill (when off Dashboard) + Mascot Logo + Brand Name */}
             <div className="flex items-center gap-2 min-w-0">
+              {active !== 'dashboard' && (
+                <button
+                  type="button"
+                  data-testid="topbar_back_button"
+                  onClick={handleGoBack}
+                  aria-label="بازگشت به صفحه قبل"
+                  title="بازگشت"
+                  className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center justify-center text-slate-800 shrink-0 active:scale-90 transition-all"
+                >
+                  <ChevronRight size={17} strokeWidth={2.5} />
+                </button>
+              )}
               <div
                 className="cursor-pointer shrink-0 transition-transform active:scale-95 md:hidden"
                 onClick={() => {
@@ -890,7 +932,7 @@ function App() {
                 }}
                 title="مینادنتال - خانه"
               >
-                <MascotTooth mood={mascotMood} size={40} />
+                <MascotTooth mood={mascotMood} size={38} />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
@@ -1247,6 +1289,20 @@ function App() {
                 handleSync();
               }}
             />
+
+            <QBankTile
+              label="جستجوی سراسری و پوشه‌ها"
+              sub="یافتن سریع بیمار، چک و خدمات"
+              color="#D97706"
+              surfaceBg="#FFFFFF"
+              surfaceBgEnd="#FFFBEB"
+              icon={<Search size={19} />}
+              testId="folder_global_search_btn"
+              onClick={() => {
+                setProjectFolderOpen(false);
+                window.dispatchEvent(new CustomEvent('minadental-open-qbank-menu', { detail: { focusSearch: true } }));
+              }}
+            />
           </div>
 
           {/* Live Smart Cross-Role Workflow Popup Triggers (تست زنده پاپ‌آپ هوشمند نوبت و درمان) */}
@@ -1376,7 +1432,7 @@ function App() {
         onOpen={() => setNotifOpen(true)}
       />
 
-      {/* World-Class iOS Right-Side Slide-Over Notification & Smart Reminder Drawer (100% Opaque Zero-Bleed Daylight Surface) */}
+      {/* World-Class iOS Right-Side Slide-Over Notification & Smart Reminder Drawer (100% Opaque + Hand-Swipe Slides) */}
       {notifOpen && (
         <div
           className="fixed inset-0 z-50 flex justify-start"
@@ -1388,9 +1444,44 @@ function App() {
         >
           <div className="absolute inset-0 bg-slate-900/65 backdrop-blur-md animate-fade-in" />
           <aside
-            className="relative w-full max-w-sm h-full bg-[#F8FAFC] text-slate-900 border-l border-slate-200 p-4 flex flex-col drawer-slide-in-right safe-top safe-bottom"
+            className="relative w-full max-w-sm h-full bg-[#F8FAFC] text-slate-900 border-l border-slate-200 p-4 flex flex-col drawer-slide-in-right safe-top safe-bottom touch-pan-y"
             onClick={e => e.stopPropagation()}
-            style={{ boxShadow: '-16px 0 48px rgba(15, 23, 42, 0.28)' }}
+            onPointerDown={(e) => {
+              if ((e.target as HTMLElement)?.closest('button, a, [data-no-drawer-drag="true"]')) return;
+              drawerSwipeRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+              setDrawerDragging(true);
+            }}
+            onPointerMove={(e) => {
+              const st = drawerSwipeRef.current;
+              if (st.id !== e.pointerId) return;
+              const dx = e.clientX - st.x;
+              const dy = e.clientY - st.y;
+              if (dx > 0 && Math.abs(dx) > Math.abs(dy)) {
+                setDrawerDragX(Math.min(260, dx));
+              }
+            }}
+            onPointerUp={(e) => {
+              const st = drawerSwipeRef.current;
+              if (st.id !== e.pointerId) return;
+              const dx = e.clientX - st.x;
+              st.id = null;
+              setDrawerDragging(false);
+              setDrawerDragX(0);
+              if (dx > 68) {
+                playTactileFeedback('soft');
+                setNotifOpen(false);
+              }
+            }}
+            onPointerCancel={() => {
+              drawerSwipeRef.current.id = null;
+              setDrawerDragging(false);
+              setDrawerDragX(0);
+            }}
+            style={{
+              boxShadow: '-16px 0 48px rgba(15, 23, 42, 0.28)',
+              transform: `translateX(${drawerDragX}px)`,
+              transition: drawerDragging ? 'none' : 'transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            }}
           >
             {/* Drawer Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 bg-white -mx-4 -mt-4 px-4 pt-4">
@@ -1401,7 +1492,7 @@ function App() {
                 <div>
                   <h3 className="text-sm font-black text-slate-900">رادار هوشمند یادآوری و اعلان‌ها</h3>
                   <p className="text-[10.5px] font-bold text-rose-700">
-                    {notifCount.toLocaleString('fa-IR')} هشدار فعال در کل بخش‌های مطب
+                    {notifCount.toLocaleString('fa-IR')} هشدار فعال • کشیدن به راست برای بستن
                   </p>
                 </div>
               </div>
@@ -1417,9 +1508,9 @@ function App() {
               </button>
             </div>
 
-            {/* Real OS Device Notification Bridge (اتصال به نوتیفیکیشن واقعی گوشی) */}
+            {/* Real OS Device Notification Bridge */}
             <div
-              className={`mt-3 p-2.5 rounded-2xl border flex items-center justify-between gap-2 ${
+              className={`mt-2.5 p-2.5 rounded-2xl border flex items-center justify-between gap-2 ${
                 deviceNotifOn
                   ? 'bg-emerald-50 border-emerald-200'
                   : 'bg-white border-slate-200 shadow-sm'
@@ -1495,6 +1586,113 @@ function App() {
               </div>
             </div>
 
+            {/* Interactive Touch-Swipe Spotlight Slide Carousel inside Drawer */}
+            {zeroLossPopupQueue.length > 0 && (() => {
+              const safeSlide = drawerSlideIdx % zeroLossPopupQueue.length;
+              const slideItem = zeroLossPopupQueue[safeSlide];
+              const isCrit = slideItem.urgency === 'critical';
+              const sBg = isCrit ? '#FFF1F2' : slideItem.urgency === 'today' ? '#FFFBEB' : '#EFF6FF';
+              const sBorder = isCrit ? '#FDA4AF' : slideItem.urgency === 'today' ? '#FCD34D' : '#BFDBFE';
+              const sAccent = isCrit ? '#E11D48' : slideItem.urgency === 'today' ? '#D97706' : '#2563EB';
+              const dotsCount = Math.min(zeroLossPopupQueue.length, 5);
+              return (
+                <div
+                  data-no-drawer-drag="true"
+                  data-testid="drawer_notification_slide_carousel"
+                  className="mt-2 rounded-2xl p-2.5 border shadow-sm select-none touch-pan-y"
+                  style={{
+                    background: sBg,
+                    borderColor: sBorder,
+                    transform: `translateX(${drawerCarouselDragX}px)`,
+                    transition: drawerCarouselDragging ? 'none' : 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  }}
+                  onPointerDown={(e) => {
+                    if ((e.target as HTMLElement)?.closest('button')) return;
+                    carouselSwipeRef.current = { id: e.pointerId, x: e.clientX, moved: false };
+                    setDrawerCarouselDragging(true);
+                  }}
+                  onPointerMove={(e) => {
+                    const st = carouselSwipeRef.current;
+                    if (st.id !== e.pointerId) return;
+                    const dx = e.clientX - st.x;
+                    if (Math.abs(dx) > 6) st.moved = true;
+                    setDrawerCarouselDragX(Math.max(-72, Math.min(72, dx * 0.55)));
+                  }}
+                  onPointerUp={(e) => {
+                    const st = carouselSwipeRef.current;
+                    if (st.id !== e.pointerId) return;
+                    const dx = e.clientX - st.x;
+                    st.id = null;
+                    setDrawerCarouselDragging(false);
+                    setDrawerCarouselDragX(0);
+                    if (zeroLossPopupQueue.length > 1 && Math.abs(dx) > 34) {
+                      playTactileFeedback('soft');
+                      setDrawerSlideIdx((prev) =>
+                        dx < 0
+                          ? (prev + 1) % zeroLossPopupQueue.length
+                          : (prev - 1 + zeroLossPopupQueue.length) % zeroLossPopupQueue.length
+                      );
+                    }
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-[9.5px] font-black px-2 py-0.5 rounded-full bg-white border" style={{ color: sAccent, borderColor: sBorder }}>
+                      اسلاید یادآوری {(safeSlide + 1).toLocaleString('fa-IR')}/{zeroLossPopupQueue.length.toLocaleString('fa-IR')}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playTactileFeedback('success');
+                          acknowledgeZeroLossAlert(slideItem.id);
+                          setZeroLossTick((t) => t + 1);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[9.5px] font-black"
+                      >
+                        تایید
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playTactileFeedback('soft');
+                          snoozeZeroLossAlert(slideItem.id, 15);
+                          setZeroLossTick((t) => t + 1);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-slate-800 text-[9.5px] font-extrabold"
+                      >
+                        ۱۵ دقیقه
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] font-black text-slate-900 truncate">{slideItem.title}</p>
+                  <p className="text-[10px] font-semibold text-slate-700 truncate mt-0.5">{slideItem.subtitle}</p>
+                  {zeroLossPopupQueue.length > 1 && (
+                    <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                      {Array.from({ length: dotsCount }).map((_, idx) => {
+                        const act = safeSlide % dotsCount === idx;
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            aria-label={`اسلاید اعلان ${(idx + 1).toLocaleString('fa-IR')}`}
+                            onClick={() => {
+                              playTactileFeedback('soft');
+                              setDrawerSlideIdx(idx);
+                            }}
+                            className="h-1.5 rounded-full transition-all duration-200"
+                            style={{
+                              width: act ? '18px' : '6px',
+                              background: act ? sAccent : '#CBD5E1',
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Instant iOS 27 Internal Popup Trigger & Zero-Loss Queue Restore Bar */}
             <div className="mt-2 grid grid-cols-2 gap-1.5">
               <button
@@ -1530,7 +1728,7 @@ function App() {
             </div>
 
             {/* Category Filter Chips inside Slide-Over Drawer */}
-            <div className="flex items-center gap-1.5 py-2.5 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1.5 py-2 overflow-x-auto no-scrollbar">
               {[
                 { id: 'all' as const, label: 'همه بخش‌ها', count: liveSmartAlerts.length },
                 {
@@ -1563,7 +1761,7 @@ function App() {
               ))}
             </div>
 
-            {/* Live Smart Alerts List (100% Opaque Solid White Cards with Crisp Semantic Borders) */}
+            {/* Live Smart Alerts List (100% Opaque Solid White Cards + Hand-Swipe Ack/Snooze) */}
             <div className="flex-1 overflow-y-auto space-y-2 py-1 pr-0.5">
               {filteredDrawerAlerts.length === 0 && pendingReminders.length === 0 && unreadMessages.length === 0 ? (
                 <div className="text-center py-12 bg-white rounded-2xl border border-slate-200">
@@ -1578,35 +1776,107 @@ function App() {
                     const accentColor = isCritical ? '#DC2626' : isToday ? '#D97706' : '#2563EB';
                     const dateBg = isCritical ? '#FFF1F2' : isToday ? '#FFFBEB' : '#EFF6FF';
                     const dateText = isCritical ? '#9F1239' : isToday ? '#92400E' : '#1E40AF';
+                    const rowOffset = swipedAlertId === alert.id ? swipedAlertDx : 0;
                     return (
-                      <button
+                      <div
                         key={alert.id}
-                        onClick={() => {
-                          setActive(alert.targetSection);
-                          setNotifOpen(false);
-                        }}
-                        className="w-full text-right rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 p-3 shadow-sm transition-all active:scale-[0.99]"
-                        style={{ borderRightWidth: '4px', borderRightColor: accentColor }}
+                        data-no-drawer-drag="true"
+                        className="relative overflow-hidden rounded-2xl"
                       >
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-1.5">
-                              <span className="text-xs font-black text-slate-900 truncate">
-                                {alert.title}
-                              </span>
-                              <span
-                                className="text-[10px] px-2 py-0.5 rounded-full shrink-0 font-extrabold"
-                                style={{ background: dateBg, color: dateText }}
-                              >
-                                {toJalaliStr(alert.dueDate)}
-                              </span>
+                        <div
+                          onPointerDown={(e) => {
+                            if ((e.target as HTMLElement)?.closest('[data-row-action="true"]')) return;
+                            rowSwipeRef.current = { id: e.pointerId, alertId: alert.id, x: e.clientX, y: e.clientY };
+                            setSwipedAlertId(alert.id);
+                          }}
+                          onPointerMove={(e) => {
+                            const st = rowSwipeRef.current;
+                            if (st.id !== e.pointerId || st.alertId !== alert.id) return;
+                            const dx = e.clientX - st.x;
+                            const dy = e.clientY - st.y;
+                            if (Math.abs(dx) > Math.abs(dy)) {
+                              setSwipedAlertDx(Math.max(-84, Math.min(84, dx * 0.7)));
+                            }
+                          }}
+                          onPointerUp={(e) => {
+                            const st = rowSwipeRef.current;
+                            if (st.id !== e.pointerId || st.alertId !== alert.id) return;
+                            const dx = e.clientX - st.x;
+                            rowSwipeRef.current = { id: null, alertId: null, x: 0, y: 0 };
+                            setSwipedAlertId(null);
+                            setSwipedAlertDx(0);
+                            if (dx < -48) {
+                              playTactileFeedback('success');
+                              acknowledgeZeroLossAlert(alert.id);
+                              setZeroLossTick((t) => t + 1);
+                            } else if (dx > 48) {
+                              playTactileFeedback('soft');
+                              snoozeZeroLossAlert(alert.id, 15);
+                              setZeroLossTick((t) => t + 1);
+                            } else if (Math.abs(dx) < 8) {
+                              handleNavigate(alert.targetSection);
+                              setNotifOpen(false);
+                            }
+                          }}
+                          className="w-full text-right rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 p-3 shadow-sm cursor-pointer select-none touch-pan-y"
+                          style={{
+                            borderRightWidth: '4px',
+                            borderRightColor: accentColor,
+                            transform: `translateX(${rowOffset}px)`,
+                            transition: swipedAlertId === alert.id ? 'none' : 'transform 0.2s ease',
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1.5">
+                                <span className="text-xs font-black text-slate-900 truncate">
+                                  {alert.title}
+                                </span>
+                                <span
+                                  className="text-[10px] px-2 py-0.5 rounded-full shrink-0 font-extrabold"
+                                  style={{ background: dateBg, color: dateText }}
+                                >
+                                  {toJalaliStr(alert.dueDate)}
+                                </span>
+                              </div>
+                              <p className="text-[11px] font-semibold text-slate-600 mt-1 leading-relaxed line-clamp-2">
+                                {alert.subtitle}
+                              </p>
+                              <div className="flex items-center justify-between gap-2 mt-2 pt-1.5 border-t border-slate-100">
+                                <span className="text-[9px] font-bold text-slate-400">
+                                  اسلاید چپ: تایید • اسلاید راست: ۱۵ دقیقه
+                                </span>
+                                <div className="flex items-center gap-1" data-row-action="true">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      playTactileFeedback('soft');
+                                      snoozeZeroLossAlert(alert.id, 15);
+                                      setZeroLossTick((t) => t + 1);
+                                    }}
+                                    className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-amber-50 text-slate-700 text-[9.5px] font-bold flex items-center gap-1"
+                                  >
+                                    <Clock size={10} /> ۱۵د
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      playTactileFeedback('success');
+                                      acknowledgeZeroLossAlert(alert.id);
+                                      setZeroLossTick((t) => t + 1);
+                                    }}
+                                    className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[9.5px] font-extrabold flex items-center gap-1"
+                                  >
+                                    <CheckCircle2 size={10} /> تایید
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                            <p className="text-[11px] font-semibold text-slate-600 mt-1 leading-relaxed line-clamp-2">
-                              {alert.subtitle}
-                            </p>
                           </div>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
 
@@ -1614,7 +1884,7 @@ function App() {
                     <button
                       key={m.id}
                       onClick={() => {
-                        setActive('messages');
+                        handleNavigate('messages');
                         setNotifOpen(false);
                       }}
                       className="w-full text-right rounded-2xl bg-white hover:bg-sky-50 border border-sky-200 p-3 shadow-sm transition-all"
@@ -1637,7 +1907,7 @@ function App() {
             <div className="pt-3 border-t border-slate-200 mt-2">
               <button
                 onClick={() => {
-                  setActive('reminders');
+                  handleNavigate('reminders');
                   setNotifOpen(false);
                 }}
                 className="w-full py-2.5 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all"
@@ -1839,7 +2109,23 @@ function App() {
         </div>
       </main>
 
-      <BottomDock active={active} onChange={handleNavigate} />
+      <BottomDock
+        active={active}
+        onChange={handleNavigate}
+        onBack={handleGoBack}
+        canGoBack={navHistory.length > 0 || active !== 'dashboard'}
+        patients={patients}
+        onQuickAction={(action) => {
+          if (action === 'caller_id') setCallerIdOpen(true);
+          else if (action === 'install') handleTriggerInstall();
+          else if (action === 'sync') handleSync();
+          else if (action === 'reminder_popup') {
+            resetAllZeroLossAlertsForToday();
+            setZeroLossTick((t) => t + 1);
+            setForceExpandReminderKey((k) => k + 1);
+          }
+        }}
+      />
 
       {/* Smart Incoming Call Caller-ID & Auto-Booking Assistant Sheet */}
       <Sheet

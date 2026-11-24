@@ -678,6 +678,33 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(!settingsSrc.includes('from-indigo-900 via-purple-950') && !settingsSrc.includes('from-slate-900 via-violet-950'), 'SettingsSection panels must use clean daylight QBank surfaces');
     assert.ok(!financeSrc.includes('#0F172A 0%, #1E293B'), 'Finance hero banners must use clean daylight QBank cards');
   });
+
+  test('33. Authentic QBank Folders Grid, Global Search & Back Capsules, Dashboard Slide Banner & Touch/Hand Swipeable Notifications', () => {
+    const tileSrc = read('src/components/ui/QBankTile.tsx');
+    const dockSrc = read('src/components/BottomDock.tsx');
+    const dashSrc = read('src/components/sections/Dashboard.tsx');
+    const popupSrc = read('src/components/ui/IOSReminderPopup.tsx');
+    const handleSrc = read('src/components/ui/DraggableNotificationHandle.tsx');
+    const appSrc = read('src/App.tsx');
+
+    // 1. Sleeker QBank tile proportions + compact 3-col mode
+    assert.ok(tileSrc.includes('compact = false') && tileSrc.includes("'102px'"), 'QBankTile must support compact 3-col mode and sleek 102px 2-col QBank proportions');
+
+    // 2. QBank 4-Square Folders Menu, Global Search & Back Bar
+    assert.ok(dockSrc.includes('qbank_all_folders_menu') && dockSrc.includes('LayoutGrid'), 'BottomDock must render QBank 4-square Folders Menu overlay');
+    assert.ok(dockSrc.includes('qbank_global_search_input') && dockSrc.includes('qbank_menu_back_btn'), 'QBank Folders Menu must render sticky bottom Search Pill & Circular Back button');
+    assert.ok(dockSrc.includes('grid-cols-3 gap-2') && dockSrc.includes('grid-cols-3 gap-x-2.5'), 'QBank Folders Menu must render 3-column quick tiles and 3-column folders icon grid');
+
+    // 3. Global Back history stack & Dashboard QBank Slide Banner
+    assert.ok(appSrc.includes('topbar_back_button') && appSrc.includes('handleGoBack'), 'App.tsx must provide contextual global Back navigation stack');
+    assert.ok(appSrc.includes('folder_global_search_btn'), 'Project Folder must provide 1-tap Global Search & Folders trigger');
+    assert.ok(dashSrc.includes('dashboard_qbank_slide_banner'), 'Dashboard must render touch-swipeable QBank Service Slide Banner');
+
+    // 4. Touch/Hand-Swipe Notifications (Ear Handle + Dynamic Island Pill/Popup + Slide-Over Drawer Carousel & Cards)
+    assert.ok(handleSrc.includes('pullOffsetX') && handleSrc.includes("fill={notifCount > 0 ? '#0F172A' : 'none'}"), 'DraggableNotificationHandle must match QBank right-edge bell ear with live pull drag');
+    assert.ok(popupSrc.includes('ios_reminder_slide_dots') && popupSrc.includes('handleCardPointerMove'), 'IOSReminderPopup must support finger horizontal swipe slides and QBank pagination dots');
+    assert.ok(appSrc.includes('drawer_notification_slide_carousel') && appSrc.includes('drawerDragX') && appSrc.includes('swipedAlertDx'), 'Slide-over notification drawer must support hand-swipe close, spotlight slide carousel, and swipe-to-acknowledge alert cards');
+  });
 });
 
 

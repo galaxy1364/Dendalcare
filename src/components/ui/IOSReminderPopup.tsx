@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   BellRing,
   CheckCircle2,
@@ -58,7 +58,8 @@ const DOMAIN_META: Record<string, { label: string; color: string; bg: string; bo
  *
  * - 100% Opaque Daylight Surface Isolation (Zero background color bleeding)
  * - WCAG 2.1 AAA Typography Contrast (#0F172A on #FFFFFF = 19:1)
- * - Never loses a single reminder: queues all unacknowledged alerts with a live pager (1 of N)
+ * - Touch/Hand Horizontal Swipe Slide between active reminders + Swipe Up to minimize
+ * - QBank elongated slide pagination pills (• ▬▬ • •)
  * - Connects directly to real phone OS Notifications + 1-click Snooze (15m) + Explicit Acknowledgement
  */
 export function IOSReminderPopup({
@@ -74,6 +75,15 @@ export function IOSReminderPopup({
 }: IOSReminderPopupProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [swipeX, setSwipeX] = useState(0);
+  const [swipeY, setSwipeY] = useState(0);
+  const [swiping, setSwiping] = useState(false);
+  const swipeRef = useRef<{ id: number | null; x: number; y: number; moved: boolean }>({
+    id: null,
+    x: 0,
+    y: 0,
+    moved: false,
+  });
 
   useEffect(() => {
     if (forceExpandedKey > 0 && items.length > 0) {
@@ -112,71 +122,155 @@ export function IOSReminderPopup({
   const urgencyTok = NOTIFICATION_SURFACE_TOKENS.urgency[current.urgency] || NOTIFICATION_SURFACE_TOKENS.urgency.normal;
   const isCritical = current.urgency === 'critical';
 
-  // 1. COMPACT iOS 27 DYNAMIC ISLAND PILL (In-Flow Non-Overlapping Solid White Card — Zero Overlap & Zero Bleed)
+  const goSlide = (dir: 'next' | 'prev') => {
+    if (items.length <= 1) return;
+    playTactileFeedback('soft');
+    setCurrentIndex((prev) => {
+      if (dir === 'next') return prev < items.length - 1 ? prev + 1 : 0;
+      return prev > 0 ? prev - 1 : items.length - 1;
+    });
+  };
+
+  const handleCardPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement)?.closest('button, a')) return;
+    swipeRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+    setSwiping(true);
+    setSwipeX(0);
+    setSwipeY(0);
+  };
+
+  const handleCardPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const st = swipeRef.current;
+    if (st.id !== e.pointerId) return;
+    const dx = e.clientX - st.x;
+    const dy = e.clientY - st.y;
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) st.moved = true;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      setSwipeX(Math.max(-90, Math.min(90, dx * 0.65)));
+      setSwipeY(0);
+    } else if (expanded && dy < 0) {
+      setSwipeY(Math.max(-65, dy * 0.55));
+      setSwipeX(0);
+    }
+  };
+
+  const handleCardPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const st = swipeRef.current;
+    if (st.id !== e.pointerId) return;
+    const dx = e.clientX - st.x;
+    const dy = e.clientY - st.y;
+    swipeRef.current.id = null;
+    setSwiping(false);
+    setSwipeX(0);
+    setSwipeY(0);
+
+    if (expanded && dy < -48 && Math.abs(dy) > Math.abs(dx)) {
+      playTactileFeedback('soft');
+      setExpanded(false);
+      return;
+    }
+
+    if (items.length > 1 && Math.abs(dx) > 38 && Math.abs(dx) > Math.abs(dy)) {
+      // In RTL: swiping left advances to next reminder, swiping right goes to previous
+      goSlide(dx < 0 ? 'next' : 'prev');
+    }
+  };
+
+  const visibleDotCount = Math.min(items.length, 5);
+
+  // 1. COMPACT iOS 27 DYNAMIC ISLAND PILL (In-Flow Non-Overlapping Solid White Card + Hand-Swipe Slides)
   if (!expanded) {
     return (
       <div
-        className="w-full animate-fade-in"
+        className="w-full animate-fade-in touch-pan-y select-none"
         dir="rtl"
         data-testid="ios27_dynamic_island_pill"
+        onPointerDown={handleCardPointerDown}
+        onPointerMove={handleCardPointerMove}
+        onPointerUp={handleCardPointerUp}
+        onPointerCancel={handleCardPointerUp}
       >
         <div
           onClick={() => {
+            if (swipeRef.current.moved) return;
             playTactileFeedback('tap');
             setExpanded(true);
           }}
-          className="flex items-center justify-between gap-2.5 px-3.5 py-2 rounded-2xl bg-white text-slate-900 cursor-pointer transition-all hover:scale-[1.005] active:scale-[0.985]"
+          className="flex flex-col gap-1.5 px-3.5 py-2 rounded-2xl bg-white text-slate-900 cursor-pointer transition-all hover:scale-[1.005] active:scale-[0.985]"
           style={{
             border: `2px solid ${urgencyTok.border}`,
             boxShadow: '0 6px 18px rgba(15, 23, 42, 0.08)',
+            transform: `translateX(${swipeX}px)`,
+            transition: swiping ? 'none' : 'transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
           }}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm"
-              style={{ background: urgencyTok.accent }}
-            >
-              <BellRing size={14} className="text-white bell-swing" />
-            </span>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-black whitespace-nowrap" style={{ color: urgencyTok.text }}>
-                  {items.length.toLocaleString('fa-IR')} یادآوری فعال
-                </span>
-                <span
-                  className="text-[9px] px-1.5 py-0.5 rounded-full font-extrabold whitespace-nowrap"
-                  style={{
-                    background: deviceNotifOn ? '#ECFDF5' : '#EFF6FF',
-                    color: deviceNotifOn ? '#065F46' : '#1E40AF',
-                    border: `1px solid ${deviceNotifOn ? '#A7F3D0' : '#BFDBFE'}`,
-                  }}
-                >
-                  {deviceNotifOn ? 'متصل به گوشی' : 'iOS 27 زنده'}
-                </span>
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm"
+                style={{ background: urgencyTok.accent }}
+              >
+                <BellRing size={14} className="text-white bell-swing" />
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-black whitespace-nowrap" style={{ color: urgencyTok.text }}>
+                    {items.length.toLocaleString('fa-IR')} یادآوری فعال
+                  </span>
+                  <span
+                    className="text-[9px] px-1.5 py-0.5 rounded-full font-extrabold whitespace-nowrap"
+                    style={{
+                      background: deviceNotifOn ? '#ECFDF5' : '#EFF6FF',
+                      color: deviceNotifOn ? '#065F46' : '#1E40AF',
+                      border: `1px solid ${deviceNotifOn ? '#A7F3D0' : '#BFDBFE'}`,
+                    }}
+                  >
+                    {deviceNotifOn ? 'متصل به گوشی' : 'اسلاید با دست'}
+                  </span>
+                </div>
+                <p className="text-[11px] font-extrabold text-slate-900 truncate">{current.title}</p>
               </div>
-              <p className="text-[11px] font-extrabold text-slate-900 truncate">{current.title}</p>
             </div>
+
+            <button
+              type="button"
+              data-testid="ios_reminder_popup_expand_btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                playTactileFeedback('tap');
+                setExpanded(true);
+              }}
+              className="px-2.5 py-1 rounded-full bg-indigo-600 hover:bg-indigo-700 text-[10px] font-black text-white shrink-0 flex items-center gap-1 shadow-sm"
+            >
+              <Maximize2 size={11} />
+              <span>باز کردن</span>
+            </button>
           </div>
 
-          <button
-            type="button"
-            data-testid="ios_reminder_popup_expand_btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              playTactileFeedback('tap');
-              setExpanded(true);
-            }}
-            className="px-2.5 py-1 rounded-full bg-indigo-600 hover:bg-indigo-700 text-[10px] font-black text-white shrink-0 flex items-center gap-1 shadow-sm"
-          >
-            <Maximize2 size={11} />
-            <span>باز کردن</span>
-          </button>
+          {items.length > 1 && (
+            <div className="flex items-center justify-center gap-1 pt-0.5" aria-hidden="true">
+              {Array.from({ length: visibleDotCount }).map((_, idx) => {
+                const isDotActive = safeIndex % visibleDotCount === idx;
+                return (
+                  <span
+                    key={idx}
+                    className="h-1 rounded-full transition-all duration-200"
+                    style={{
+                      width: isDotActive ? '16px' : '5px',
+                      background: isDotActive ? urgencyTok.accent : '#CBD5E1',
+                    }}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  // 2. EXPANDED iOS 27 LIVE ACTIVITY NOTIFICATION POPUP (100% Opaque White Card + Protective Backdrop Scrim)
+  // 2. EXPANDED iOS 27 LIVE ACTIVITY NOTIFICATION POPUP (100% Opaque White Card + Touch Swipe Slides + Protective Scrim)
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center pt-[76px] px-3 bg-slate-900/55 backdrop-blur-sm animate-fade-in"
@@ -187,15 +281,21 @@ export function IOSReminderPopup({
       }}
     >
       <div
-        className="w-full max-w-md animate-scale-in"
+        className="w-full max-w-md animate-scale-in touch-pan-y select-none"
         data-testid="ios27_expanded_reminder_popup"
         onClick={(e) => e.stopPropagation()}
+        onPointerDown={handleCardPointerDown}
+        onPointerMove={handleCardPointerMove}
+        onPointerUp={handleCardPointerUp}
+        onPointerCancel={handleCardPointerUp}
       >
         <div
           className="rounded-[28px] bg-white text-slate-900 overflow-hidden relative"
           style={{
             border: `2px solid ${urgencyTok.border}`,
             boxShadow: '0 24px 60px rgba(15, 23, 42, 0.24), 0 4px 12px rgba(15, 23, 42, 0.08)',
+            transform: `translate(${swipeX}px, ${swipeY}px)`,
+            transition: swiping ? 'none' : 'transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
           }}
         >
           {/* Top Semantic Urgency Accent Strip */}
@@ -232,8 +332,8 @@ export function IOSReminderPopup({
                 </div>
                 <p className="text-[10px] font-semibold text-slate-600 truncate">
                   {deviceNotifOn
-                    ? 'متصل به نوتیفیکیشن واقعی گوشی + صف ضد فراموشی'
-                    : 'پاپ‌آپ داخلی iOS 27 • تا تایید شما حذف نمی‌شود'}
+                    ? 'متصل به نوتیفیکیشن گوشی • اسلاید با دست چپ/راست'
+                    : 'پاپ‌آپ داخلی iOS 27 • اسلاید با دست بین یادآوری‌ها'}
                 </p>
               </div>
             </div>
@@ -245,10 +345,7 @@ export function IOSReminderPopup({
                   <button
                     type="button"
                     aria-label="یادآوری قبلی"
-                    onClick={() => {
-                      playTactileFeedback('soft');
-                      setCurrentIndex((prev) => (prev > 0 ? prev - 1 : items.length - 1));
-                    }}
+                    onClick={() => goSlide('prev')}
                     className="p-0.5 text-slate-600 hover:text-slate-900"
                   >
                     <ChevronRight size={13} />
@@ -259,10 +356,7 @@ export function IOSReminderPopup({
                   <button
                     type="button"
                     aria-label="یادآوری بعدی"
-                    onClick={() => {
-                      playTactileFeedback('soft');
-                      setCurrentIndex((prev) => (prev < items.length - 1 ? prev + 1 : 0));
-                    }}
+                    onClick={() => goSlide('next')}
                     className="p-0.5 text-slate-600 hover:text-slate-900"
                   >
                     <ChevronLeft size={13} />
@@ -317,6 +411,31 @@ export function IOSReminderPopup({
                 </div>
               )}
             </div>
+
+            {/* Interactive QBank Slide Pagination Dots (• ▬▬ • •) */}
+            {items.length > 1 && (
+              <div className="flex items-center justify-center gap-1.5 py-0.5" data-testid="ios_reminder_slide_dots">
+                {Array.from({ length: visibleDotCount }).map((_, idx) => {
+                  const isDotActive = safeIndex % visibleDotCount === idx;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      aria-label={`اسلاید ${(idx + 1).toLocaleString('fa-IR')}`}
+                      onClick={() => {
+                        playTactileFeedback('soft');
+                        setCurrentIndex(idx);
+                      }}
+                      className="h-1.5 rounded-full transition-all duration-200"
+                      style={{
+                        width: isDotActive ? '22px' : '6px',
+                        background: isDotActive ? urgencyTok.accent : '#CBD5E1',
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
 
             {/* 4 Instant iOS 27 Action Buttons (Clean Primary + Tonal Secondary Hierarchy) */}
             <div className="grid grid-cols-2 gap-1.5">
