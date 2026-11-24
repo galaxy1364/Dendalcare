@@ -13,6 +13,8 @@ import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
 import { toJalaliStr, todayGregorian } from '@/lib/jalali';
 import { exportClinicBackupToJson } from '@/lib/exportUtils';
 import { InstallAppModal } from '@/components/ui/InstallAppModal';
+import { RoadmapAuditModal } from '@/components/ui/RoadmapAuditModal';
+import { downloadWindowsDesktopLauncher } from '@/lib/platformEngine';
 import {
   loadActiveUser,
   loadBackupSchedule,
@@ -81,12 +83,35 @@ async function clearServiceWorkerCacheAndHardReload() {
   window.location.replace(url.toString());
 }
 
-export function SettingsSection() {
+export function SettingsSection({
+  onOpenRoadmapAudit,
+  onOpenInstall,
+}: {
+  onOpenRoadmapAudit?: () => void;
+  onOpenInstall?: () => void;
+} = {}) {
   const { data: settings } = useRealtimeTable<ClinicSetting>('clinic_settings');
   const { data: ads } = useRealtimeTable<Advertisement>('advertisements');
 
   const [tab, setTab] = useState<SettingsTab>('clinic');
   const [installModalOpen, setInstallModalOpen] = useState(false);
+  const [roadmapModalOpen, setRoadmapModalOpen] = useState(false);
+
+  const handleOpenInstall = () => {
+    if (onOpenInstall) {
+      onOpenInstall();
+    } else {
+      setInstallModalOpen(true);
+    }
+  };
+
+  const handleOpenAudit = () => {
+    if (onOpenRoadmapAudit) {
+      onOpenRoadmapAudit();
+    } else {
+      setRoadmapModalOpen(true);
+    }
+  };
 
   return (
     <div className="space-y-2.5 pb-2 animate-fade-in-up">
@@ -94,7 +119,7 @@ export function SettingsSection() {
       <div className="glass-card p-2.5">
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
           {[
-            { key: 'clinic' as const, label: 'کلینیک، تعرفه‌ها و بکاپ خودکار', icon: <Building2 size={13} /> },
+            { key: 'clinic' as const, label: 'کلینیک، تعرفه‌ها و نسخه‌ها', icon: <Building2 size={13} /> },
             { key: 'integrations' as const, label: 'گیت‌هاب، سوپابیس و گوگل درایو', icon: <FolderGit2 size={13} /> },
             { key: 'diagnostics' as const, label: 'عیب‌یابی فنی و کش', icon: <Activity size={13} /> },
             { key: 'ads' as const, label: `تبلیغات مطب (${ads.length.toLocaleString('fa-IR')})`, icon: <Megaphone size={13} /> },
@@ -119,12 +144,13 @@ export function SettingsSection() {
         <ClinicSettingsTab
           settings={settings}
           onOpenDiagnostics={() => setTab('diagnostics')}
-          onOpenInstallModal={() => setInstallModalOpen(true)}
+          onOpenInstallModal={handleOpenInstall}
+          onOpenAuditModal={handleOpenAudit}
         />
       )}
       {tab === 'integrations' && <IntegrationsTab />}
       {tab === 'diagnostics' && (
-        <DiagnosticsPanel onOpenInstallModal={() => setInstallModalOpen(true)} />
+        <DiagnosticsPanel onOpenInstallModal={handleOpenInstall} />
       )}
       {tab === 'ads' && <AdsTab ads={ads} />}
 
@@ -133,6 +159,10 @@ export function SettingsSection() {
         onClose={() => setInstallModalOpen(false)}
         deferredPrompt={typeof window !== 'undefined' ? (window as any).__deferredInstallPrompt || null : null}
         onInstallSuccess={() => {}}
+      />
+      <RoadmapAuditModal
+        open={roadmapModalOpen}
+        onClose={() => setRoadmapModalOpen(false)}
       />
     </div>
   );
@@ -143,10 +173,12 @@ function ClinicSettingsTab({
   settings,
   onOpenDiagnostics,
   onOpenInstallModal,
+  onOpenAuditModal,
 }: {
   settings: ClinicSetting[];
   onOpenDiagnostics: () => void;
   onOpenInstallModal: () => void;
+  onOpenAuditModal: () => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -406,12 +438,28 @@ function ClinicSettingsTab({
         <Button color="#64748B" disabled={saving} className="w-full" onClick={save} icon={<Save size={16} />}>{saving ? 'در حال ذخیره...' : 'ذخیره تنظیمات کلینیک'}</Button>
       </div>
 
-      {/* Clean Multi-Platform Hub */}
-      <div className="glass-card p-4 space-y-2.5">
-        <h3 className="text-xs font-bold text-gray-700 flex items-center gap-2">
-          <Download size={16} className="text-indigo-600" />
-          دانلود و راه‌اندازی نسخه‌ها
-        </h3>
+      {/* Clean Multi-Platform Hub (Moved from Dashboard Top into Settings) */}
+      <div className="glass-card p-4 space-y-3" data-testid="settings_version_download_card">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h3 className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
+              <Download size={16} className="text-indigo-600" />
+              دانلود و نصب نسخه‌های برنامه (آیفون، اندروید، آیپد و ویندوز)
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              نسخه رسمی v{CURRENT_APP_VERSION} (بیلد #{CURRENT_APP_BUILD}) • پکیج کامل ۴ پلتفرم
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenInstallModal}
+            data-testid="settings_open_install_modal_btn"
+            className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-sm active:scale-95 transition-all shrink-0 flex items-center gap-1.5"
+          >
+            <Smartphone size={14} />
+            راهنمای نصب ۴ پلتفرم
+          </button>
+        </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <button
@@ -419,48 +467,119 @@ function ClinicSettingsTab({
             onClick={async () => {
               setDownloadingApk(true);
               setApkDownloadProgress(10);
-              const res = await downloadApkSafely('DentalCare.apk', (p) => setApkDownloadProgress(p));
+              await downloadApkSafely('DentalCare.apk', (p) => setApkDownloadProgress(p));
               setDownloadingApk(false);
             }}
             disabled={downloadingApk}
-            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm active:scale-95 transition-all text-center disabled:opacity-50"
+            data-testid="settings_download_apk_btn"
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm active:scale-95 transition-all text-center disabled:opacity-50"
           >
             <Download size={14} className={downloadingApk ? 'animate-bounce' : ''} />
-            {downloadingApk ? `دانلود (${apkDownloadProgress}%)` : `دانلود فایل APK`}
+            {downloadingApk ? `دانلود (${apkDownloadProgress}%)` : `دانلود APK اندروید`}
           </button>
 
           <a
             href="./DentalCare.mobileconfig"
-            download="DentalCare.mobileconfig"
-            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow-sm active:scale-95 transition-all no-underline text-center"
+            download="MinaDental-iOS.mobileconfig"
+            data-testid="settings_download_ios_profile_btn"
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow-sm active:scale-95 transition-all no-underline text-center"
           >
             <Download size={14} />
-            پروفایل iOS
-          </a>
-
-          <a
-            href="https://galaxy1364.github.io/Dendalcare/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm active:scale-95 transition-all no-underline text-center"
-          >
-            <Link size={14} />
-            نسخه GitHub Pages
+            پروفایل آیفون و آیپد
           </a>
 
           <button
+            type="button"
+            onClick={() => downloadWindowsDesktopLauncher(window.location.origin + window.location.pathname)}
+            data-testid="settings_download_windows_btn"
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-sm active:scale-95 transition-all text-center"
+          >
+            <Download size={14} />
+            نصب نسخه ویندوز
+          </button>
+
+          <button
+            type="button"
             onClick={() => {
               setHardReloading(true);
               clearServiceWorkerCacheAndHardReload();
             }}
             disabled={hardReloading}
-            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50"
           >
             <RotateCcw size={14} className={hardReloading ? 'animate-spin' : ''} />
             {hardReloading ? 'در حال پاکسازی...' : 'پاکسازی کش و ری‌لود'}
           </button>
         </div>
       </div>
+
+      {/* Manager & Upgrader Exclusive Section: Super-Audit, System Health & Architecture Lock */}
+      {(() => {
+        const activeUser = loadActiveUser();
+        const isManagerOrUpgrader =
+          activeUser.role === 'manager' ||
+          Boolean(activeUser.canPublishUpdate) ||
+          Boolean(activeUser.permissions?.canPublishOtaUpdate);
+        if (!isManagerOrUpgrader) return null;
+        return (
+          <div
+            data-testid="settings_manager_audit_section"
+            className="p-4 rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-950 text-white border border-indigo-400/30 shadow-lg space-y-3"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/25 border border-indigo-400/40 flex items-center justify-center text-indigo-200">
+                  <ShieldCheck size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-xs font-black text-white">
+                      فوق ممیزی، گزارش سلامت و قفل معماری سیستم
+                    </h3>
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                      مختص مدیر و ارتقادهنده
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-indigo-200/80 mt-0.5">
+                    دسترسی انحصاری دکتر مهدی امیری • بررسی زنده ۹ فاز، دفتر کل ممیزی و قفل نسخه
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={onOpenAuditModal}
+                data-testid="settings_manager_audit_btn"
+                className="py-2.5 px-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+              >
+                <ShieldCheck size={16} />
+                باز کردن پنل فوق ممیزی و گزارش سلامت (۹ فاز)
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await publishOtaUpdateToAllUsers(
+                    CURRENT_APP_VERSION,
+                    `قفل و انتشار رسمی نسخه v${CURRENT_APP_VERSION} توسط ${activeUser.fullName}`
+                  );
+                  setUpdateMessage({
+                    type: res.ok ? 'success' : 'error',
+                    text: res.message,
+                  });
+                }}
+                data-testid="settings_manager_lock_release_btn"
+                className="py-2.5 px-3.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-extrabold flex items-center justify-center gap-2 active:scale-95 transition-all"
+              >
+                <Zap size={15} className="text-amber-300" />
+                قفل نهایی و انتشار OTA به همه دستگاه‌ها
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Cloud & Local Backup */}
       <div className="glass-card p-4 space-y-2.5">

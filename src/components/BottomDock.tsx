@@ -36,7 +36,7 @@ export function BottomDock({ active, onChange }: Props) {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-40 safe-bottom">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 safe-bottom md:hidden">
         <div className="max-w-xl md:max-w-4xl lg:max-w-5xl mx-auto px-2 pb-1.5 pt-1">
           <div
             className="bottom-dock rounded-[26px] flex items-center justify-between px-1.5 py-1"
@@ -161,7 +161,7 @@ export function BottomDock({ active, onChange }: Props) {
             <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 mb-3 px-1">
               <div>
                 <h3 className="text-base font-black text-slate-800">سایر بخش‌های تخصصی مینادنتال</h3>
-                <p className="text-[11px] text-slate-500">کاشی‌های منحنی استاندارد کیوبانک با هپتیک iOS</p>
+                <p className="text-[11px] text-slate-500">دسترسی سریع به تمام بخش‌های کلینیک</p>
               </div>
               <button
                 onClick={() => {

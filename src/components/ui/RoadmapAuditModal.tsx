@@ -65,7 +65,7 @@ export function RoadmapAuditModal({ open, onClose }: Props) {
     : '۱۰ از ۱۰';
 
   return (
-    <Sheet open={open} onClose={onClose} title="فوق ممیزی زنده ۱۰ از ۱۰ و نقشه راه قفل‌شده">
+    <Sheet open={open} onClose={onClose} title="گزارش سلامت، امنیت و وضعیت فنی سیستم">
       <div className="space-y-4 max-h-[82vh] overflow-y-auto px-1 py-1" style={{ scrollbarWidth: 'none' }}>
         {/* Header Banner */}
         <div className="p-4 rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-950 text-white border border-emerald-500/35 shadow-xl relative overflow-hidden">
@@ -76,22 +76,22 @@ export function RoadmapAuditModal({ open, onClose }: Props) {
               </div>
               <div>
                 <h3 className="text-sm font-black text-white flex items-center gap-1.5">
-                  معماری قفل‌شده • امتیاز زنده {scoreLabel}
+                  وضعیت تاییدشده سیستم • امتیاز سلامت {scoreLabel}
                 </h3>
                 <p className="text-[11px] text-emerald-300">
-                  شناسه رهگیری فعال:{' '}
-                  <strong className="font-mono">{liveReport?.traceId || 'TRC-MINA-QBANK-9008-H'}</strong>
+                  شناسه نسخه:{' '}
+                  <strong className="font-mono">{liveReport?.traceId || 'TRC-MINA-XPLAT-9009-I'}</strong>
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-[10px] font-bold text-emerald-300 shrink-0">
               <Lock size={12} />
-              <span>{liveReport?.locked10of10 ? 'قفل ۱۰/۱۰' : 'ممیزی فعال'}</span>
+              <span>{liveReport?.locked10of10 ? 'تایید کامل' : 'در حال بررسی'}</span>
             </div>
           </div>
 
           <p className="text-[11px] text-gray-300 leading-relaxed">
-            هر ۸ فاز معماری (اسکلت و فونت، بالینی و پالمر، تقویم و رادار، مالی و RBAC، PWA/OTA، گاوصندوق ضدحذف Cloud SQL + گوگل درایو + گیت‌هاب، سپر سراسری Guardian، و رابط اصیل کیوبانک + پوشه پروژه + اعلان واقعی گوشی + هپتیک iOS 27 + فیکسچر با مطب) به صورت زنده بررسی و با امضای دیجیتال قفل می‌شوند.
+            پایش خودکار ۹ لایه معماری شامل تایپوگرافی فارسی، پرونده و چارت پالمر، تقویم شمسی و یادآوری، خزانه‌داری و کنترل دسترسی، پشتیبانی چندپلتفرمی (آیفون، اندروید، آیپد و ویندوز)، گاوصندوق ضدحذف و پشتیبان ابری.
           </p>
 
           <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-white/10 text-[11px]">
@@ -133,7 +133,7 @@ export function RoadmapAuditModal({ open, onClose }: Props) {
             }`}
           >
             <FileText size={14} />
-            ۸ فاز قفل‌شده
+            ۹ فاز قفل‌شده
           </button>
           <button
             onClick={() => {
@@ -311,7 +311,7 @@ export function RoadmapAuditModal({ open, onClose }: Props) {
             className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-md active:scale-95 transition-all"
           >
             <Download size={15} />
-            <span>دانلود گواهی جامع فوق ممیزی ۱۰ از ۱۰ و نقشه راه (JSON)</span>
+            <span>دانلود گزارش جامع سلامت و سوابق فنی سیستم (JSON)</span>
           </button>
         </div>
       </div>

@@ -248,8 +248,8 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(engineSrc.includes('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'), 'Real Google Drive API v3 upload endpoint must exist');
     assert.ok(!engineSrc.includes('v5.0.0 (Build #52)'), 'Outdated hardcoded GitHub deploy version must be removed');
     assert.ok(tabSrc.includes('uploadBackupToGoogleDrive'), 'IntegrationsTab must invoke real uploadBackupToGoogleDrive');
-    assert.equal(versionJson.version, '62.0');
-    assert.equal(versionJson.build, 62);
+    assert.equal(versionJson.version, '63.0');
+    assert.equal(versionJson.build, 63);
   });
 
   test('PWA manifest, service worker, and index.html typography/installability stay 100% intact', () => {
@@ -262,7 +262,7 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(html.includes('window.__deferredInstallPrompt'), 'index.html must capture beforeinstallprompt early');
     assert.ok(manifest.icons.some((i) => i.purpose === 'any' && i.sizes === '512x512'), 'manifest must have 512x512 any icon');
     assert.ok(manifest.icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512'), 'manifest must have 512x512 maskable icon');
-    assert.ok(sw.includes('minadental-pwa-v62.0-b62'), 'sw.js must be on unified v62.0-b62 cache');
+    assert.ok(sw.includes('minadental-pwa-v63.0-b63'), 'sw.js must be on unified v63.0-b63 cache');
   });
 });
 
@@ -336,7 +336,7 @@ describe('Phase 7 [TRC-MINA-GUARD-9007-G]: App-Wide Zero-Delete Guardian, Offlin
     assert.ok(memSrc.includes('TRC-MINA-GUARD-9007-G'), 'MemPalace must lock Phase 7 trace ID');
     assert.ok(memSrc.includes('evaluateMutationGuard'), 'Live Super-Audit must actively verify evaluateMutationGuard');
     assert.ok(memSrc.includes('calculateDoctorShare'), 'Live Super-Audit must actively verify calculateDoctorShare');
-    assert.ok(modalSrc.includes('۸ فاز قفل‌شده'), 'RoadmapAuditModal must reflect all 8 locked phases');
+    assert.ok(modalSrc.includes('۹ فاز قفل‌شده'), 'RoadmapAuditModal must reflect all 9 locked phases');
   });
 });
 
@@ -421,5 +421,48 @@ describe('Phase 8 [TRC-MINA-QBANK-9008-H]: Authentic QBank Curved-Notch UI, Proj
   });
 });
 
+describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPad/Windows), Manager-Exclusive Audit in Settings, Smart Cross-Role Workflow Popups & Zero-AI-Fingerprint', () => {
+  const root = process.cwd();
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
+  test('platformEngine.ts & DesktopSidebar.tsx provide native iPhone, Android, iPad & Windows 10/11 support', () => {
+    const platSrc = read('src/lib/platformEngine.ts');
+    const sidebarSrc = read('src/components/DesktopSidebar.tsx');
+    const installSrc = read('src/components/ui/InstallAppModal.tsx');
+    const cssSrc = read('src/index.css');
+    const manifest = JSON.parse(read('public/manifest.json'));
 
+    assert.ok(platSrc.includes('detectPlatformFromUA'), 'platformEngine must export detectPlatformFromUA');
+    assert.ok(platSrc.includes('buildWindowsLauncherScript'), 'platformEngine must generate standalone Windows .cmd launcher');
+    assert.ok(platSrc.includes('msedge') && platSrc.includes('--app='), 'Windows launcher must support Edge/Chrome standalone --app window mode');
+    assert.ok(sidebarSrc.includes('adaptive_desktop_sidebar'), 'DesktopSidebar must provide adaptive iPad rail & Windows full sidebar');
+    assert.ok(installSrc.includes('install_tab_android') && installSrc.includes('install_tab_ios') && installSrc.includes('install_tab_ipad') && installSrc.includes('install_tab_windows'), 'InstallAppModal must provide dedicated tabs for Android, iPhone, iPad, and Windows');
+    assert.ok(cssSrc.includes('grid-template-columns: repeat(3, minmax(0, 1fr))') && cssSrc.includes('grid-template-columns: repeat(4, minmax(0, 1fr))'), 'index.css must scale bento grid to 3 cols on iPad and 4 cols on Windows desktop');
+    assert.ok(manifest.display_override.includes('window-controls-overlay'), 'manifest.json must support desktop window-controls-overlay');
+  });
+
+  test('Super-Audit & Version Download are moved to SettingsSection (Manager & Upgrader exclusive) and removed from Top Bar & Dashboard top', () => {
+    const appSrc = read('src/App.tsx');
+    const settingsSrc = read('src/components/sections/SettingsSection.tsx');
+    const dashSrc = read('src/components/sections/Dashboard.tsx');
+
+    assert.ok(!appSrc.includes('folder_roadmap_audit_btn'), 'Super-Audit button must NOT be in Top Bar or Project Folder');
+    assert.ok(!dashSrc.includes('dashboard_install_pwa_banner'), 'Version download banner must NOT be above Dashboard');
+    assert.ok(settingsSrc.includes('settings_version_download_card'), 'SettingsSection must house the 4-platform version download hub');
+    assert.ok(settingsSrc.includes('settings_manager_audit_section'), 'SettingsSection must house the Manager-exclusive Super-Audit section');
+    assert.ok(settingsSrc.includes('settings_manager_audit_btn'), 'SettingsSection must provide Manager-only Super-Audit trigger button');
+    assert.ok(settingsSrc.includes('مختص مدیر و ارتقادهنده'), 'Super-Audit section must explicitly enforce Manager & Upgrader exclusivity');
+  });
+
+  test('Smart Cross-Role Real-Time Workflow Popup triggers on Appointment booking (for Dentist/Manager) and Treatment completion (for Secretary/Assistant/Manager)', () => {
+    const appSrc = read('src/App.tsx');
+    const guardianSrc = read('src/lib/supabaseGuardian.ts');
+
+    assert.ok(guardianSrc.includes("new CustomEvent('minadental-table-mutated'"), 'supabaseGuardian must emit minadental-table-mutated with payload');
+    assert.ok(appSrc.includes('smart_workflow_popup'), 'App.tsx must render Smart Cross-Role Workflow Popup');
+    assert.ok(appSrc.includes("detail.table === 'appointments' && detail.operation === 'INSERT'"), 'App.tsx must trigger popup for Dentist & Manager when an appointment is booked');
+    assert.ok(appSrc.includes("detail.table === 'treatments' && (detail.operation === 'INSERT' || detail.operation === 'UPDATE')"), 'App.tsx must trigger anti-forgetting popup for Secretary/Assistant/Manager when a treatment is recorded');
+    assert.ok(appSrc.includes('smart_popup_open_treatment_btn'), 'Appointment popup must allow Dentist/Manager 1-click jump to treatment chart');
+    assert.ok(appSrc.includes('smart_popup_open_finance_btn'), 'Treatment popup must allow Secretary/Manager 1-click jump to billing/installments/cheques');
+  });
+});

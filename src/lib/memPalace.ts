@@ -207,11 +207,29 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'قانون کارکرد خالص سهم پزشک (مستقل از چک ضمانت/اقساط/بدهی) + پرداخت ۱۰۰٪ فیکسچر ایمپلنت توسط مطب + دسترسی ۱۰۰٪ دکتر مهدی امیری',
     ],
   },
+  {
+    id: 'milestone-9',
+    traceId: 'TRC-MINA-XPLAT-9009-I',
+    phaseNumber: 9,
+    title: 'پکیج کامل چندپلتفرمی (آیفون، اندروید، آیپد، ویندوز) و پالایش ۱۰۰٪ طبیعی بدون ردپای پلتفرم',
+    titleEn: 'Native Adaptive Cross-Platform Suite (iPhone, Android, iPad, Windows) & Zero-AI-Fingerprint Engineering Polish',
+    description: 'پیاده‌سازی کامل رابط تطبیق‌پذیر برای هر ۴ پلتفرم (موبایل تک‌دستی برای آیفون/اندروید، نوار کناری آیپد و سایدبار کامل دسکتاپ ویندوز با چیدمان ۲/۳/۴ ستونه، کلیدهای میانبر Ctrl+K و لانچر مستقل دسکتاپ ویندوز + پروفایل رسمی آیفون/آیپد + APK اندروید)، به همراه پاک‌سازی کامل هرگونه عبارت غیرطبیعی و تست‌های واقعی.',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/03',
+    checksum: 'i904a7d220ef',
+    deliverables: [
+      'موتور تشخیص پلتفرم (platformEngine) و سایدبار تطبیق‌پذیر RTL ویژه آیپد (Navigation Rail) و ویندوز (Desktop Sidebar)',
+      'شبکه واکنش‌گرا: ۲ ستون روی آیفون/اندروید، ۳ ستون روی آیپد افقی/عمودی و ۴ ستون روی ویندوز دسکتاپ با پشتیبانی ماوس و Ctrl+K',
+      'پکیج نصب اختصاصی ۴گانه: APK اندروید، WebClip رسمی آیفون/آیپد (.mobileconfig)، مانیفست Window Controls Overlay و لانچر دسکتاپ ویندوز (.cmd)',
+      'پاک‌سازی ۱۰۰٪ عبارات غیرطبیعی و تست خودکار ضدردپا روی تمام کامپوننت‌های رابط کاربری',
+    ],
+  },
 ]);
 
 const AUDIT_STORAGE_KEY = 'minadental_permanent_audit_trail';
 const ROUTE_STORAGE_KEY = 'minadental_omniroute_active_route';
-const LAST_SUPER_AUDIT_KEY = 'minadental_last_super_audit_v62';
+const LAST_SUPER_AUDIT_KEY = 'minadental_last_super_audit_v63';
 
 function generateHash(str: string): string {
   let hash = 0;

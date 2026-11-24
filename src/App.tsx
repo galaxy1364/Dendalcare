@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { type SectionId, getSection } from '@/lib/sections';
 import { BottomDock } from '@/components/BottomDock';
+import { DesktopSidebar } from '@/components/DesktopSidebar';
+import { getCurrentPlatformInfo } from '@/lib/platformEngine';
 import { Dashboard } from '@/components/sections/Dashboard';
 import { Patients } from '@/components/sections/Patients';
 import { Appointments } from '@/components/sections/Appointments';
@@ -87,6 +89,7 @@ function App() {
 
   const [roadmapModalOpen, setRoadmapModalOpen] = useState(false);
   const [projectFolderOpen, setProjectFolderOpen] = useState(false);
+  const [platformInfo, setPlatformInfo] = useState(() => getCurrentPlatformInfo());
   const [hapticsOn, setHapticsOn] = useState<boolean>(() => isHapticsEnabled());
   const [soundOn, setSoundOn] = useState<boolean>(() => isSoundEnabled());
   const [deviceNotifOn, setDeviceNotifOn] = useState<boolean>(() => isDeviceNotificationsEnabled());
@@ -165,6 +168,19 @@ function App() {
   } | null>(null);
   const [offlineQueueCount, setOfflineQueueCount] = useState<number>(() => getOfflineQueue().length);
   const [flushingQueue, setFlushingQueue] = useState(false);
+  const [smartWorkflowPopup, setSmartWorkflowPopup] = useState<{
+    id: string;
+    type: 'appointment_booked' | 'treatment_completed';
+    title: string;
+    subtitle: string;
+    targetRolesLabel: string;
+    patientName: string;
+    doctorName: string;
+    detailLine: string;
+    amountLine?: string;
+    actorName: string;
+    timestamp: string;
+  } | null>(null);
   const [newUserForm, setNewUserForm] = useState({
     name: '',
     username: '',
@@ -325,16 +341,82 @@ function App() {
         }
       }
     };
+    const onTableMutated = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      if (!detail?.table || !detail?.operation) return;
+      const rawPayload = Array.isArray(detail.payload) ? detail.payload[0] : detail.payload || {};
+      const patientObj = patients.find(p => p.id === rawPayload?.patient_id);
+      const resolvedPatientName =
+        rawPayload?.patient_name ||
+        (patientObj ? `${patientObj.first_name || ''} ${patientObj.last_name || ''}`.trim() : '') ||
+        'بیمار کلینیک';
+
+      if (detail.table === 'appointments' && detail.operation === 'INSERT') {
+        const apptDate = rawPayload?.appointment_date ? toJalaliStr(rawPayload.appointment_date) : toJalaliStr(todayGregorian());
+        const apptTime = rawPayload?.appointment_time || '—';
+        const serviceType = rawPayload?.service_type || rawPayload?.title || 'ویزیت و معاینه تخصصی';
+        const docName = rawPayload?.doctor_name || 'دکتر مهدی امیری';
+        playTactileFeedback('success');
+        setSmartWorkflowPopup({
+          id: `wf_appt_${Date.now()}`,
+          type: 'appointment_booked',
+          title: 'نوبت جدید بیمار ثبت شد',
+          subtitle: 'اطلاع‌رسانی آنی جهت آماده‌سازی یونیت و طرح درمان',
+          targetRolesLabel: 'ویژه پزشک معالج و مدیر کلینیک',
+          patientName: resolvedPatientName,
+          doctorName: docName,
+          detailLine: `خدمت: ${serviceType} • زمان: ${apptDate} ساعت ${apptTime}`,
+          actorName: detail.actor || 'پذیرش کلینیک',
+          timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+        });
+        if (isDeviceNotificationsEnabled()) {
+          sendRealDeviceNotification({
+            title: `نوبت جدید: ${resolvedPatientName}`,
+            body: `${serviceType} • پزشک: ${docName} • ساعت ${apptTime}`,
+            tag: `minadental-appt-${Date.now()}`,
+          }).catch(() => {});
+        }
+      } else if (detail.table === 'treatments' && (detail.operation === 'INSERT' || detail.operation === 'UPDATE')) {
+        const toothNum = rawPayload?.tooth_number ? `دندان شماره ${rawPayload.tooth_number}` : 'چارت عمومی';
+        const treatType = rawPayload?.treatment_type || rawPayload?.description || 'درمان تخصصی دندانپزشکی';
+        const docName = rawPayload?.doctor_name || detail.actor || 'دکتر مهدی امیری';
+        const costVal = Number(rawPayload?.cost || rawPayload?.final_cost || 0);
+        playTactileFeedback('success');
+        setSmartWorkflowPopup({
+          id: `wf_treat_${Date.now()}`,
+          type: 'treatment_completed',
+          title: 'ثبت / تکمیل درمان توسط پزشک (ضد فراموشی)',
+          subtitle: 'جهت تسویه‌حساب، تقسیط، چک، لابراتوار یا تعیین نوبت جلسه بعد اقدام کنید',
+          targetRolesLabel: 'ویژه منشی، دستیار و مدیر کلینیک',
+          patientName: resolvedPatientName,
+          doctorName: docName,
+          detailLine: `${treatType} • ${toothNum}`,
+          amountLine: costVal > 0 ? `${costVal.toLocaleString('fa-IR')} تومان` : undefined,
+          actorName: detail.actor || docName,
+          timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+        });
+        if (isDeviceNotificationsEnabled()) {
+          sendRealDeviceNotification({
+            title: `درمان ثبت شد: ${resolvedPatientName}`,
+            body: `${treatType} (${toothNum}) توسط ${docName} — آماده اقدام مالی و نوبت بعدی`,
+            tag: `minadental-treat-${Date.now()}`,
+          }).catch(() => {});
+        }
+      }
+    };
+
     window.addEventListener('minadental-guardian-toast', onGuardianToast);
     window.addEventListener('minadental-offline-queue-changed', onQueueChanged);
+    window.addEventListener('minadental-table-mutated', onTableMutated);
     window.addEventListener('online', onBackOnline);
     return () => {
       if (toastTimer) clearTimeout(toastTimer);
       window.removeEventListener('minadental-guardian-toast', onGuardianToast);
       window.removeEventListener('minadental-offline-queue-changed', onQueueChanged);
+      window.removeEventListener('minadental-table-mutated', onTableMutated);
       window.removeEventListener('online', onBackOnline);
     };
-  }, []);
+  }, [patients]);
 
   const handleFlushOfflineQueue = async () => {
     if (flushingQueue) return;
@@ -471,7 +553,18 @@ function App() {
   };
 
   useEffect(() => {
+    const onResize = () => setPlatformInfo(getCurrentPlatformInfo());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShortcutsOpen(prev => !prev);
+        return;
+      }
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
         if (e.key === 'Escape') target.blur();
@@ -486,7 +579,11 @@ function App() {
       else if (e.key === 'F7') { e.preventDefault(); setActive('implants'); }
       else if (e.key === 'F8') { e.preventDefault(); setActive('lab'); }
       else if (e.key === 'F9') { e.preventDefault(); setActive('calendar'); }
-      else if (e.key === 'Escape') { setNotifOpen(false); setShortcutsOpen(false); }
+      else if (e.key === 'Escape') {
+        setNotifOpen(false);
+        setShortcutsOpen(false);
+        setProjectFolderOpen(false);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -563,7 +660,13 @@ function App() {
       case 'reminders': return <Reminders />;
       case 'staff': return <StaffSection />;
       case 'messages': return <Messages />;
-      case 'settings': return <SettingsSection />;
+      case 'settings':
+        return (
+          <SettingsSection
+            onOpenRoadmapAudit={() => setRoadmapModalOpen(true)}
+            onOpenInstall={handleTriggerInstall}
+          />
+        );
       default: return <Dashboard onNavigate={setActive} onOpenInstall={handleTriggerInstall} />;
     }
   };
@@ -589,9 +692,21 @@ function App() {
 
       <div className="section-glow" style={{ background: section.color }} />
 
-      {/* Ultra-Clean Minimal QBank Top Bar — Strictly 2 Action Icons (User Account + Project Folder) */}
-      <header className={`fixed top-0 left-0 right-0 z-30 px-2 pt-2 safe-top transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}>
-        <div className="max-w-xl md:max-w-4xl lg:max-w-5xl mx-auto">
+      {/* Adaptive RTL Navigation Rail (iPad) & Full Sidebar (Windows/Mac Desktop) */}
+      <DesktopSidebar
+        active={active}
+        onChange={handleNavigate}
+        mascotMood={mascotMood}
+        currentUser={currentUser}
+        platformInfo={platformInfo}
+        onOpenUserModal={() => setUserModalOpen(true)}
+        onOpenProjectFolder={() => setProjectFolderOpen(true)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
+      />
+
+      {/* Ultra-Clean Minimal Top Bar — Strictly 2 Action Icons (User Account + Project Folder) */}
+      <header className={`fixed top-0 left-0 right-0 md:right-20 lg:right-64 z-30 px-2 md:px-4 pt-2 safe-top transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}>
+        <div className="max-w-xl md:max-w-5xl xl:max-w-6xl mx-auto">
           <div
             className="glass-dark rounded-[22px] px-3.5 py-2 flex items-center justify-between"
             style={{
@@ -601,7 +716,7 @@ function App() {
             {/* Right Side (RTL Start): Mascot Logo + Brand Name + Active User */}
             <div className="flex items-center gap-2 min-w-0">
               <div
-                className="cursor-pointer shrink-0 transition-transform active:scale-95"
+                className="cursor-pointer shrink-0 transition-transform active:scale-95 md:hidden"
                 onClick={() => {
                   playTactileFeedback('tap');
                   handleNavigate('dashboard');
@@ -612,16 +727,19 @@ function App() {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h1 className="text-sm font-black text-white leading-tight truncate">مینادنتال</h1>
+                  <h1 className="text-sm font-black text-white leading-tight truncate">
+                    <span className="md:hidden">مینادنتال</span>
+                    <span className="hidden md:inline">{section.label}</span>
+                  </h1>
                   <span
-                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-md text-white truncate max-w-[120px]"
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-md text-white truncate max-w-[130px]"
                     style={{ background: `${currentUser?.avatarColor || '#8B5CF6'}CC` }}
                   >
                     {currentUser?.fullName || currentUser?.name || 'دکتر مهدی امیری'}
                   </span>
                 </div>
                 <p className="text-[10px] text-purple-200/75 leading-tight truncate">
-                  {onlinePeersCount.toLocaleString('fa-IR')} دستگاه آنلاین • سینک زنده
+                  {platformInfo.labelFa} • {onlinePeersCount.toLocaleString('fa-IR')} دستگاه آنلاین • سینک زنده
                 </p>
               </div>
             </div>
@@ -654,7 +772,7 @@ function App() {
                   setProjectFolderOpen(true);
                 }}
                 aria-label="پوشه پروژه مینادنتال"
-                title="پوشه پروژه: کالرآیدی، نصب برنامه، فوق ممیزی، سینک و هپتیک iOS"
+                title="پوشه برنامه: کالرآیدی، نصب روی آیفون/اندروید/آیپد/ویندوز، وضعیت سیستم و سینک"
                 data-testid="topbar_project_folder_button"
               >
                 <FolderKanban size={18} className="text-amber-300" />
@@ -1040,8 +1158,8 @@ function App() {
               <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow">
                 <Download size={19} />
               </div>
-              <p className="text-xs font-black text-purple-950">نصب برنامه (PWA / iOS)</p>
-              <p className="text-[10px] text-purple-700">افزودن با لوگو به صفحه اصلی گوشی</p>
+              <p className="text-xs font-black text-purple-950">نصب روی گوشی، آیپد و ویندوز</p>
+              <p className="text-[10px] text-purple-700">بسته نصب اندروید، آیفون، آیپد و دسکتاپ</p>
             </button>
 
             <button
@@ -1049,16 +1167,16 @@ function App() {
               onClick={() => {
                 playTactileFeedback('tap');
                 setProjectFolderOpen(false);
-                setRoadmapModalOpen(true);
+                handleNavigate('settings');
               }}
-              data-testid="folder_roadmap_audit_btn"
+              data-testid="folder_settings_shortcut_btn"
               className="p-3.5 rounded-3xl bg-indigo-50 border border-indigo-200/80 text-right space-y-1.5 haptic shadow-sm"
             >
               <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow">
-                <ShieldCheck size={19} />
+                <Keyboard size={19} />
               </div>
-              <p className="text-xs font-black text-indigo-950">فوق ممیزی ۱۰ از ۱۰</p>
-              <p className="text-[10px] text-indigo-700">نقشه راه ۸ فازه قفل‌شده و لاگ‌ها</p>
+              <p className="text-xs font-black text-indigo-950">تنظیمات و دانلود نسخه‌ها</p>
+              <p className="text-[10px] text-indigo-700">تعرفه‌ها، بکاپ ابری و مدیریت نسخه</p>
             </button>
 
             <button
@@ -1074,13 +1192,13 @@ function App() {
                 <Cloud size={19} className={syncing ? 'animate-pulse' : ''} />
               </div>
               <p className="text-xs font-black text-sky-950">سینک ابری و لوکال آنی</p>
-              <p className="text-[10px] text-sky-700">بک‌آپ Cloud SQL + گاوصندوق ضدحذف</p>
+              <p className="text-[10px] text-sky-700">پشتیبان ابری + گاوصندوق ضدحذف</p>
             </button>
           </div>
 
-          {/* iOS 27 Haptics & Soft Acoustic Click Toggles */}
+          {/* Tactile Haptics & Soft Acoustic Click Toggles */}
           <div className="rounded-3xl bg-slate-50 border border-slate-200/80 p-3.5 space-y-2.5">
-            <h4 className="text-xs font-black text-slate-800">بازخورد لمسی و صوتی استاندارد iOS 27</h4>
+            <h4 className="text-xs font-black text-slate-800">تنظیمات بازخورد لمسی و صدای کلیک</h4>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -1358,14 +1476,13 @@ function App() {
         </div>
       )}
 
-      {/* Main content — viewport-fit with edge-to-edge stretched tiles */}
+      {/* Main content — adaptive for Phone, iPad (Rail) & Windows Desktop (Sidebar) */}
       <main
         ref={sectionRef}
         onScroll={handleScroll}
-        className="fixed inset-0 overflow-y-auto pt-[80px] pb-36 px-2"
-        style={{ scrollbarWidth: 'none' }}
+        className="fixed inset-0 md:right-20 lg:right-64 overflow-y-auto pt-[80px] pb-36 md:pb-12 px-2 md:px-5 desktop-scroll"
       >
-        <div className="max-w-xl md:max-w-4xl lg:max-w-5xl mx-auto space-y-2">
+        <div className="max-w-xl md:max-w-5xl xl:max-w-6xl mx-auto space-y-2.5">
           {!isOnline && (
             <div className="rounded-2xl bg-amber-600/95 text-white text-xs font-bold py-1.5 px-3 flex items-center justify-center gap-2 shadow-lg animate-pulse mb-2">
               <WifiOff size={15} />
@@ -1588,6 +1705,154 @@ function App() {
         updateAvailable={updateAvailable}
         onApplyUpdate={handleApplyUpdate}
       />
+
+      {/* Smart Cross-Role Real-Time Workflow Popup (پاپ‌آپ مدرن هوشمند نوبت و درمان — ضد فراموشی) */}
+      {smartWorkflowPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-fade-in"
+          data-testid="smart_workflow_popup"
+        >
+          <div className="w-full max-w-md rounded-[28px] bg-white border border-slate-200/90 shadow-2xl overflow-hidden animate-scale-in">
+            {/* Header Banner */}
+            <div
+              className={`p-4 text-white flex items-start justify-between gap-3 ${
+                smartWorkflowPopup.type === 'appointment_booked'
+                  ? 'bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-700'
+                  : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700'
+              }`}
+            >
+              <div className="space-y-1 min-w-0">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 text-[10px] font-black">
+                  <BellRing size={11} />
+                  {smartWorkflowPopup.targetRolesLabel}
+                </span>
+                <h3 className="text-sm font-black leading-snug">{smartWorkflowPopup.title}</h3>
+                <p className="text-[11px] text-white/85 leading-relaxed">{smartWorkflowPopup.subtitle}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSmartWorkflowPopup(null)}
+                aria-label="بستن پنجره اطلاع‌رسانی"
+                data-testid="smart_workflow_popup_close"
+                className="w-8 h-8 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center shrink-0 transition-all"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Patient & Clinical / Financial Details Card */}
+            <div className="p-4 space-y-3">
+              <div className="rounded-2xl bg-slate-50 border border-slate-200/80 p-3.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-slate-500">نام بیمار:</span>
+                  <span className="text-xs font-black text-slate-900">{smartWorkflowPopup.patientName}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-slate-500">پزشک معالج:</span>
+                  <span className="text-xs font-extrabold text-indigo-700">{smartWorkflowPopup.doctorName}</span>
+                </div>
+                <div className="pt-1.5 border-t border-slate-200/70 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-extrabold text-slate-700">{smartWorkflowPopup.detailLine}</span>
+                  {smartWorkflowPopup.amountLine && (
+                    <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                      {smartWorkflowPopup.amountLine}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1">
+                  <span>ثبت توسط: {smartWorkflowPopup.actorName}</span>
+                  <span>ساعت {smartWorkflowPopup.timestamp}</span>
+                </div>
+              </div>
+
+              {/* Role-Specific 1-Click Action Buttons */}
+              {smartWorkflowPopup.type === 'appointment_booked' ? (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    data-testid="smart_popup_open_treatment_btn"
+                    onClick={() => {
+                      playTactileFeedback('tap');
+                      setSmartWorkflowPopup(null);
+                      handleNavigate('treatments');
+                    }}
+                    className="w-full py-2.5 px-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+                  >
+                    <CheckCircle2 size={15} />
+                    انتخاب بیمار و ورود به چارت درمان (ویژه پزشک و مدیر)
+                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playTactileFeedback('tap');
+                        setSmartWorkflowPopup(null);
+                        handleNavigate('appointments');
+                      }}
+                      className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all"
+                    >
+                      مشاهده لیست نوبت‌ها
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playTactileFeedback('tap');
+                        setSmartWorkflowPopup(null);
+                        handleNavigate('patients');
+                      }}
+                      className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all"
+                    >
+                      پرونده کامل بیمار
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    data-testid="smart_popup_open_finance_btn"
+                    onClick={() => {
+                      playTactileFeedback('tap');
+                      setSmartWorkflowPopup(null);
+                      handleNavigate('finance');
+                    }}
+                    className="w-full py-2.5 px-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+                  >
+                    <CheckCircle2 size={15} />
+                    ثبت دریافتی، تقسیط یا چک ضمانت بیمار (منشی / مدیر)
+                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      data-testid="smart_popup_open_next_appt_btn"
+                      onClick={() => {
+                        playTactileFeedback('tap');
+                        setSmartWorkflowPopup(null);
+                        handleNavigate('appointments');
+                      }}
+                      className="py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-xs font-extrabold transition-all"
+                    >
+                      تعیین نوبت جلسه بعد
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="smart_popup_open_lab_btn"
+                      onClick={() => {
+                        playTactileFeedback('tap');
+                        setSmartWorkflowPopup(null);
+                        handleNavigate('lab');
+                      }}
+                      className="py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-extrabold transition-all"
+                    >
+                      سفارش لابراتوار / ایمپلنت
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

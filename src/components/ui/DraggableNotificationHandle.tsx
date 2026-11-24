@@ -130,7 +130,7 @@ export function DraggableNotificationHandle({ notifCount, open, onOpen }: Props)
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className="fixed right-0 z-40 touch-none select-none flex items-center justify-center focus:outline-none"
+      className="fixed right-0 md:right-20 lg:right-64 z-40 touch-none select-none flex items-center justify-center focus:outline-none"
       style={{
         top: `${yPct}%`,
         transform: `translateY(-50%) scale(${dragging ? 1.06 : 1})`,

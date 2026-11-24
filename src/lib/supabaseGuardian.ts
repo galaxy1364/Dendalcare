@@ -228,6 +228,23 @@ function wrapMutationBuilder(
 
     // 3. Execute real Cloud SQL request with automatic network-failure queue fallback
     try {
+      const emitMutationEvent = (effectivePayload: any) => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('minadental-table-mutated', {
+              detail: {
+                table,
+                operation,
+                payload: effectivePayload,
+                actor: actor.fullName,
+                actorRole: actor.role,
+                timestamp: Date.now(),
+              },
+            })
+          );
+        }
+      };
+
       const result = await builder;
       if (result?.error && isNetworkFailure(result.error) && (operation === 'INSERT' || operation === 'UPDATE')) {
         const queuedPayload =
@@ -235,6 +252,7 @@ function wrapMutationBuilder(
             ? { ...payload, id: eqFilters.id }
             : payload;
         enqueueOfflineMutation(table, operation, queuedPayload);
+        emitMutationEvent(queuedPayload);
         dispatchSecurityAlert(
           `اختلال موقت شبکه: تغییر جدول «${table}» در صف آفلاین ذخیره شد و خودکار همگام می‌شود.`,
           'offline'
@@ -246,12 +264,8 @@ function wrapMutationBuilder(
           statusText: 'Queued On Network Fallback',
         };
       }
-      if (!result?.error && typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('minadental-table-mutated', {
-            detail: { table, operation, actor: actor.fullName, timestamp: Date.now() },
-          })
-        );
+      if (!result?.error) {
+        emitMutationEvent(payload);
       }
       return result;
     } catch (err: any) {
@@ -261,6 +275,20 @@ function wrapMutationBuilder(
             ? { ...payload, id: eqFilters.id }
             : payload;
         enqueueOfflineMutation(table, operation, queuedPayload);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('minadental-table-mutated', {
+              detail: {
+                table,
+                operation,
+                payload: queuedPayload,
+                actor: actor.fullName,
+                actorRole: actor.role,
+                timestamp: Date.now(),
+              },
+            })
+          );
+        }
         dispatchSecurityAlert(
           `اختلال شبکه: تغییر جدول «${table}» با موفقیت در صف آفلاین محفوظ ماند.`,
           'offline'

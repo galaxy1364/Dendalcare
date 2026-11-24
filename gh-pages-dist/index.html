@@ -25,6 +25,11 @@
     <!-- Web App Manifest with credentials so authenticated & public HTTPS origins both load it -->
     <link rel="manifest" href="./manifest.json" crossorigin="use-credentials" />
 
+    <!-- Fast non-blocking Persian Typography (Vazirmatn) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" />
+
     <title>مینادنتال | سیستم هوشمند مدیریت کلینیک دندانپزشکی</title>
 
     <!-- Capture Android/Desktop beforeinstallprompt immediately before React bundle mounts -->
@@ -42,8 +47,8 @@
         window.dispatchEvent(new Event('minadental:installed'));
       });
     </script>
-    <script type="module" crossorigin src="./assets/index-DYk5XhNT.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BLXJTKy2.css">
+    <script type="module" crossorigin src="./assets/index-DSC6OITc.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-23uNluex.css">
   </head>
   <body style="margin: 0; background-color: #0A0E27;">
     <div id="root">
@@ -97,12 +102,12 @@
       if (window.location.hostname.indexOf('github.io') !== -1 && !document.querySelector('script[src*="./assets/index-"]')) {
         var ghCss = document.createElement('link');
         ghCss.rel = 'stylesheet';
-        ghCss.href = './gh-pages-dist/app.css?v=59';
+        ghCss.href = './gh-pages-dist/app.css?v=63';
         document.head.appendChild(ghCss);
         var ghJs = document.createElement('script');
         ghJs.type = 'module';
         ghJs.crossOrigin = 'anonymous';
-        ghJs.src = './gh-pages-dist/app.js?v=59';
+        ghJs.src = './gh-pages-dist/app.js?v=63';
         document.head.appendChild(ghJs);
       }
 

@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import {
   Users, CalendarDays, Stethoscope, FlaskConical, Anchor,
-  Wallet, Package, BellRing, TrendingUp, TrendingDown,
-  AlertTriangle, CheckCircle2, ArrowUpLeft, Sparkles, Clock,
-  UserCog, FileCheck, ScrollText, CreditCard, Download,
+  Wallet, Package, BellRing, TrendingUp,
+  AlertTriangle, Sparkles, Clock,
+  UserCog, CreditCard,
 } from 'lucide-react';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import type {
@@ -345,8 +345,8 @@ export function Dashboard({ onNavigate }: Props) {
           surfaceBg="#FFFFFF"
           surfaceBgEnd="#F0F9FF"
           icon={<Sparkles size={20} strokeWidth={2.3} />}
-          label="هوش مصنوعی کلینیک"
-          badge="هوشمند"
+          label="دستیار بالینی هوشمند"
+          badge="تحلیلگر"
           sub="تحلیل پرونده و طرح درمان"
           testId="dashboard_tile_ai"
           onClick={() => {

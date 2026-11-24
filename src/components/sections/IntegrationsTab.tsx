@@ -145,7 +145,7 @@ export function IntegrationsTab() {
     if (!tokenInput.trim()) {
       setGithubMessage({
         type: 'error',
-        text: 'برای سینک مستقیم از داخل برنامه، توکن گیت‌هاب را وارد کنید یا از دکمه Push to GitHub در نوار بالای AI Studio استفاده نمایید.',
+        text: 'برای ارسال مستقیم از داخل برنامه، ابتدا توکن دسترسی شخصی (Personal Access Token) گیت‌هاب را وارد و ذخیره کنید.',
       });
       return;
     }
@@ -527,7 +527,7 @@ export function IntegrationsTab() {
             </div>
           </div>
 
-          {/* AI Studio to GitHub Sync Guide */}
+          {/* GitHub Repository & Pages Sync Status */}
           <div className="glass-card p-4 space-y-2.5">
             <h4 className="text-xs font-bold text-gray-800 flex items-center gap-2">
               <Terminal size={15} className="text-indigo-600" />
@@ -535,7 +535,7 @@ export function IntegrationsTab() {
             </h4>
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1.5 leading-relaxed">
               <p>
-                <strong>۱. آدرس رسمی GitHub Pages:</strong>{' '}
+                <strong>۱. آدرس رسمی نسخه وب:</strong>{' '}
                 <a href="https://galaxy1364.github.io/Dendalcare/" target="_blank" rel="noopener noreferrer" className="font-mono text-indigo-600 font-bold underline">
                   https://galaxy1364.github.io/Dendalcare/
                 </a>
@@ -547,7 +547,7 @@ export function IntegrationsTab() {
                 </a>
               </p>
               <p>
-                <strong>۳. بروزرسانی خودکار با یک کلیک از استودیو:</strong> فایل‌های سنگین اضافه از <code className="font-mono">.gitignore</code> پاکسازی شدند و ورک‌فلو اتوماتیک GitHub Actions (<code className="font-mono">.github/workflows/deploy.yml</code>) و باندل استاتیک آماده گردید. با زدن دکمه <strong>«Push to GitHub»</strong> از منوی بالای استودیو به مخزن <code className="font-mono">galaxy1364/Dendalcare</code>، صفحه GitHub Pages به صورت خودکار آپدیت می‌شود.
+                <strong>۳. استقرار خودکار (CI/CD):</strong> خط لوله انتشار خودکار (<code className="font-mono">.github/workflows/deploy.yml</code>) و بسته استاتیک وب آماده است. با هر همگام‌سازی روی شاخه اصلی مخزن <code className="font-mono">galaxy1364/Dendalcare</code>، نسخه وب برای تمامی دستگاه‌ها به صورت خودکار بروزرسانی می‌شود.
               </p>
             </div>
           </div>
