@@ -304,86 +304,73 @@ export function PersonalFinance() {
   };
 
   return (
-    <div className="space-y-3 animate-fade-in">
-      {/* Top Header & Sliding Chip Bar */}
-      <div className="glass-card p-3.5 border-t-4 border-purple-500">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-500 via-fuchsia-500 to-indigo-600 flex items-center justify-center text-white shadow-lg">
-              <Briefcase size={20} />
-            </div>
-            <div>
-              <h2 className="text-base font-extrabold text-gray-800">
-                مدیریت مالی شخصی، وام، چک، رهن و اجاره، خرید و کارها
-              </h2>
-              <p className="text-[10px] text-gray-500">
-                تعهدات ماهانه ثابت: {fmt(summary.totalMonthlyFixedCommitment)} تومان • همگام با تقویم و ابر
-              </p>
-            </div>
+    <div className="space-y-2.5 animate-fade-in">
+      {/* Compact QBank Sliding Chip Bar + Magnifier Search + Quick Add */}
+      <div className="glass-card p-2.5 border-t-4 border-purple-500">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              setSearchOpen(!searchOpen);
+              if (searchOpen) setSearch('');
+            }}
+            className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 transition-all haptic ${
+              searchOpen ? 'bg-purple-600 text-white shadow-md' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+            }`}
+            title="جستجو در مالی شخصی"
+            aria-label="جستجو در مالی شخصی"
+          >
+            {searchOpen ? <X size={16} /> : <Search size={16} />}
+          </button>
+
+          {/* Sliding Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 flex-1 no-scrollbar">
+            {[
+              { id: 'overview' as const, label: 'خلاصه و رادار', icon: <Sparkles size={13} /> },
+              { id: 'loans' as const, label: 'وام و اقساط', icon: <Landmark size={13} />, count: store.loans.length },
+              { id: 'rents' as const, label: 'رهن و اجاره', icon: <Home size={13} />, count: store.rents.length },
+              { id: 'checks' as const, label: 'چک‌های شخصی', icon: <FileCheck size={13} />, count: store.checks.length },
+              { id: 'purchases' as const, label: 'خریدها', icon: <ShoppingBag size={13} />, count: store.purchases.length },
+              { id: 'tasks' as const, label: 'کارها', icon: <CheckSquare size={13} />, count: summary.openTasks },
+            ].map((c) => {
+              const active = tab === c.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => setTab(c.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-[11px] font-extrabold whitespace-nowrap transition-all shrink-0 haptic ${
+                    active
+                      ? 'bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white shadow-md scale-[1.02]'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200/70'
+                  }`}
+                >
+                  {c.icon}
+                  <span>{c.label}</span>
+                  {c.count !== undefined && c.count > 0 && (
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[9.5px] font-extrabold ${
+                        active ? 'bg-white/25 text-white' : 'bg-purple-100 text-purple-700'
+                      }`}
+                    >
+                      {jalaliToFa(c.count)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => {
-                setSearchOpen(!searchOpen);
-                if (searchOpen) setSearch('');
-              }}
-              className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all haptic ${
-                searchOpen ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-700'
-              }`}
-            >
-              {searchOpen ? <X size={16} /> : <Search size={16} />}
-            </button>
-            <button
-              onClick={openQuickAddForCurrentTab}
-              data-testid="personal_finance_new_fullscreen_btn"
-              className="px-3.5 h-9 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-md haptic"
-            >
-              <Plus size={16} />
-              <span>افزودن مورد جدید</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Sliding Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
-          {[
-            { id: 'overview' as const, label: 'خلاصه و رادار شخصی', icon: <Sparkles size={13} /> },
-            { id: 'loans' as const, label: 'وام و اقساط بانکی', icon: <Landmark size={13} />, count: store.loans.length },
-            { id: 'rents' as const, label: 'رهن و اجاره ملک/مطب', icon: <Home size={13} />, count: store.rents.length },
-            { id: 'checks' as const, label: 'چک‌های شخصی', icon: <FileCheck size={13} />, count: store.checks.length },
-            { id: 'purchases' as const, label: 'خریدها و لیست خرید', icon: <ShoppingBag size={13} />, count: store.purchases.length },
-            { id: 'tasks' as const, label: 'کارها و برنامه‌ها', icon: <CheckSquare size={13} />, count: summary.openTasks },
-          ].map((c) => {
-            const active = tab === c.id;
-            return (
-              <button
-                key={c.id}
-                onClick={() => setTab(c.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all haptic ${
-                  active
-                    ? 'bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white shadow-md scale-[1.02]'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200/70'
-                }`}
-              >
-                {c.icon}
-                <span>{c.label}</span>
-                {c.count !== undefined && c.count > 0 && (
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
-                      active ? 'bg-white/25 text-white' : 'bg-purple-100 text-purple-700'
-                    }`}
-                  >
-                    {jalaliToFa(c.count)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          <button
+            onClick={openQuickAddForCurrentTab}
+            data-testid="personal_finance_new_fullscreen_btn"
+            className="px-3 h-9 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white text-xs font-extrabold flex items-center gap-1 shrink-0 shadow-md haptic"
+          >
+            <Plus size={16} />
+            <span>افزودن</span>
+          </button>
         </div>
 
         {searchOpen && (
-          <div className="mt-2.5 pt-2.5 border-t border-gray-100 animate-slide-down">
+          <div className="mt-2 pt-2 border-t border-gray-100 animate-slide-down">
             <Input
               autoFocus
               value={search}

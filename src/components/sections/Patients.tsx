@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Users, Search, Plus, Phone, Calendar, Heart, AlertCircle,
   Pill, FileText, Shield, Activity, Stethoscope, Wallet,
@@ -24,6 +24,7 @@ import { ConsentModal } from '@/components/ui/ConsentModal';
 import { Camera, Printer, FileSpreadsheet, AlertTriangle, FileSignature } from 'lucide-react';
 import { exportToCsv } from '@/lib/exportUtils';
 import { detectMedicalAlerts } from '@/lib/medicalAlerts';
+import { subscribeGlobalFocus } from '@/lib/globalFocus';
 
 const GENDER_OPTIONS = [
   { value: 'male', label: 'مرد' },
@@ -141,6 +142,19 @@ export function Patients() {
     if (p.national_id?.trim()) return `P-${p.national_id.slice(-4)}`;
     return `${1001 + (idx ?? 0)}`;
   };
+
+  useEffect(() => {
+    return subscribeGlobalFocus('patients', (payload) => {
+      setChipFilter('all');
+      if (payload.query) {
+        setSearch(payload.query);
+        setSearchOpen(true);
+      }
+      if (payload.recordId) {
+        setExpandedCardId(payload.recordId);
+      }
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     let list = patients;

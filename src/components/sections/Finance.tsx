@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Wallet, Plus, TrendingUp, TrendingDown,
   ArrowUpCircle, ArrowDownCircle, Search,
@@ -20,6 +20,7 @@ import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
 import { toJalaliStr, JALALI_MONTHS, todayGregorian } from '@/lib/jalali';
 import { exportToCsv } from '@/lib/exportUtils';
 import { PersonalFinance } from '@/components/sections/PersonalFinance';
+import { subscribeGlobalFocus } from '@/lib/globalFocus';
 
 const fmt = (n: number) => Number(n || 0).toLocaleString('fa-IR');
 const today = todayGregorian();
@@ -95,6 +96,16 @@ export function Finance() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
 
+  useEffect(() => {
+    return subscribeGlobalFocus('finance', (payload) => {
+      if (payload.subTab) setTab(payload.subTab as FinanceTab);
+      if (payload.query) {
+        setGlobalSearch(payload.query);
+        setSearchOpen(true);
+      }
+    });
+  }, []);
+
   const chips: { v: FinanceTab; l: string; i: React.ReactNode; badge?: number }[] = [
     {
       v: 'debtors',
@@ -108,7 +119,7 @@ export function Finance() {
     },
     {
       v: 'personal',
-      l: 'مالی شخصی (وام، اجاره، چک و خرید)',
+      l: 'مالی شخصی',
       i: <Briefcase size={13} />,
     },
     {

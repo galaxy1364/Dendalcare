@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   CalendarDays, Plus, ChevronRight, ChevronLeft,
   CheckCircle2, XCircle, Play, UserX, BadgeCheck,
@@ -18,6 +18,7 @@ import {
   APT_TYPES, CLINIC_UNITS, APPOINTMENT_STATUS,
   minutesToTime, timeToMinutes, suggestFreeTimeSlots, findSmartConflicts,
 } from '@/lib/appointments';
+import { subscribeGlobalFocus } from '@/lib/globalFocus';
 
 const STATUS_ACTIONS: Record<string, { status: string; label: string; icon: React.ReactNode; className: string }[]> = {
   scheduled: [
@@ -61,6 +62,17 @@ export function Appointments() {
   const [savingQuickPatient, setSavingQuickPatient] = useState(false);
 
   const today = todayGregorian();
+
+  useEffect(() => {
+    return subscribeGlobalFocus('appointments', (payload) => {
+      if (payload.date) setCurrentDate(payload.date);
+      if (payload.subTab) setTabMode(payload.subTab as ApptTabMode);
+      if (payload.query) {
+        setSearchQuery(payload.query);
+        setSearchOpen(true);
+      }
+    });
+  }, []);
 
   const weekDays = useMemo(() => {
     const jsDay = new Date(currentDate + 'T00:00:00').getDay();
@@ -215,79 +227,68 @@ export function Appointments() {
 
   return (
     <div className="space-y-2.5 pb-2 animate-fade-in-up">
-      {/* Top Sliding Chip Bar + Magnifier Search + Full-Screen New Button */}
-      <div className="glass-card p-3">
-        <div className="flex items-center justify-between gap-2 mb-2.5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white shadow-lg">
-              <CalendarDays size={20} />
-            </div>
-            <div>
-              <h1 className="text-base font-extrabold text-gray-800">سیستم هوشمند نوبت‌دهی و ضدتداخل</h1>
-              <p className="text-[10px] text-gray-500">
-                {jalaliToFa(dayAppts.length)} نوبت این روز • {jalaliToFa(dayFreeSlots.length)} بازه خالی پیشنهادی
-              </p>
-            </div>
+      {/* Top QBank Sliding Chip Bar + Magnifier Search + Full-Screen New Button */}
+      <div className="glass-card p-2.5">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              setSearchOpen(!searchOpen);
+              if (searchOpen) setSearchQuery('');
+            }}
+            data-testid="appointments_search_toggle"
+            className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 transition-all haptic ${
+              searchOpen ? 'bg-amber-600 text-white shadow-md' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+            }`}
+            title="جستجو در نوبت‌ها"
+            aria-label="جستجو در نوبت‌ها"
+          >
+            {searchOpen ? <X size={16} /> : <Search size={16} />}
+          </button>
+
+          {/* Sliding Module Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 flex-1 no-scrollbar">
+            {[
+              { id: 'daily' as const, label: 'نوبت‌های روز', icon: <CalendarDays size={13} />, badge: dayAppts.length },
+              { id: 'units' as const, label: 'یونیت‌ها', icon: <Layers size={13} /> },
+              { id: 'caller_id' as const, label: 'کالرآیدی', icon: <PhoneIncoming size={13} /> },
+              { id: 'free_slots' as const, label: 'زمان‌های خالی', icon: <Sparkles size={13} />, badge: dayFreeSlots.length },
+            ].map((chip) => {
+              const active = tabMode === chip.id;
+              return (
+                <button
+                  key={chip.id}
+                  onClick={() => setTabMode(chip.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-[11px] font-extrabold whitespace-nowrap transition-all shrink-0 haptic ${
+                    active
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md scale-[1.02]'
+                      : 'bg-gray-100/90 text-gray-600 hover:bg-gray-200/70'
+                  }`}
+                >
+                  {chip.icon}
+                  <span>{chip.label}</span>
+                  {chip.badge !== undefined && chip.badge > 0 && (
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[9.5px] font-extrabold ${
+                        active ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {jalaliToFa(chip.badge)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => {
-                setSearchOpen(!searchOpen);
-                if (searchOpen) setSearchQuery('');
-              }}
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all haptic ${
-                searchOpen ? 'bg-amber-600 text-white shadow-md' : 'bg-amber-50 text-amber-700'
-              }`}
-              title="جستجو در نوبت‌ها"
-            >
-              {searchOpen ? <X size={18} /> : <Search size={18} />}
-            </button>
-            <button
-              onClick={() => openNew('')}
-              aria-label="نوبت جدید"
-              data-testid="new_appointment_fullscreen_btn"
-              className="px-3.5 h-10 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg haptic"
-            >
-              <Plus size={18} />
-              <span>نوبت جدید</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Sliding Module Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
-          {[
-            { id: 'daily' as const, label: 'نوبت‌های روز', icon: <CalendarDays size={13} />, badge: dayAppts.length },
-            { id: 'units' as const, label: 'تفکیک یونیت‌ها و تداخل‌سنج', icon: <Layers size={13} /> },
-            { id: 'caller_id' as const, label: 'تشخیص تماس بیمار (Caller ID)', icon: <PhoneIncoming size={13} /> },
-            { id: 'free_slots' as const, label: 'زمان‌های خالی امروز', icon: <Sparkles size={13} />, badge: dayFreeSlots.length },
-          ].map((chip) => {
-            const active = tabMode === chip.id;
-            return (
-              <button
-                key={chip.id}
-                onClick={() => setTabMode(chip.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all haptic ${
-                  active
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md scale-[1.02]'
-                    : 'bg-gray-100/90 text-gray-600 hover:bg-gray-200/70'
-                }`}
-              >
-                {chip.icon}
-                <span>{chip.label}</span>
-                {chip.badge !== undefined && chip.badge > 0 && (
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
-                      active ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'
-                    }`}
-                  >
-                    {jalaliToFa(chip.badge)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          <button
+            onClick={() => openNew('')}
+            aria-label="نوبت جدید"
+            data-testid="new_appointment_fullscreen_btn"
+            className="px-3 h-9 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-extrabold flex items-center gap-1 shrink-0 shadow-md haptic"
+          >
+            <Plus size={16} />
+            <span>نوبت</span>
+          </button>
         </div>
 
         {searchOpen && (

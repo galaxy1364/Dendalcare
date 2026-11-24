@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { FlaskConical, Plus, Search, Send, PackageCheck, ArrowLeftRight, Clock, Building2 } from 'lucide-react';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { supabase, type LabOrder, type Patient } from '@/lib/supabase';
@@ -8,6 +8,7 @@ import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
 import { toJalaliStr, todayGregorian } from '@/lib/jalali';
 import { ClinicDefinitionsModal } from '@/components/ui/ClinicDefinitionsModal';
 import { loadLaboratories } from '@/lib/clinicDefinitions';
+import { subscribeGlobalFocus } from '@/lib/globalFocus';
 
 const WORK_TYPES = [
   { value: 'crown', label: 'روکش' },
@@ -59,6 +60,19 @@ export function Lab() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return subscribeGlobalFocus('lab', (payload) => {
+      setFilter('all');
+      if (payload.query) {
+        setSearch(payload.query);
+        setSearchOpen(true);
+      }
+      if (payload.recordId) {
+        setExpandedId(payload.recordId);
+      }
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     let list = labOrders;

@@ -715,6 +715,36 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
       'NotificationDrawer must implement modern grouped cards, swipe-to-act reveal trays, spotlight deck, and swipe-to-dismiss drawer gesture'
     );
   });
+
+  test('34. Global Search, Cross-Module Deep-Linking, Popstate Back & Swipeable Reminders', () => {
+    const focusSrc = read('src/lib/globalFocus.ts');
+    const appSrc = read('src/App.tsx');
+    const sidebarSrc = read('src/components/DesktopSidebar.tsx');
+    const dockSrc = read('src/components/BottomDock.tsx');
+    const patientsSrc = read('src/components/sections/Patients.tsx');
+    const apptsSrc = read('src/components/sections/Appointments.tsx');
+    const financeSrc = read('src/components/sections/Finance.tsx');
+    const labSrc = read('src/components/sections/Lab.tsx');
+    const implantsSrc = read('src/components/sections/Implants.tsx');
+    const remindersSrc = read('src/components/sections/Reminders.tsx');
+
+    assert.ok(focusSrc.includes('emitGlobalFocus') && focusSrc.includes('subscribeGlobalFocus'), 'globalFocus.ts must export emitGlobalFocus and subscribeGlobalFocus');
+    assert.ok(appSrc.includes('topbar_global_search_button') && appSrc.includes("addEventListener('popstate'") && appSrc.includes('minadental-zero-loss-updated'), 'App.tsx must expose topbar global search, hardware popstate Back handling, and cross-module alert sync');
+    assert.ok(sidebarSrc.includes('sidebar_global_search_btn') && sidebarSrc.includes('sidebar_notifications_btn') && sidebarSrc.includes('sidebar_back_btn'), 'DesktopSidebar must provide global search, notifications, and back buttons');
+    assert.ok(dockSrc.includes('global_search_record_results') && dockSrc.includes('global_search_patient_results') && dockSrc.includes('emitGlobalFocus('), 'BottomDock QBank global search must index all clinic records and deep-link with emitGlobalFocus');
+    assert.ok(remindersSrc.includes('SwipeableReminderCard') && remindersSrc.includes('acknowledgeZeroLossAlert') && remindersSrc.includes('snoozeZeroLossAlert'), 'Reminders section must support horizontal swipe-to-act gestures synced with global zero-loss alerts');
+
+    for (const [name, src, sec] of [
+      ['Patients.tsx', patientsSrc, "'patients'"],
+      ['Appointments.tsx', apptsSrc, "'appointments'"],
+      ['Finance.tsx', financeSrc, "'finance'"],
+      ['Lab.tsx', labSrc, "'lab'"],
+      ['Implants.tsx', implantsSrc, "'implants'"],
+      ['Reminders.tsx', remindersSrc, "'reminders'"],
+    ]) {
+      assert.ok(src.includes(`subscribeGlobalFocus(${sec}`), `${name} must subscribe to globalFocus deep-links`);
+    }
+  });
 });
 
 

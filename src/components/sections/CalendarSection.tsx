@@ -361,15 +361,15 @@ export function CalendarSection({ onNavigate }: { onNavigate?: (id: SectionId) =
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <h1 className="text-base font-black text-gray-800 truncate">تقویم جامع و دائمی فارسی</h1>
+                <h1 className="text-sm font-black text-gray-800 truncate">تقویم جامع فارسی</h1>
                 {isJalaliLeap(jy) && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-fuchsia-100 text-fuchsia-700">
                     سال کبیسه
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-gray-500 truncate">
-                شمسی، میلادی و قمری • متصل به کلیه بخش‌های مطب و مالی شخصی
+              <p className="text-[10.5px] text-gray-500 truncate">
+                {toJalaliFullLabel(selectedDate)}
               </p>
             </div>
           </div>

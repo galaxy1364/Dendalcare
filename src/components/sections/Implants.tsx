@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Anchor, Plus, Search, Calendar, DollarSign, CheckCircle2, CircleDot, Building2 } from 'lucide-react';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { supabase, type Implant, type Patient } from '@/lib/supabase';
@@ -8,6 +8,7 @@ import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
 import { toJalaliStr, todayGregorian } from '@/lib/jalali';
 import { ClinicDefinitionsModal } from '@/components/ui/ClinicDefinitionsModal';
 import { loadImplantBrands } from '@/lib/clinicDefinitions';
+import { subscribeGlobalFocus } from '@/lib/globalFocus';
 
 const STAGES = [
   { value: 'planning', label: 'برنامه‌ریزی', icon: '📋' },
@@ -45,6 +46,19 @@ export function Implants() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return subscribeGlobalFocus('implants', (payload) => {
+      setStageFilter('all');
+      if (payload.query) {
+        setSearch(payload.query);
+        setSearchOpen(true);
+      }
+      if (payload.recordId) {
+        setExpandedId(payload.recordId);
+      }
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     let list = implants;

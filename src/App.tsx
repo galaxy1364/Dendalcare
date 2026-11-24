@@ -119,6 +119,17 @@ function App() {
   const [forceExpandReminderKey, setForceExpandReminderKey] = useState(0);
   const [navHistory, setNavHistory] = useState<SectionId[]>([]);
   const lastScrollY = useRef(0);
+  const backStateRef = useRef({
+    active: 'dashboard' as SectionId,
+    notifOpen: false,
+    projectFolderOpen: false,
+    userModalOpen: false,
+    callerIdOpen: false,
+    shortcutsOpen: false,
+    roadmapModalOpen: false,
+    installModalOpen: false,
+    hasWorkflowPopup: false,
+  });
 
   useEffect(() => {
     const splashEl = document.getElementById('app-splash');
@@ -131,6 +142,14 @@ function App() {
     const savedRoute = OmniRoute.getCurrentRoute() as SectionId;
     if (savedRoute && savedRoute !== active) {
       setActive(savedRoute);
+    }
+
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      try {
+        window.history.replaceState({ minadental: true, route: savedRoute || 'dashboard' }, '');
+      } catch {
+        // ignore sandboxed history errors
+      }
     }
 
     // MemPalace audit trail boot record with verifiable trace ID
@@ -147,6 +166,13 @@ function App() {
   const handleNavigate = (newSection: SectionId) => {
     if (newSection !== active) {
       setNavHistory((prev) => [...prev.slice(-9), active]);
+      if (typeof window !== 'undefined' && window.history?.pushState) {
+        try {
+          window.history.pushState({ minadental: true, route: newSection }, '');
+        } catch {
+          // ignore
+        }
+      }
     }
     setActive(newSection);
     OmniRoute.navigate(newSection);
@@ -353,10 +379,15 @@ function App() {
       setZeroLossTick((t) => t + 1);
       setForceExpandReminderKey((k) => k + 1);
     };
+    const onZeroLossUpdated = () => {
+      setZeroLossTick((t) => t + 1);
+    };
     window.addEventListener('minadental-trigger-ios-reminder-popup', onTriggerPopup);
+    window.addEventListener('minadental-zero-loss-updated', onZeroLossUpdated);
     return () => {
       clearInterval(timer);
       window.removeEventListener('minadental-trigger-ios-reminder-popup', onTriggerPopup);
+      window.removeEventListener('minadental-zero-loss-updated', onZeroLossUpdated);
     };
   }, []);
 
@@ -733,10 +764,54 @@ function App() {
   }, []);
 
   useEffect(() => {
+    backStateRef.current = {
+      active,
+      notifOpen,
+      projectFolderOpen,
+      userModalOpen,
+      callerIdOpen,
+      shortcutsOpen,
+      roadmapModalOpen,
+      installModalOpen,
+      hasWorkflowPopup: !!smartWorkflowPopup,
+    };
+  }, [
+    active,
+    notifOpen,
+    projectFolderOpen,
+    userModalOpen,
+    callerIdOpen,
+    shortcutsOpen,
+    roadmapModalOpen,
+    installModalOpen,
+    smartWorkflowPopup,
+  ]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const s = backStateRef.current;
+      window.dispatchEvent(new Event('minadental-close-qbank-menu'));
+      if (s.notifOpen) { setNotifOpen(false); return; }
+      if (s.hasWorkflowPopup) { setSmartWorkflowPopup(null); return; }
+      if (s.projectFolderOpen) { setProjectFolderOpen(false); return; }
+      if (s.userModalOpen) { setUserModalOpen(false); setAddingNewUser(false); return; }
+      if (s.callerIdOpen) { setCallerIdOpen(false); return; }
+      if (s.shortcutsOpen) { setShortcutsOpen(false); return; }
+      if (s.roadmapModalOpen) { setRoadmapModalOpen(false); return; }
+      if (s.installModalOpen) { setInstallModalOpen(false); return; }
+      if (s.active !== 'dashboard') {
+        handleGoBack();
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setShortcutsOpen(prev => !prev);
+        window.dispatchEvent(new CustomEvent('minadental-open-qbank-menu', { detail: { focusSearch: true } }));
         return;
       }
       const target = e.target as HTMLElement | null;
@@ -745,18 +820,22 @@ function App() {
         return;
       }
       if (e.key === 'F1') { e.preventDefault(); setShortcutsOpen(prev => !prev); }
-      else if (e.key === 'F2') { e.preventDefault(); setActive('patients'); }
-      else if (e.key === 'F3') { e.preventDefault(); setActive('appointments'); }
-      else if (e.key === 'F4') { e.preventDefault(); setActive('treatments'); }
-      else if (e.key === 'F5') { e.preventDefault(); setActive('dashboard'); }
-      else if (e.key === 'F6') { e.preventDefault(); setActive('finance'); }
-      else if (e.key === 'F7') { e.preventDefault(); setActive('implants'); }
-      else if (e.key === 'F8') { e.preventDefault(); setActive('lab'); }
-      else if (e.key === 'F9') { e.preventDefault(); setActive('calendar'); }
+      else if (e.key === 'F2') { e.preventDefault(); handleNavigate('patients'); }
+      else if (e.key === 'F3') { e.preventDefault(); handleNavigate('appointments'); }
+      else if (e.key === 'F4') { e.preventDefault(); handleNavigate('treatments'); }
+      else if (e.key === 'F5') { e.preventDefault(); handleNavigate('dashboard'); }
+      else if (e.key === 'F6') { e.preventDefault(); handleNavigate('finance'); }
+      else if (e.key === 'F7') { e.preventDefault(); handleNavigate('implants'); }
+      else if (e.key === 'F8') { e.preventDefault(); handleNavigate('lab'); }
+      else if (e.key === 'F9') { e.preventDefault(); handleNavigate('calendar'); }
       else if (e.key === 'Escape') {
         setNotifOpen(false);
         setShortcutsOpen(false);
         setProjectFolderOpen(false);
+        setUserModalOpen(false);
+        setCallerIdOpen(false);
+        setSmartWorkflowPopup(null);
+        window.dispatchEvent(new Event('minadental-close-qbank-menu'));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -870,15 +949,26 @@ function App() {
       <DesktopSidebar
         active={active}
         onChange={handleNavigate}
+        onBack={handleGoBack}
+        canGoBack={navHistory.length > 0 || active !== 'dashboard'}
+        notifCount={notifCount}
         mascotMood={mascotMood}
         currentUser={currentUser}
         platformInfo={platformInfo}
         onOpenUserModal={() => setUserModalOpen(true)}
         onOpenProjectFolder={() => setProjectFolderOpen(true)}
+        onOpenGlobalSearch={() => {
+          playTactileFeedback('tap');
+          window.dispatchEvent(new CustomEvent('minadental-open-qbank-menu', { detail: { focusSearch: true } }));
+        }}
+        onOpenNotifications={() => {
+          playTactileFeedback('tap');
+          setNotifOpen(true);
+        }}
         onOpenShortcuts={() => setShortcutsOpen(true)}
       />
 
-      {/* Ultra-Clean Minimal Top Bar — Opaque Pearl Safe-Area Backdrop + 2 Action Icons (Zero Text Peek-Through) */}
+      {/* Ultra-Clean Minimal Top Bar — Opaque Pearl Safe-Area Backdrop + Global Search, Account & Folder */}
       <header className={`fixed top-0 left-0 right-0 md:right-20 lg:right-64 z-30 bg-[#F3F6FB] border-b border-slate-200/75 px-2 md:px-4 pt-2 pb-1.5 safe-top transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}>
         <div className="max-w-xl md:max-w-5xl xl:max-w-6xl mx-auto">
           <div
@@ -930,9 +1020,24 @@ function App() {
               </div>
             </div>
 
-            {/* Left Side (RTL End): ONLY 2 Clean Circular QBank Buttons (Account + Project Folder) */}
+            {/* Left Side (RTL End): Clean Circular QBank Buttons (Global Search + Account + Project Folder) */}
             <div className="flex items-center gap-1.5 shrink-0">
-              {/* 1. User Account, Username/Password & Role Switcher */}
+              {/* 1. Global Search & All Folders Trigger */}
+              <button
+                type="button"
+                className="topbar-btn relative bg-sky-50 hover:bg-sky-100 border border-sky-200"
+                onClick={() => {
+                  playTactileFeedback('tap');
+                  window.dispatchEvent(new CustomEvent('minadental-open-qbank-menu', { detail: { focusSearch: true } }));
+                }}
+                aria-label="جستجوی سراسری و پوشه‌ها"
+                title="جستجوی سراسری در کل کلینیک (Ctrl+K)"
+                data-testid="topbar_global_search_button"
+              >
+                <Search size={17} className="text-sky-700" />
+              </button>
+
+              {/* 2. User Account, Username/Password & Role Switcher */}
               <button
                 className="topbar-btn relative bg-slate-100 hover:bg-slate-200/80 border border-slate-200"
                 onClick={() => {
@@ -950,7 +1055,7 @@ function App() {
                 />
               </button>
 
-              {/* 2. Project Folder (Houses Caller-ID, PWA Install, 8-Phase Super-Audit, Sync & iOS Haptics) */}
+              {/* 3. Project Folder (Houses Caller-ID, PWA Install, 8-Phase Super-Audit, Sync & iOS Haptics) */}
               <button
                 className="topbar-btn relative bg-amber-50 hover:bg-amber-100 border border-amber-200"
                 onClick={() => {
@@ -1663,6 +1768,12 @@ function App() {
         onBack={handleGoBack}
         canGoBack={navHistory.length > 0 || active !== 'dashboard'}
         patients={patients}
+        appointments={appointments}
+        checks={checks}
+        installments={installments}
+        labOrders={labOrders}
+        implants={implants}
+        reminders={reminders}
         onQuickAction={(action) => {
           if (action === 'caller_id') setCallerIdOpen(true);
           else if (action === 'install') handleTriggerInstall();

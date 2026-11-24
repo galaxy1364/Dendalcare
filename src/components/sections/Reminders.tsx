@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   BellRing, Plus, Search, Clock, Calendar, CheckCircle2,
   Bell, Sparkles, Phone, X, CreditCard,
@@ -28,8 +28,12 @@ import {
 import {
   sendRealDeviceNotification,
   resetAllZeroLossAlertsForToday,
+  acknowledgeZeroLossAlert,
+  snoozeZeroLossAlert,
+  reconcileZeroLossAlerts,
 } from '@/lib/deviceNotifications';
 import { playTactileFeedback } from '@/lib/hapticsAudio';
+import { subscribeGlobalFocus } from '@/lib/globalFocus';
 
 const CATEGORIES = [
   { value: 'appointment', label: 'نوبت و ویزیت' },
@@ -119,6 +123,25 @@ export function Reminders() {
   const [rules, setRules] = useState<SmartReminderRules>(() => loadSmartReminderRules());
   const [scanningAll, setScanningAll] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
+  const [zeroLossTick, setZeroLossTick] = useState(0);
+
+  useEffect(() => {
+    const onUpdated = () => setZeroLossTick(t => t + 1);
+    window.addEventListener('minadental-zero-loss-updated', onUpdated);
+    const unsub = subscribeGlobalFocus('reminders', (payload) => {
+      if (payload.query) {
+        setSearch(payload.query);
+        setSearchOpen(true);
+      }
+      if (payload.subTab) {
+        setTabMode(payload.subTab as ReminderTabMode);
+      }
+    });
+    return () => {
+      window.removeEventListener('minadental-zero-loss-updated', onUpdated);
+      unsub();
+    };
+  }, []);
 
   // Smart SMS / WhatsApp Modal State
   const [smsAlert, setSmsAlert] = useState<{
@@ -138,7 +161,8 @@ export function Reminders() {
 
   // Compute live cross-module smart alerts in real time
   const liveAlerts = useMemo(() => {
-    return computeLiveSmartAlerts({
+    void zeroLossTick;
+    const raw = computeLiveSmartAlerts({
       patients,
       appointments,
       treatments,
@@ -150,7 +174,8 @@ export function Reminders() {
       safteh,
       rules,
     });
-  }, [patients, appointments, treatments, labOrders, implants, inventory, installments, checks, safteh, rules]);
+    return reconcileZeroLossAlerts(raw);
+  }, [patients, appointments, treatments, labOrders, implants, inventory, installments, checks, safteh, rules, zeroLossTick]);
 
   const filteredLiveAlerts = useMemo(() => {
     let list = liveAlerts;
@@ -540,20 +565,17 @@ export function Reminders() {
 
       {/* Executive Smart Radar Summary Banner (60-30-10 Daylight QBank Standard) */}
       <div
-        className="rounded-[24px] p-4 bg-white border-2 border-rose-200 shadow-sm space-y-3"
+        className="rounded-[24px] p-3.5 bg-white border-2 border-rose-200 shadow-sm space-y-2.5"
         style={{ background: 'linear-gradient(155deg, #FFFFFF 0%, #FFF2F4 58%, #FFE4E6 100%)' }}
       >
-        <div className="flex items-start justify-between flex-wrap gap-2">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-200 text-[10px] font-black mb-1">
-              <Sparkles size={11} className="text-rose-700" />
-              <span>رادار هوشمند ۳۶۰ درجه کلینیک مینادنتال</span>
-            </div>
-            <h2 className="text-base font-black text-slate-900">
-              {radarCounts.total.toLocaleString('fa-IR')} رویداد و هشدار فعال در کل بخش‌های مطب
+            <h2 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+              <Sparkles size={14} className="text-rose-600" />
+              <span>{radarCounts.total.toLocaleString('fa-IR')} یادآوری فعال مطب</span>
             </h2>
-            <p className="text-[11px] font-semibold text-slate-600 mt-0.5">
-              پایش همزمان نوبت‌ها، چک صیادی، اقساط، بدهکاران، مراحل ایمپلنت، لابراتوار و موجودی انبار
+            <p className="text-[10px] font-bold text-slate-500 mt-0.5">
+              سوایپ چپ: انجام شد • سوایپ راست: تعویق ۱۵ دقیقه‌ای
             </p>
           </div>
 
@@ -565,8 +587,8 @@ export function Reminders() {
                 window.dispatchEvent(new Event('minadental-trigger-ios-reminder-popup'));
                 const topAlert = liveAlerts[0];
                 sendRealDeviceNotification({
-                  title: topAlert ? `مینادنتال — ${topAlert.title}` : 'مینادنتال — رادار هوشمند ۳۶۰ درجه',
-                  body: topAlert ? topAlert.subtitle : `${radarCounts.total.toLocaleString('fa-IR')} یادآوری فعال در کل مطب آماده بررسی است.`,
+                  title: topAlert ? `مینادنتال — ${topAlert.title}` : 'مینادنتال — رادار یادآوری',
+                  body: topAlert ? topAlert.subtitle : `${radarCounts.total.toLocaleString('fa-IR')} یادآوری فعال آماده بررسی است.`,
                   tag: 'minadental-reminders-radar-push',
                   urgent: topAlert?.urgency === 'critical',
                 });
@@ -575,17 +597,17 @@ export function Reminders() {
               className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
             >
               <BellRing size={14} />
-              <span>پاپ‌آپ مدرن آیفونی + اعلان گوشی</span>
+              <span>پاپ‌آپ و اعلان گوشی</span>
             </button>
 
             <button
               onClick={handleSyncToDatabase}
               disabled={scanningAll}
               data-testid="smart_auto_scan_reminders_button"
-              className="px-3.5 py-2 rounded-xl bg-white text-rose-900 hover:bg-rose-50 border border-rose-300 text-xs font-extrabold shadow-sm flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+              className="px-3 py-2 rounded-xl bg-white text-rose-900 hover:bg-rose-50 border border-rose-300 text-xs font-extrabold shadow-sm flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
             >
               <Sparkles size={14} className="text-rose-600" />
-              {scanningAll ? 'در حال ثبت در دیتابیس...' : 'ثبت خودکار همه در دیتابیس یادآوری'}
+              {scanningAll ? 'در حال ثبت...' : 'همگام‌سازی خودکار'}
             </button>
           </div>
         </div>
@@ -631,10 +653,21 @@ export function Reminders() {
             {filteredLiveAlerts.map(alert => {
               const u = urgencyStyles[alert.urgency];
               return (
-                <div
+                <SwipeableReminderCard
                   key={alert.id}
-                  className="glass-card p-3.5 space-y-2.5 transition-all"
-                  style={{ borderRight: `4px solid ${u.border}` }}
+                  borderColor={u.border}
+                  onAcknowledge={() => {
+                    playTactileFeedback('success');
+                    acknowledgeZeroLossAlert(alert.id);
+                    setZeroLossTick(t => t + 1);
+                    window.dispatchEvent(new Event('minadental-zero-loss-updated'));
+                  }}
+                  onSnooze={() => {
+                    playTactileFeedback('soft');
+                    snoozeZeroLossAlert(alert.id, 15);
+                    setZeroLossTick(t => t + 1);
+                    window.dispatchEvent(new Event('minadental-zero-loss-updated'));
+                  }}
                 >
                   {/* Top Header */}
                   <div className="flex items-start justify-between gap-2">
@@ -763,7 +796,7 @@ export function Reminders() {
                       </a>
                     )}
                   </div>
-                </div>
+                </SwipeableReminderCard>
               );
             })}
           </div>
@@ -1031,6 +1064,103 @@ function ReminderForm({ reminder, patients, onSave, saving }: {
       <Button onClick={submit} color="#EF4444" disabled={saving} className="w-full">
         {saving ? 'در حال ذخیره...' : 'ذخیره یادآوری'}
       </Button>
+    </div>
+  );
+}
+
+function SwipeableReminderCard({
+  children,
+  borderColor,
+  onAcknowledge,
+  onSnooze,
+}: {
+  children: React.ReactNode;
+  borderColor: string;
+  onAcknowledge: () => void;
+  onSnooze: () => void;
+}) {
+  const [dragX, setDragX] = useState(0);
+  const [swiping, setSwiping] = useState(false);
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const axisRef = useRef<'x' | 'y' | null>(null);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest('button, a, select, input')) return;
+    startRef.current = { x: e.clientX, y: e.clientY };
+    axisRef.current = null;
+    setSwiping(true);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!startRef.current) return;
+    const dx = e.clientX - startRef.current.x;
+    const dy = e.clientY - startRef.current.y;
+    if (!axisRef.current) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      axisRef.current = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+    }
+    if (axisRef.current === 'x') {
+      const clamped = Math.max(-130, Math.min(130, dx));
+      setDragX(clamped);
+    }
+  };
+
+  const finishSwipe = () => {
+    if (!startRef.current) return;
+    const finalX = dragX;
+    startRef.current = null;
+    axisRef.current = null;
+    setSwiping(false);
+    if (finalX <= -64) {
+      setDragX(0);
+      onAcknowledge();
+    } else if (finalX >= 64) {
+      setDragX(0);
+      onSnooze();
+    } else {
+      setDragX(0);
+    }
+  };
+
+  return (
+    <div className="relative rounded-3xl overflow-hidden">
+      {/* Reveal Trays behind card */}
+      <div
+        className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none"
+        aria-hidden="true"
+      >
+        <div
+          className="flex items-center gap-1.5 text-amber-800 bg-amber-100 px-3 py-1.5 rounded-2xl border border-amber-300 text-[11px] font-black transition-opacity"
+          style={{ opacity: dragX > 18 ? 1 : 0 }}
+        >
+          <Clock size={14} />
+          <span>۱۵ دقیقه بعد</span>
+        </div>
+        <div
+          className="flex items-center gap-1.5 text-emerald-800 bg-emerald-100 px-3 py-1.5 rounded-2xl border border-emerald-300 text-[11px] font-black transition-opacity"
+          style={{ opacity: dragX < -18 ? 1 : 0 }}
+        >
+          <CheckCircle2 size={14} />
+          <span>انجام شد</span>
+        </div>
+      </div>
+
+      {/* Foreground Card */}
+      <div
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={finishSwipe}
+        onPointerCancel={finishSwipe}
+        className="glass-card p-3.5 space-y-2.5 relative z-10 touch-pan-y select-none"
+        style={{
+          borderRight: `4px solid ${borderColor}`,
+          transform: `translate3d(${dragX}px, 0, 0)`,
+          transition: swiping ? 'none' : 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

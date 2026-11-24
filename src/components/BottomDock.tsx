@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { SECTIONS, type SectionId, getSection } from '@/lib/sections';
 import { getModuleToken } from '@/lib/designTokens';
+import { emitGlobalFocus, type GlobalFocusPayload } from '@/lib/globalFocus';
+import { toJalaliStr } from '@/lib/jalali';
 import {
   LayoutGrid,
   X,
@@ -13,6 +15,12 @@ import {
   Settings,
   UserCheck,
   Sparkles,
+  CalendarDays,
+  FileCheck,
+  CreditCard,
+  FlaskConical,
+  Anchor,
+  ArrowUpLeft,
 } from 'lucide-react';
 import { QBankTile } from '@/components/ui/QBankTile';
 import { MascotTooth } from '@/components/ui/MascotTooth';
@@ -24,6 +32,60 @@ export interface DockSearchPatient {
   last_name?: string | null;
   phone?: string | null;
   insurance_number?: string | null;
+  national_id?: string | null;
+}
+
+export interface DockSearchAppointment {
+  id: string;
+  patient_id?: string | null;
+  title?: string | null;
+  appointment_date: string;
+  appointment_time?: string | null;
+  room?: string | null;
+  type?: string | null;
+}
+
+export interface DockSearchCheck {
+  id: string;
+  patient_id?: string | null;
+  check_number?: string | null;
+  bank_name?: string | null;
+  amount: number;
+  due_date: string;
+  status?: string | null;
+}
+
+export interface DockSearchInstallment {
+  id: string;
+  patient_id?: string | null;
+  monthly_amount: number;
+  next_due_date?: string | null;
+  status?: string | null;
+}
+
+export interface DockSearchLabOrder {
+  id: string;
+  patient_id?: string | null;
+  lab_name?: string | null;
+  tooth_numbers?: string | null;
+  work_type?: string | null;
+  status?: string | null;
+}
+
+export interface DockSearchImplant {
+  id: string;
+  patient_id?: string | null;
+  brand?: string | null;
+  tooth_number?: string | number | null;
+  stage?: string | null;
+}
+
+export interface DockSearchReminder {
+  id: string;
+  patient_id?: string | null;
+  title: string;
+  reminder_date: string;
+  status?: string | null;
 }
 
 type Props = {
@@ -32,6 +94,12 @@ type Props = {
   onBack?: () => void;
   canGoBack?: boolean;
   patients?: DockSearchPatient[];
+  appointments?: DockSearchAppointment[];
+  checks?: DockSearchCheck[];
+  installments?: DockSearchInstallment[];
+  labOrders?: DockSearchLabOrder[];
+  implants?: DockSearchImplant[];
+  reminders?: DockSearchReminder[];
   onQuickAction?: (action: 'caller_id' | 'install' | 'sync' | 'reminder_popup') => void;
 };
 
@@ -76,6 +144,12 @@ export function BottomDock({
   onBack,
   canGoBack = false,
   patients = [],
+  appointments = [],
+  checks = [],
+  installments = [],
+  labOrders = [],
+  implants = [],
+  reminders = [],
   onQuickAction,
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -87,7 +161,7 @@ export function BottomDock({
   const activeToken = getModuleToken(active);
   const moreSections = SECTIONS.filter((s) => !PRIMARY_SECTION_IDS.includes(s.id));
 
-  // Global listener so Top Bar / Dashboard / Shortcuts can open the QBank Folders & Search Menu from anywhere
+  // Global listener so Top Bar / Sidebar / Dashboard / Shortcuts can open the QBank Folders & Search Menu from anywhere
   useEffect(() => {
     const onOpenMenu = (ev: Event) => {
       const detail = (ev as CustomEvent)?.detail;
@@ -96,13 +170,21 @@ export function BottomDock({
         setTimeout(() => searchInputRef.current?.focus(), 140);
       }
     };
+    const onCloseMenu = () => setMoreOpen(false);
     window.addEventListener('minadental-open-qbank-menu', onOpenMenu);
-    return () => window.removeEventListener('minadental-open-qbank-menu', onOpenMenu);
+    window.addEventListener('minadental-close-qbank-menu', onCloseMenu);
+    return () => {
+      window.removeEventListener('minadental-open-qbank-menu', onOpenMenu);
+      window.removeEventListener('minadental-close-qbank-menu', onCloseMenu);
+    };
   }, []);
 
-  const handleSelect = (id: SectionId) => {
+  const handleSelect = (id: SectionId, focus?: Omit<GlobalFocusPayload, 'section'>) => {
     playTactileFeedback('dock');
     onChange(id);
+    if (focus) {
+      emitGlobalFocus({ section: id, ...focus });
+    }
     setMoreOpen(false);
     setSearchQuery('');
   };
@@ -151,6 +233,14 @@ export function BottomDock({
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
+  const patientNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of patients) {
+      map.set(p.id, `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'بیمار');
+    }
+    return map;
+  }, [patients]);
+
   const filteredSections = useMemo(() => {
     if (!normalizedQuery) return SECTIONS;
     return SECTIONS.filter((s) => {
@@ -168,11 +258,142 @@ export function BottomDock({
     if (!normalizedQuery || patients.length === 0) return [];
     return patients
       .filter((p) => {
-        const full = `${p.first_name || ''} ${p.last_name || ''} ${p.phone || ''} ${p.insurance_number || ''}`.toLowerCase();
+        const full = `${p.first_name || ''} ${p.last_name || ''} ${p.phone || ''} ${p.insurance_number || ''} ${p.national_id || ''}`.toLowerCase();
         return full.includes(normalizedQuery);
       })
       .slice(0, 5);
   }, [normalizedQuery, patients]);
+
+  const matchedRecords = useMemo(() => {
+    if (!normalizedQuery) return [];
+    const results: {
+      id: string;
+      badge: string;
+      badgeColor: string;
+      badgeBg: string;
+      title: string;
+      sub: string;
+      section: SectionId;
+      focus: Omit<GlobalFocusPayload, 'section'>;
+      icon: typeof FileCheck;
+    }[] = [];
+
+    for (const c of checks) {
+      const pName = c.patient_id ? patientNameMap.get(c.patient_id) || '' : '';
+      const hay = `${c.check_number || ''} ${c.bank_name || ''} ${pName} چک`.toLowerCase();
+      if (hay.includes(normalizedQuery)) {
+        results.push({
+          id: `chk_${c.id}`,
+          badge: 'چک صیادی',
+          badgeColor: '#B91C1C',
+          badgeBg: '#FEE2E2',
+          title: `چک ${c.check_number || 'صیادی'} • ${Number(c.amount || 0).toLocaleString('fa-IR')} ت`,
+          sub: `${pName || 'بیمار'} • سررسید ${toJalaliStr(c.due_date)}`,
+          section: 'finance',
+          focus: { subTab: 'checks', query: c.check_number || pName, recordId: c.id },
+          icon: FileCheck,
+        });
+      }
+      if (results.length >= 8) break;
+    }
+
+    for (const inst of installments) {
+      if (results.length >= 8) break;
+      const pName = inst.patient_id ? patientNameMap.get(inst.patient_id) || '' : '';
+      const hay = `${pName} قسط اقساط ${inst.monthly_amount}`.toLowerCase();
+      if (hay.includes(normalizedQuery)) {
+        results.push({
+          id: `inst_${inst.id}`,
+          badge: 'قسط',
+          badgeColor: '#6D28D9',
+          badgeBg: '#EDE9FE',
+          title: `قسط ${pName || 'بیمار'} • ${Number(inst.monthly_amount || 0).toLocaleString('fa-IR')} ت`,
+          sub: inst.next_due_date ? `سررسید ${toJalaliStr(inst.next_due_date)}` : 'اقساط فعال',
+          section: 'finance',
+          focus: { subTab: 'installments', query: pName, recordId: inst.id },
+          icon: CreditCard,
+        });
+      }
+    }
+
+    for (const apt of appointments) {
+      if (results.length >= 8) break;
+      const pName = apt.patient_id ? patientNameMap.get(apt.patient_id) || '' : '';
+      const hay = `${apt.title || ''} ${pName} ${apt.room || ''} ${apt.type || ''} نوبت`.toLowerCase();
+      if (hay.includes(normalizedQuery)) {
+        results.push({
+          id: `apt_${apt.id}`,
+          badge: 'نوبت',
+          badgeColor: '#B45309',
+          badgeBg: '#FEF3C7',
+          title: apt.title || `نوبت ${pName}`,
+          sub: `${toJalaliStr(apt.appointment_date)} ساعت ${(apt.appointment_time || '').slice(0, 5)}`,
+          section: 'appointments',
+          focus: { date: apt.appointment_date, query: pName || apt.title || '', recordId: apt.id },
+          icon: CalendarDays,
+        });
+      }
+    }
+
+    for (const lab of labOrders) {
+      if (results.length >= 8) break;
+      const pName = lab.patient_id ? patientNameMap.get(lab.patient_id) || '' : '';
+      const hay = `${lab.lab_name || ''} ${lab.tooth_numbers || ''} ${pName} لابراتوار`.toLowerCase();
+      if (hay.includes(normalizedQuery)) {
+        results.push({
+          id: `lab_${lab.id}`,
+          badge: 'لابراتوار',
+          badgeColor: '#BE185D',
+          badgeBg: '#FCE7F3',
+          title: `${lab.lab_name || 'سفارش لابراتوار'} (${lab.tooth_numbers || '—'})`,
+          sub: pName || 'پروتز کلینیک',
+          section: 'lab',
+          focus: { query: pName || lab.lab_name || '', recordId: lab.id },
+          icon: FlaskConical,
+        });
+      }
+    }
+
+    for (const imp of implants) {
+      if (results.length >= 8) break;
+      const pName = imp.patient_id ? patientNameMap.get(imp.patient_id) || '' : '';
+      const hay = `${imp.brand || ''} ${imp.tooth_number ?? ''} ${pName} ایمپلنت`.toLowerCase();
+      if (hay.includes(normalizedQuery)) {
+        results.push({
+          id: `imp_${imp.id}`,
+          badge: 'ایمپلنت',
+          badgeColor: '#0E7490',
+          badgeBg: '#CFFAFE',
+          title: `${imp.brand || 'ایمپلنت'} • دندان ${imp.tooth_number ?? '—'}`,
+          sub: pName || 'پرونده ایمپلنت',
+          section: 'implants',
+          focus: { query: pName || imp.brand || '', recordId: imp.id },
+          icon: Anchor,
+        });
+      }
+    }
+
+    for (const rem of reminders) {
+      if (results.length >= 8) break;
+      const pName = rem.patient_id ? patientNameMap.get(rem.patient_id) || '' : '';
+      const hay = `${rem.title} ${pName} یادآوری`.toLowerCase();
+      if (hay.includes(normalizedQuery)) {
+        results.push({
+          id: `rem_${rem.id}`,
+          badge: 'یادآوری',
+          badgeColor: '#E11D48',
+          badgeBg: '#FFE4E6',
+          title: rem.title,
+          sub: `${pName ? `${pName} • ` : ''}${toJalaliStr(rem.reminder_date)}`,
+          section: 'reminders',
+          focus: { query: rem.title, recordId: rem.id },
+          icon: BellRing,
+        });
+      }
+    }
+
+    return results;
+  }, [normalizedQuery, checks, installments, appointments, labOrders, implants, reminders, patientNameMap]);
 
   const handleMenuBack = () => {
     playTactileFeedback('soft');
@@ -332,25 +553,68 @@ export function BottomDock({
             <div className="flex-1 overflow-y-auto px-3.5 py-3 space-y-4">
               {/* Live Patient Search Results (when typing in Search Capsule) */}
               {matchedPatients.length > 0 && (
-                <div className="rounded-2xl bg-white border border-emerald-200 p-2.5 space-y-1.5 shadow-sm">
+                <div className="rounded-2xl bg-white border border-emerald-200 p-2.5 space-y-1.5 shadow-sm" data-testid="global_search_patient_results">
                   <p className="text-[10.5px] font-black text-emerald-800 flex items-center gap-1 px-1">
-                    <UserCheck size={13} /> بیماران یافت‌شده در پرونده کلینیک:
+                    <UserCheck size={13} /> بیماران ({matchedPatients.length.toLocaleString('fa-IR')})
                   </p>
-                  {matchedPatients.map((pt) => (
-                    <button
-                      key={pt.id}
-                      type="button"
-                      onClick={() => handleSelect('patients')}
-                      className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200/70 text-right transition-all"
-                    >
-                      <span className="text-xs font-black text-slate-900">
-                        {pt.first_name} {pt.last_name}
-                      </span>
-                      <span className="text-[10.5px] font-mono font-bold text-emerald-800" dir="ltr">
-                        {pt.phone || `#${pt.insurance_number || 'پرونده'}`}
-                      </span>
-                    </button>
-                  ))}
+                  {matchedPatients.map((pt) => {
+                    const fullName = `${pt.first_name || ''} ${pt.last_name || ''}`.trim();
+                    return (
+                      <button
+                        key={pt.id}
+                        type="button"
+                        onClick={() => handleSelect('patients', { query: fullName || pt.phone || '', recordId: pt.id })}
+                        className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200/70 text-right transition-all"
+                      >
+                        <span className="text-xs font-black text-slate-900">
+                          {fullName}
+                        </span>
+                        <span className="text-[10.5px] font-mono font-bold text-emerald-800 flex items-center gap-1" dir="ltr">
+                          {pt.phone || `#${pt.insurance_number || 'پرونده'}`}
+                          <ArrowUpLeft size={12} />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Live Cross-Module Clinical & Financial Search Results (Checks, Installments, Appointments, Lab, Implants, Reminders) */}
+              {matchedRecords.length > 0 && (
+                <div className="rounded-2xl bg-white border border-indigo-200 p-2.5 space-y-1.5 shadow-sm" data-testid="global_search_record_results">
+                  <p className="text-[10.5px] font-black text-indigo-800 flex items-center gap-1 px-1">
+                    <Search size={12} /> سوابق مالی و بالینی ({matchedRecords.length.toLocaleString('fa-IR')})
+                  </p>
+                  {matchedRecords.map((rec) => {
+                    const RIcon = rec.icon;
+                    return (
+                      <button
+                        key={rec.id}
+                        type="button"
+                        onClick={() => handleSelect(rec.section, rec.focus)}
+                        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl bg-slate-50 hover:bg-indigo-50/70 border border-slate-200/80 text-right transition-all"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
+                            style={{ background: rec.badgeBg, color: rec.badgeColor }}
+                          >
+                            <RIcon size={14} />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-slate-900 truncate">{rec.title}</p>
+                            <p className="text-[10px] font-semibold text-slate-500 truncate">{rec.sub}</p>
+                          </div>
+                        </div>
+                        <span
+                          className="text-[9.5px] font-black px-2 py-0.5 rounded-full shrink-0"
+                          style={{ background: rec.badgeBg, color: rec.badgeColor }}
+                        >
+                          {rec.badge}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
@@ -462,7 +726,7 @@ export function BottomDock({
                   })}
                 </div>
 
-                {filteredSections.length === 0 && filteredTools.length === 0 && matchedPatients.length === 0 && (
+                {filteredSections.length === 0 && filteredTools.length === 0 && matchedPatients.length === 0 && matchedRecords.length === 0 && (
                   <p className="text-center text-xs font-bold text-slate-500 py-6">
                     موردی با عبارت «{searchQuery}» یافت نشد
                   </p>
