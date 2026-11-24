@@ -36,17 +36,18 @@ export function BottomDock({ active, onChange }: Props) {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-40 safe-bottom md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 safe-bottom md:hidden bg-gradient-to-t from-[#F3F6FB] via-[#F3F6FB]/90 to-transparent">
         <div className="max-w-xl md:max-w-4xl lg:max-w-5xl mx-auto px-2 pb-1.5 pt-1">
           <div
             className="bottom-dock rounded-[26px] flex items-center justify-between px-1.5 py-1"
             style={{
-              boxShadow: '0 10px 36px rgba(0,0,0,0.35), 0 4px 0 rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.16)',
+              boxShadow: '0 -2px 20px rgba(15,23,42,0.08), 0 8px 24px rgba(15,23,42,0.10)',
             }}
           >
             {/* Primary 5 Sections */}
             {PRIMARY_SECTION_IDS.map((id) => {
               const section = getSection(id);
+              const tok = getModuleToken(id);
               const Icon = section.icon;
               const isActive = active === id;
               return (
@@ -55,7 +56,7 @@ export function BottomDock({ active, onChange }: Props) {
                   onClick={() => handleSelect(section.id)}
                   className={`dock-item no-select ${isActive ? 'active' : ''}`}
                   style={{
-                    color: isActive ? section.color : '#CBD5E1',
+                    color: isActive ? tok.primary : '#475569',
                     minWidth: '54px',
                     minHeight: '50px',
                   }}
@@ -64,24 +65,23 @@ export function BottomDock({ active, onChange }: Props) {
                   <div
                     className="dock-icon"
                     style={{
-                      background: isActive ? `${section.color}28` : 'rgba(255,255,255,0.04)',
-                      border: isActive ? `1px solid ${section.color}65` : '1px solid rgba(255,255,255,0.06)',
+                      background: isActive ? tok.surfaceTintEnd : '#F8FAFC',
+                      border: isActive ? `1.5px solid ${tok.surfaceBorder}` : '1px solid #E2E8F0',
                       boxShadow: isActive
-                        ? `0 3px 0 ${section.color}55, 0 6px 14px ${section.color}35`
-                        : '0 2px 0 rgba(0,0,0,0.35)',
+                        ? `0 3px 0 ${tok.surfaceBorder}, 0 6px 12px ${tok.primary}22`
+                        : '0 2px 0 #E2E8F0',
                     }}
                   >
                     <Icon
                       size={isActive ? 21 : 19}
                       strokeWidth={isActive ? 2.5 : 2}
-                      style={isActive ? { filter: `drop-shadow(0 2px 6px ${section.color}75)` } : undefined}
                     />
                   </div>
                   <span
                     className="dock-label"
                     style={{
-                      color: isActive ? section.color : '#CBD5E1',
-                      fontWeight: isActive ? 800 : 600,
+                      color: isActive ? tok.primaryDark : '#475569',
+                      fontWeight: isActive ? 800 : 700,
                     }}
                   >
                     {section.label}
@@ -98,7 +98,7 @@ export function BottomDock({ active, onChange }: Props) {
               }}
               className={`dock-item no-select ${!isPrimaryActive || moreOpen ? 'active' : ''}`}
               style={{
-                color: !isPrimaryActive ? activeSection.color : '#CBD5E1',
+                color: !isPrimaryActive ? activeSection.color : '#475569',
                 minWidth: '54px',
                 minHeight: '50px',
               }}
@@ -109,23 +109,22 @@ export function BottomDock({ active, onChange }: Props) {
                 className="dock-icon"
                 style={{
                   background: !isPrimaryActive
-                    ? `${activeSection.color}28`
+                    ? activeSection.surfaceTintEnd
                     : moreOpen
-                    ? 'rgba(168,85,247,0.28)'
-                    : 'rgba(255,255,255,0.04)',
+                    ? '#F3E8FF'
+                    : '#F8FAFC',
                   border: !isPrimaryActive
-                    ? `1px solid ${activeSection.color}65`
-                    : '1px solid rgba(255,255,255,0.06)',
+                    ? `1.5px solid ${activeSection.surfaceBorder}`
+                    : '1px solid #E2E8F0',
                   boxShadow: !isPrimaryActive
-                    ? `0 3px 0 ${activeSection.color}55, 0 6px 14px ${activeSection.color}35`
-                    : '0 2px 0 rgba(0,0,0,0.35)',
+                    ? `0 3px 0 ${activeSection.surfaceBorder}, 0 6px 12px ${activeSection.color}22`
+                    : '0 2px 0 #E2E8F0',
                 }}
               >
                 {!isPrimaryActive ? (
                   <activeSection.icon
                     size={21}
                     strokeWidth={2.5}
-                    style={{ filter: `drop-shadow(0 2px 6px ${activeSection.color}75)` }}
                   />
                 ) : (
                   <MoreHorizontal size={20} strokeWidth={2.3} />
@@ -134,8 +133,8 @@ export function BottomDock({ active, onChange }: Props) {
               <span
                 className="dock-label"
                 style={{
-                  color: !isPrimaryActive ? activeSection.color : '#CBD5E1',
-                  fontWeight: !isPrimaryActive ? 800 : 600,
+                  color: !isPrimaryActive ? activeSection.darkColor : '#475569',
+                  fontWeight: !isPrimaryActive ? 800 : 700,
                 }}
               >
                 {!isPrimaryActive ? activeSection.label : 'سایر'}

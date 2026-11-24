@@ -112,11 +112,11 @@ export function IOSReminderPopup({
   const urgencyTok = NOTIFICATION_SURFACE_TOKENS.urgency[current.urgency] || NOTIFICATION_SURFACE_TOKENS.urgency.normal;
   const isCritical = current.urgency === 'critical';
 
-  // 1. COMPACT iOS 27 DYNAMIC ISLAND PILL (100% Opaque Solid White Card + Protective Separation Halo)
+  // 1. COMPACT iOS 27 DYNAMIC ISLAND PILL (In-Flow Non-Overlapping Solid White Card — Zero Overlap & Zero Bleed)
   if (!expanded) {
     return (
       <div
-        className="fixed top-[72px] left-1/2 -translate-x-1/2 z-40 px-3 w-full max-w-md pointer-events-none animate-fade-in"
+        className="w-full animate-fade-in"
         dir="rtl"
         data-testid="ios27_dynamic_island_pill"
       >
@@ -125,10 +125,10 @@ export function IOSReminderPopup({
             playTactileFeedback('tap');
             setExpanded(true);
           }}
-          className="pointer-events-auto mx-auto flex items-center justify-between gap-2.5 px-3.5 py-2 rounded-full bg-white text-slate-900 cursor-pointer transition-all hover:scale-[1.01] active:scale-95"
+          className="flex items-center justify-between gap-2.5 px-3.5 py-2 rounded-2xl bg-white text-slate-900 cursor-pointer transition-all hover:scale-[1.005] active:scale-[0.985]"
           style={{
             border: `2px solid ${urgencyTok.border}`,
-            boxShadow: '0 12px 32px rgba(15, 23, 42, 0.16), 0 0 0 4px rgba(248, 250, 252, 0.92)',
+            boxShadow: '0 6px 18px rgba(15, 23, 42, 0.08)',
           }}
         >
           <div className="flex items-center gap-2 min-w-0">
@@ -179,7 +179,7 @@ export function IOSReminderPopup({
   // 2. EXPANDED iOS 27 LIVE ACTIVITY NOTIFICATION POPUP (100% Opaque White Card + Protective Backdrop Scrim)
   return (
     <div
-      className="fixed inset-0 z-40 flex items-start justify-center pt-[74px] px-3 bg-slate-900/45 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[76px] px-3 bg-slate-900/55 backdrop-blur-sm animate-fade-in"
       dir="rtl"
       onClick={() => {
         playTactileFeedback('soft');

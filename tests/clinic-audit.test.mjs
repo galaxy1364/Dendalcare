@@ -650,11 +650,18 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.equal(tintEndMatches.length, 13, 'Must define exactly 13 calibrated pastel surfaces');
     assert.equal(new Set(tintEndMatches).size, 13, 'All 13 pastel surfaces must be strictly unique');
 
-    // 3. Zero-Bleed Opaque Notification Surface Isolation
+    // 3. Zero-Bleed Opaque & Non-Overlapping Notification Surface Isolation
     assert.ok(popupSrc.includes('NOTIFICATION_SURFACE_TOKENS'), 'IOSReminderPopup must use NOTIFICATION_SURFACE_TOKENS');
+    assert.ok(!popupSrc.includes('fixed top-[72px]'), 'Compact IOSReminderPopup pill must render in-flow without floating overlap on top of content');
     assert.ok(!popupSrc.includes('bg-slate-950/92') && !popupSrc.includes('bg-slate-950/95') && !popupSrc.includes('bg-white/8'), 'IOSReminderPopup must NOT use translucent dark/muddy overlays');
-    assert.ok(popupSrc.includes('bg-slate-900/45 backdrop-blur-sm'), 'Expanded IOSReminderPopup must isolate content with protective backdrop scrim');
+    assert.ok(popupSrc.includes('bg-slate-900/55 backdrop-blur-sm'), 'Expanded IOSReminderPopup must isolate content with protective backdrop scrim');
     assert.ok(handleSrc.includes('fill="#FFFFFF"') && handleSrc.includes('stroke="#CBD5E1"'), 'DraggableNotificationHandle must use opaque crisp white ear');
+
+    const headerStart = appSrc.indexOf('<header');
+    const mainStart = appSrc.indexOf('<main');
+    const mainEnd = appSrc.indexOf('</main>');
+    assert.ok(appSrc.slice(headerStart, headerStart + 250).includes('bg-[#F3F6FB]'), 'Header must have opaque top gutter so scrolled cards never peek through');
+    assert.ok(appSrc.slice(mainStart, mainEnd).includes('<IOSReminderPopup'), 'IOSReminderPopup must mount inside <main> flow for zero overlap');
 
     const drawerStart = appSrc.indexOf('data-testid="slide_over_notification_drawer"');
     const drawerEnd = appSrc.indexOf('</aside>', drawerStart);
@@ -665,9 +672,9 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
 
     // 4. QBank Colored Spring Chevrons & Daylight Compliance Across Modules
     assert.ok(qbankSrc.includes('qbank-spring-arrow') && qbankSrc.includes('borderColor'), 'QBankTile must render colored spring pocket chevron and crisp border');
-    assert.ok(cssSrc.includes('.qbank-spring-arrow') && cssSrc.includes('--section-tint-end'), 'index.css must define qbank-spring-arrow animation and pastel background variables');
+    assert.ok(cssSrc.includes('.qbank-spring-arrow') && cssSrc.includes('--section-tint-end') && cssSrc.includes('rgba(255, 255, 255, 0.97)'), 'index.css must define qbank-spring-arrow animation, pastel background variables, and pearl-white bottom-dock');
     assert.ok(dashSrc.includes('getModuleToken(') && !dashSrc.includes('from-indigo-950'), 'Dashboard must use getModuleToken() daylight surfaces without dark indigo blocks');
-    assert.ok(dockSrc.includes('getModuleToken('), 'BottomDock More sheet must use getModuleToken()');
+    assert.ok(dockSrc.includes('getModuleToken(') && dockSrc.includes('#475569'), 'BottomDock must use getModuleToken() and AAA #475569 labels on pearl dock');
     assert.ok(!settingsSrc.includes('from-indigo-900 via-purple-950') && !settingsSrc.includes('from-slate-900 via-violet-950'), 'SettingsSection panels must use clean daylight QBank surfaces');
     assert.ok(!financeSrc.includes('#0F172A 0%, #1E293B'), 'Finance hero banners must use clean daylight QBank cards');
   });

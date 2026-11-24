@@ -871,8 +871,8 @@ function App() {
         onOpenShortcuts={() => setShortcutsOpen(true)}
       />
 
-      {/* Ultra-Clean Minimal Top Bar — Strictly 2 Action Icons (User Account + Project Folder) */}
-      <header className={`fixed top-0 left-0 right-0 md:right-20 lg:right-64 z-30 px-2 md:px-4 pt-2 safe-top transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}>
+      {/* Ultra-Clean Minimal Top Bar — Opaque Pearl Safe-Area Backdrop + 2 Action Icons (Zero Text Peek-Through) */}
+      <header className={`fixed top-0 left-0 right-0 md:right-20 lg:right-64 z-30 bg-[#F3F6FB] border-b border-slate-200/75 px-2 md:px-4 pt-2 pb-1.5 safe-top transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}>
         <div className="max-w-xl md:max-w-5xl xl:max-w-6xl mx-auto">
           <div
             className="rounded-[22px] px-3.5 py-2 flex items-center justify-between bg-white border border-slate-200/95 text-slate-900"
@@ -1369,45 +1369,6 @@ function App() {
         </div>
       </Sheet>
 
-      {/* Global iOS 27 Dynamic Island & Live Activity Zero-Loss Reminder Popup (پاپ‌آپ مدرن آیفونی متصل به گوشی و داخلی) */}
-      <IOSReminderPopup
-        items={zeroLossPopupQueue}
-        hidden={notifOpen}
-        forceExpandedKey={forceExpandReminderKey}
-        deviceNotifOn={deviceNotifOn}
-        onNavigate={(sec) => handleNavigate(sec)}
-        onAcknowledge={(id) => {
-          acknowledgeZeroLossAlert(id);
-          setZeroLossTick((t) => t + 1);
-        }}
-        onSnooze={(id, mins) => {
-          snoozeZeroLossAlert(id, mins);
-          setZeroLossTick((t) => t + 1);
-          setLiveSyncToast(`یادآوری برای ${mins.toLocaleString('fa-IR')} دقیقه بعد در صف ضد فراموشی تنظیم شد`);
-          setTimeout(() => setLiveSyncToast(null), 3000);
-        }}
-        onSendToPhone={async (item) => {
-          if (!deviceNotifOn) {
-            const perm = await requestDeviceNotificationPermission();
-            setDeviceNotifPerm(perm);
-            setDeviceNotifOn(perm === 'granted');
-          }
-          const sent = await sendRealDeviceNotification({
-            title: `مینادنتال • ${item.title}`,
-            body: item.subtitle,
-            tag: `manual-push-${item.id}-${Date.now()}`,
-            urgent: item.urgency === 'critical',
-          });
-          setLiveSyncToast(
-            sent
-              ? 'یادآوری با موفقیت به نوار نوتیفیکیشن واقعی گوشی ارسال شد'
-              : 'یادآوری در پاپ‌آپ داخلی iOS 27 و صف ضد فراموشی ثبت شد'
-          );
-          setTimeout(() => setLiveSyncToast(null), 3000);
-        }}
-        onOpenDrawer={() => setNotifOpen(true)}
-      />
-
       {/* Right-Edge Draggable QBank Notification Ear Handle (Locks permanently wherever dropped) */}
       <DraggableNotificationHandle
         notifCount={notifCount}
@@ -1829,6 +1790,44 @@ function App() {
                   )}
                 </div>
               )}
+              {/* Global iOS 27 Dynamic Island & Live Activity Zero-Loss Reminder Pill (In-Flow Non-Overlapping) */}
+              <IOSReminderPopup
+                items={zeroLossPopupQueue}
+                hidden={notifOpen}
+                forceExpandedKey={forceExpandReminderKey}
+                deviceNotifOn={deviceNotifOn}
+                onNavigate={(sec) => handleNavigate(sec)}
+                onAcknowledge={(id) => {
+                  acknowledgeZeroLossAlert(id);
+                  setZeroLossTick((t) => t + 1);
+                }}
+                onSnooze={(id, mins) => {
+                  snoozeZeroLossAlert(id, mins);
+                  setZeroLossTick((t) => t + 1);
+                  setLiveSyncToast(`یادآوری برای ${mins.toLocaleString('fa-IR')} دقیقه بعد در صف ضد فراموشی تنظیم شد`);
+                  setTimeout(() => setLiveSyncToast(null), 3000);
+                }}
+                onSendToPhone={async (item) => {
+                  if (!deviceNotifOn) {
+                    const perm = await requestDeviceNotificationPermission();
+                    setDeviceNotifPerm(perm);
+                    setDeviceNotifOn(perm === 'granted');
+                  }
+                  const sent = await sendRealDeviceNotification({
+                    title: `مینادنتال • ${item.title}`,
+                    body: item.subtitle,
+                    tag: `manual-push-${item.id}-${Date.now()}`,
+                    urgent: item.urgency === 'critical',
+                  });
+                  setLiveSyncToast(
+                    sent
+                      ? 'یادآوری با موفقیت به نوار نوتیفیکیشن واقعی گوشی ارسال شد'
+                      : 'یادآوری در پاپ‌آپ داخلی iOS 27 و صف ضد فراموشی ثبت شد'
+                  );
+                  setTimeout(() => setLiveSyncToast(null), 3000);
+                }}
+                onOpenDrawer={() => setNotifOpen(true)}
+              />
             </>
           )}
 
