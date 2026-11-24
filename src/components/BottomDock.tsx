@@ -296,14 +296,11 @@ export function BottomDock({
               <div className="flex items-center gap-2.5">
                 <MascotTooth mood="happy" size={34} />
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
-                    <span>پوشه جامع خدمات مینادنتال</span>
-                    <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 font-extrabold">
-                      ۱۳ بخش فعال
-                    </span>
+                  <h3 className="text-sm font-black text-slate-900">
+                    خدمات کلینیک مینادنتال
                   </h3>
                   <p className="text-[10px] font-semibold text-slate-500">
-                    دسترسی مستقیم به پوشه‌ها، بیماران، سرچ و ابزارهای سریع
+                    بخش‌ها، بیماران و جستجوی سریع
                   </p>
                 </div>
               </div>
@@ -472,11 +469,10 @@ export function BottomDock({
                 )}
               </div>
 
-              {/* Curved-Notch Specialized Overflow Tiles for Quick Visual Comparison */}
               {!normalizedQuery && (
                 <div className="space-y-1.5 pb-1">
                   <p className="text-[10.5px] font-extrabold text-slate-600 px-1">
-                    کاشی‌های تخصصی کیوبانک
+                    دسترسی سریع
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {moreSections.slice(0, 4).map((sec) => {

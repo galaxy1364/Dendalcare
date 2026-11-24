@@ -64,7 +64,7 @@ export function QBankTile({
   const gradId = `qbt-${label.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '')}-${color.replace('#', '')}`;
   const effectiveDark = darkColor || color;
   const effectiveBorder = borderColor || `${color}45`;
-  const minH = compact ? '88px' : '102px';
+  const minH = compact ? '64px' : '72px';
 
   const handleClick = () => {
     playTactileFeedback('tap');
@@ -86,16 +86,15 @@ export function QBankTile({
       className="qbank-notch-card group relative w-full select-none cursor-pointer"
       style={{ minHeight: minH }}
     >
-      {/* Authentic QBank Curved-Notch SVG Surface (Smooth Concave Bottom-Left Cutout in RTL) */}
       <svg
-        viewBox="0 0 220 120"
+        viewBox="0 0 220 76"
         preserveAspectRatio="none"
         aria-hidden="true"
         className="absolute inset-0 w-full h-full pointer-events-none qbank-notch-svg"
         style={{
           filter: selected
-            ? `drop-shadow(0 0 0 2px ${color}) drop-shadow(0 8px 18px ${color}33)`
-            : 'drop-shadow(0 5px 12px rgba(15, 23, 42, 0.055)) drop-shadow(0 1px 2px rgba(15, 23, 42, 0.035))',
+            ? `drop-shadow(0 0 0 2px ${color}) drop-shadow(0 6px 14px ${color}33)`
+            : 'drop-shadow(0 4px 10px rgba(15, 23, 42, 0.055)) drop-shadow(0 1px 2px rgba(15, 23, 42, 0.035))',
         }}
       >
         <defs>
@@ -105,37 +104,34 @@ export function QBankTile({
           </linearGradient>
         </defs>
         <path
-          d="M 20,1 H 200 A 19,19 0 0 1 219,20 V 100 A 19,19 0 0 1 200,119 H 64 A 15,15 0 0 1 49,104 V 91 A 15,15 0 0 0 34,76 H 20 A 19,19 0 0 1 1,57 V 20 A 19,19 0 0 1 20,1 Z"
+          d="M 16,1 H 204 A 15,15 0 0 1 219,16 V 60 A 15,15 0 0 1 204,75 H 58 A 12,12 0 0 1 46,63 V 56 A 12,12 0 0 0 34,44 H 16 A 15,15 0 0 1 1,29 V 16 A 15,15 0 0 1 16,1 Z"
           fill={`url(#${gradId})`}
           stroke={selected ? color : effectiveBorder}
-          strokeWidth={selected ? '2.4' : '1.4'}
+          strokeWidth={selected ? '2.2' : '1.3'}
         />
       </svg>
 
-      {/* Card Inner Content (RTL: Crisp Icon Top-Right, Value Top-Left, Title Padded Cleanly Away From Pocket) */}
       <div
-        className={`relative z-10 flex flex-col justify-between h-full ${compact ? 'p-2.5' : 'px-3 py-2.5'}`}
+        className={`relative z-10 flex flex-col justify-between h-full ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}`}
         style={{ minHeight: minH }}
       >
         <div className="flex items-start justify-between gap-1.5">
-          {/* Top-Right (RTL Start): Clean Crisp Icon Box */}
           <div
-            className={`${compact ? 'w-8 h-8 rounded-[11px]' : 'w-9 h-9 rounded-[13px]'} flex items-center justify-center shrink-0 shadow-sm transition-transform duration-200 group-active:scale-90`}
+            className={`${compact ? 'w-7 h-7 rounded-[10px]' : 'w-8 h-8 rounded-[11px]'} flex items-center justify-center shrink-0 shadow-sm transition-transform duration-200 group-active:scale-90`}
             style={{
               background: '#FFFFFF',
               color,
-              boxShadow: `0 3px 8px ${color}22, inset 0 1px 0 #FFFFFF`,
+              boxShadow: `0 2px 6px ${color}20, inset 0 1px 0 #FFFFFF`,
               border: `1.5px solid ${effectiveBorder}`,
             }}
           >
             {icon}
           </div>
 
-          {/* Top-Left (RTL End): High-Contrast Value or Badge (never overlapping icon) */}
           <div className="flex flex-col items-end min-w-0">
             {value !== undefined && (
               <span
-                className={`${compact ? 'text-sm' : 'text-[17px]'} font-black tracking-tight leading-none tabular-nums`}
+                className={`${compact ? 'text-[13px]' : 'text-[15px]'} font-black tracking-tight leading-none tabular-nums`}
                 style={{ color: '#0F172A' }}
               >
                 {typeof value === 'number' ? value.toLocaleString('fa-IR') : value}
@@ -143,7 +139,7 @@ export function QBankTile({
             )}
             {badge && (
               <span
-                className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full mt-0.5"
+                className="text-[8.5px] font-extrabold px-1.5 py-0.5 rounded-full"
                 style={{
                   background: '#FFFFFF',
                   color: effectiveDark,
@@ -155,40 +151,38 @@ export function QBankTile({
             )}
             {alert && (
               <span
-                className="inline-block w-2 h-2 rounded-full animate-breathe mt-1"
+                className="inline-block w-2 h-2 rounded-full animate-breathe mt-0.5"
                 style={{ background: color, boxShadow: `0 0 8px ${color}` }}
               />
             )}
           </div>
         </div>
 
-        {/* Bottom-Right Area (padded cleanly away from bottom-left cutout pocket) */}
-        <div className={`${compact ? 'mt-1.5 pl-[40px]' : 'mt-2 pl-[48px]'} text-right`}>
-          <p className={`${compact ? 'text-[11px]' : 'text-[12.5px]'} font-black text-slate-900 leading-snug truncate`}>
+        <div className={`${compact ? 'mt-1 pl-[36px]' : 'mt-1 pl-[42px]'} text-right`}>
+          <p className={`${compact ? 'text-[10.5px]' : 'text-[12px]'} font-black text-slate-900 leading-tight truncate`}>
             {label}
           </p>
           {sub && !compact && (
-            <p className="text-[10px] font-semibold text-slate-600 mt-0.5 truncate">
+            <p className="text-[9.5px] font-semibold text-slate-600 leading-tight truncate">
               {sub}
             </p>
           )}
         </div>
       </div>
 
-      {/* Standalone Colored QBank Spring Pocket Chevron inside Bottom-Left Cutout Pocket */}
       <div
         aria-hidden="true"
         className={`qbank-pocket-btn absolute bottom-[2px] left-[2px] z-10 flex items-center justify-center transition-all duration-150 ${
-          compact ? 'w-[32px] h-[28px] rounded-[10px]' : 'w-[38px] h-[34px] rounded-[12px]'
+          compact ? 'w-[30px] h-[24px] rounded-[9px]' : 'w-[34px] h-[28px] rounded-[11px]'
         }`}
         style={{
           background: `linear-gradient(135deg, ${color}, ${effectiveDark})`,
           color: '#FFFFFF',
           border: '1px solid rgba(255,255,255,0.65)',
-          boxShadow: `0 4px 9px ${color}3B, 0 2px 0 ${effectiveDark}`,
+          boxShadow: `0 3px 8px ${color}3B, 0 1.5px 0 ${effectiveDark}`,
         }}
       >
-        <ChevronLeft size={compact ? 14 : 16} strokeWidth={2.7} className="qbank-spring-arrow" />
+        <ChevronLeft size={compact ? 13 : 15} strokeWidth={2.7} className="qbank-spring-arrow" />
       </div>
     </div>
   );

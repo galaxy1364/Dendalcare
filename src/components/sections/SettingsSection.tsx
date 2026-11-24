@@ -502,67 +502,6 @@ function ClinicSettingsTab({
         )}
       </div>
 
-      {/* 8 Installed UI Libraries & Simultaneous Active Project Skills Engine Panel (Daylight QBank Card) */}
-      {(() => {
-        const uiSummary = getActiveUILibrariesSummary();
-        return (
-          <div
-            data-testid="settings_active_ui_libraries_panel"
-            className="p-4 rounded-3xl bg-white text-slate-900 border border-slate-200/95 shadow-sm space-y-3"
-          >
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <h3 className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-2">
-                  <Zap size={16} className="text-indigo-600" />
-                  موتور همزمان ۸ کتابخانه برتر UI و ۷ اسکیل فعال پروژه
-                </h3>
-                <p className="text-[11px] text-slate-600 font-medium mt-0.5">
-                  تمامی کتابخانه‌های رابط کاربری و اسکیل‌های معماری به‌صورت دائمی نصب، قفل و روی کل ۱۳ ماژول فعال هستند
-                </p>
-              </div>
-              <span
-                data-testid="active_ui_libs_badge"
-                className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold"
-              >
-                {uiSummary.totalLibraries.toLocaleString('fa-IR')} کتابخانه UI + {uiSummary.totalSkills.toLocaleString('fa-IR')} اسکیل همزمان • فعال
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {uiSummary.libraries.map((lib) => (
-                <div
-                  key={lib.id}
-                  data-testid={`ui_lib_card_${lib.id}`}
-                  className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-indigo-50/50 transition-all space-y-1"
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-black text-slate-900 truncate">{lib.name}</span>
-                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md shrink-0 bg-indigo-50 text-indigo-800 border border-indigo-200">
-                      v{lib.version}
-                    </span>
-                  </div>
-                  <p className="text-[10px] font-extrabold text-indigo-700 truncate">{lib.persianRole}</p>
-                  <p className="text-[9.5px] text-slate-600 line-clamp-2 leading-snug">{lib.capabilities[0]}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-extrabold text-slate-700 ml-1">اسکیل‌های فعال همزمان:</span>
-              {uiSummary.skills.map((sk) => (
-                <span
-                  key={sk.id}
-                  data-testid={`active_skill_chip_${sk.id}`}
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800"
-                >
-                  ✓ {sk.name} ({sk.domain})
-                </span>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Clinic Base Definitions & Companies Card */}
       <div className="p-3.5 rounded-3xl bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200/80 shadow-sm flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -781,9 +720,6 @@ function ClinicSettingsTab({
 
       {/* Multi-User Cloud Sync, Automatic Backup Scheduler & Instant OTA Update Publisher */}
       <CloudOtaAndAutoBackupCard />
-
-      {/* Inline Live Diagnostics Summary */}
-      <DiagnosticsPanel onOpenInstallModal={onOpenInstallModal} />
     </div>
   );
 }
@@ -1605,6 +1541,48 @@ function DiagnosticsPanel({ onOpenInstallModal }: { onOpenInstallModal: () => vo
           <span>{actionMessage}</span>
         </div>
       )}
+
+      {/* Technical Architecture & UI Engine Status (inside Diagnostics tab only) */}
+      {(() => {
+        const uiSummary = getActiveUILibrariesSummary();
+        return (
+          <div
+            data-testid="settings_active_ui_libraries_panel"
+            className="p-4 rounded-3xl bg-white text-slate-900 border border-slate-200/95 shadow-sm space-y-3"
+          >
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h3 className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-2">
+                <Zap size={16} className="text-indigo-600" />
+                ماژول‌های رابط کاربری و استانداردهای معماری
+              </h3>
+              <span
+                data-testid="active_ui_libs_badge"
+                className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold"
+              >
+                {uiSummary.totalLibraries.toLocaleString('fa-IR')} کتابخانه • فعال
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {uiSummary.libraries.map((lib) => (
+                <div
+                  key={lib.id}
+                  data-testid={`ui_lib_card_${lib.id}`}
+                  className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-black text-slate-900 truncate">{lib.name}</span>
+                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md shrink-0 bg-indigo-50 text-indigo-800 border border-indigo-200">
+                      v{lib.version}
+                    </span>
+                  </div>
+                  <p className="text-[10px] font-extrabold text-indigo-700 truncate">{lib.persianRole}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

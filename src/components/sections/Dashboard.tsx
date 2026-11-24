@@ -3,7 +3,7 @@ import {
   Users, CalendarDays, Stethoscope, FlaskConical, Anchor,
   Wallet, Package, BellRing, TrendingUp,
   AlertTriangle, Sparkles, Clock,
-  UserCog, CreditCard, Activity, CheckCircle2, ArrowUpLeft, Smartphone, ShieldCheck, Search,
+  UserCog, CreditCard, Activity, CheckCircle2, ArrowUpLeft, Smartphone, Search,
 } from 'lucide-react';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import type {
@@ -15,7 +15,6 @@ import type { SectionId } from '@/lib/sections';
 import { todayGregorian, toJalaliStr } from '@/lib/jalali';
 import { QBankTile } from '@/components/ui/QBankTile';
 import { playTactileFeedback } from '@/lib/hapticsAudio';
-import { MemPalace } from '@/lib/memPalace';
 import { getModuleToken } from '@/lib/designTokens';
 
 type Props = {
@@ -392,7 +391,7 @@ export function Dashboard({ onNavigate }: Props) {
         >
           <div className="flex items-center gap-2 min-w-[180px] flex-1" data-testid="dashboard_daily_goal_bar">
             <span className="text-[9.5px] font-extrabold text-slate-700 whitespace-nowrap">
-              هدف کارکرد روزانه (CareStack KPI):
+              هدف درآمد امروز:
             </span>
             <div className="flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden max-w-[180px]">
               <div
@@ -419,7 +418,7 @@ export function Dashboard({ onNavigate }: Props) {
             className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-extrabold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
           >
             <Smartphone size={12} className="text-rose-100" />
-            <span>پاپ‌آپ یادآوری زنده آیفونی + اعلان گوشی ({fmt(s.pendingRem + s.totalOverdueFin + s.lowStock)})</span>
+            <span>یادآوری‌های فعال ({fmt(s.pendingRem + s.totalOverdueFin + s.lowStock)})</span>
           </button>
         </div>
       </div>
@@ -467,8 +466,8 @@ export function Dashboard({ onNavigate }: Props) {
           },
           {
             id: 'global_search',
-            title: 'جستجوی سراسری و پوشه‌ها',
-            subtitle: 'دسترسی تک‌لمسی به تمام ۱۳ بخش، پرونده بیماران و ابزارهای مطب',
+            title: 'جستجوی سریع پوشه‌ها',
+            subtitle: 'دسترسی فوری به بخش‌ها و پرونده بیماران',
             cta: 'باز کردن جستجو',
             color: '#7C3AED',
             bgStart: '#F5F3FF',
@@ -740,11 +739,8 @@ export function Dashboard({ onNavigate }: Props) {
             </div>
             <div>
               <h3 className="text-xs font-black text-slate-800">
-                هادل صبحگاهی و نبض عملیاتی مطب (دیروز • امروز • فردا)
+                برنامه نوبت‌های مطب
               </h3>
-              <p className="text-[10px] text-slate-500 font-medium">
-                هماهنگی سریع پذیرش، پزشک و دستیار با پرش تک‌کلیکی به پرونده
-              </p>
             </div>
           </div>
 
@@ -985,89 +981,6 @@ export function Dashboard({ onNavigate }: Props) {
         </div>
       )}
 
-      {/* ── 5. Phased 13-Module Section-by-Section Global Benchmark Tracker + 8 UI Libraries & 7 Skills Engine (10/10 Locked) ── */}
-      <div className="glass-card manus-ui-card p-3.5 space-y-2.5" data-testid="dashboard_module_phase_roadmap">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center">
-              <ShieldCheck size={15} className="text-emerald-600" />
-            </div>
-            <div>
-              <h3 className="text-xs font-black text-slate-800">
-                نقشه فازبندی بخش‌به‌بخش ۱۳ ماژول (استاندارد جهانی ۱۰ از ۱۰ قفل‌شده)
-              </h3>
-              <p className="text-[10px] text-slate-500 font-medium">
-                جستجوی جهانی ➔ الگوبرداری (CareStack / Curve / Archy / QBank) ➔ پیاده‌سازی ➔ تست زنده ۱۰/۱۰
-              </p>
-            </div>
-          </div>
-          <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-            ۱۳ از ۱۳ ماژول قفل‌شده • ۱۰/۱۰
-          </span>
-        </div>
-
-        {/* Active 8 UI Libraries & 7 Simultaneous Project Skills Ribbon */}
-        {(() => {
-          const uiSummary = MemPalace.getUILibrariesAndSkills();
-          return (
-            <div
-              data-testid="dashboard_active_ui_libs_strip"
-              className="rounded-2xl bg-gradient-to-l from-indigo-50 via-white to-violet-50 p-3 text-slate-900 border border-indigo-200 space-y-2 shadow-sm"
-            >
-              <div className="flex items-center justify-between flex-wrap gap-1.5">
-                <span className="text-[10.5px] font-black text-indigo-900 flex items-center gap-1.5">
-                  <Sparkles size={13} className="text-indigo-600" />
-                  موتور همزمان ۸ کتابخانه UI و ۷ اسکیل پروژه (فعال روی تمام ۱۳ ماژول)
-                </span>
-                <span className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  {fmt(uiSummary.totalLibraries)} کتابخانه + {fmt(uiSummary.totalSkills)} اسکیل فعال
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-                {uiSummary.libraries.map((lib) => (
-                  <span
-                    key={lib.id}
-                    className="skiper-ui-pill smooth-ui-spring px-2.5 py-0.5 rounded-lg text-[9.5px] font-extrabold whitespace-nowrap shrink-0"
-                  >
-                    ✓ {lib.name.split(' ')[0]} {lib.name.split(' ')[1] || ''}
-                  </span>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-          {MemPalace.getModuleBenchmarkPhases().map((mp) => (
-            <button
-              key={mp.traceId}
-              type="button"
-              data-testid={`module_phase_card_${mp.sectionId}`}
-              onClick={() => {
-                playTactileFeedback('tap');
-                onNavigate(mp.sectionId as SectionId);
-              }}
-              className="vengeance-ui-hover smooth-ui-spring flex items-center justify-between gap-2 px-2.5 py-2 rounded-2xl bg-white/90 hover:bg-indigo-50/50 border border-slate-200/80 text-right transition-all"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className="w-5 h-5 rounded-lg text-[10px] font-black text-white flex items-center justify-center shrink-0 tabular-nums"
-                  style={{ background: mp.color }}
-                >
-                  {fmt(mp.modulePhase)}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-extrabold text-slate-800 truncate">{mp.title}</p>
-                  <p className="text-[9.5px] text-slate-500 truncate">{mp.globalBenchmarkRef}</p>
-                </div>
-              </div>
-              <span className="daisy-badge text-[9px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                ۱۰/۱۰
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

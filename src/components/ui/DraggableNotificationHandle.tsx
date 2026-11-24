@@ -37,32 +37,50 @@ export function DraggableNotificationHandle({ notifCount, open, onOpen }: Props)
   const [dragging, setDragging] = useState(false);
   const [pullOffsetX, setPullOffsetX] = useState(0);
 
+  const lastDraggedAtRef = useRef<number>(0);
+  const lastOpenedAtRef = useRef<number>(0);
+
   const dragStateRef = useRef<{
     pointerId: number | null;
     startY: number;
     startX: number;
     startPct: number;
-    moved: boolean;
+    draggingY: boolean;
+    swipedOpen: boolean;
   }>({
     pointerId: null,
     startY: 0,
     startX: 0,
     startPct: 58,
-    moved: false,
+    draggingY: false,
+    swipedOpen: false,
   });
 
   if (open) return null;
 
   const clampPct = (val: number) => Math.min(78, Math.max(16, val));
 
+  const triggerOpen = () => {
+    const now = Date.now();
+    if (now - lastOpenedAtRef.current < 260) return;
+    lastOpenedAtRef.current = now;
+    playTactileFeedback('drawer');
+    onOpen();
+  };
+
   const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore if capture is unsupported
+    }
     dragStateRef.current = {
       pointerId: e.pointerId,
       startY: e.clientY,
       startX: e.clientX,
       startPct: yPct,
-      moved: false,
+      draggingY: false,
+      swipedOpen: false,
     };
     setDragging(true);
     setPullOffsetX(0);
@@ -75,26 +93,25 @@ export function DraggableNotificationHandle({ notifCount, open, onOpen }: Props)
     const dy = e.clientY - st.startY;
     const dx = e.clientX - st.startX;
 
-    if (Math.abs(dy) > 6 || Math.abs(dx) > 6) {
-      st.moved = true;
-    }
-
-    // Live horizontal finger pull feedback from the right edge (Screenshots 3 & 4)
-    if (dx < -4 && Math.abs(dx) > Math.abs(dy) * 0.8) {
+    // Live horizontal finger pull feedback from the right edge
+    if (!st.draggingY && dx < -4 && Math.abs(dx) > Math.abs(dy) * 0.9) {
       setPullOffsetX(Math.max(-24, dx * 0.45));
     }
 
-    // Swipe left with finger opens drawer smoothly
-    if (dx < -32 && Math.abs(dy) < 34) {
+    // Swipe left with finger opens drawer immediately
+    if (!st.draggingY && dx < -22 && Math.abs(dy) < 34) {
       st.pointerId = null;
+      st.swipedOpen = true;
       setDragging(false);
       setPullOffsetX(0);
-      playTactileFeedback('drawer');
-      onOpen();
+      triggerOpen();
       return;
     }
 
-    if (Math.abs(dy) > 5 && Math.abs(dy) >= Math.abs(dx) && typeof window !== 'undefined' && window.innerHeight > 0) {
+    // Only treat as vertical reposition once finger moves > 14px vertically
+    if (Math.abs(dy) > 14 && Math.abs(dy) >= Math.abs(dx) && typeof window !== 'undefined' && window.innerHeight > 0) {
+      st.draggingY = true;
+      lastDraggedAtRef.current = Date.now();
       const deltaPct = (dy / window.innerHeight) * 100;
       const next = clampPct(st.startPct + deltaPct);
       setYPct(next);
@@ -111,14 +128,18 @@ export function DraggableNotificationHandle({ notifCount, open, onOpen }: Props)
       // ignore
     }
 
+    const wasDraggingY = st.draggingY;
+    const wasSwiped = st.swipedOpen;
     st.pointerId = null;
     setDragging(false);
     setPullOffsetX(0);
 
-    if (!st.moved) {
-      playTactileFeedback('drawer');
-      onOpen();
+    if (wasSwiped) return;
+
+    if (!wasDraggingY) {
+      triggerOpen();
     } else {
+      lastDraggedAtRef.current = Date.now();
       playTactileFeedback('soft');
       try {
         localStorage.setItem(HANDLE_Y_STORAGE_KEY, yPct.toFixed(2));
@@ -128,26 +149,39 @@ export function DraggableNotificationHandle({ notifCount, open, onOpen }: Props)
     }
   };
 
+  const handlePointerCancel = () => {
+    dragStateRef.current.pointerId = null;
+    setDragging(false);
+    setPullOffsetX(0);
+  };
+
+  const handleClick = () => {
+    // Fallback for browsers where click fires after pointerup or without pointer events
+    if (Date.now() - lastDraggedAtRef.current < 280) return;
+    triggerOpen();
+  };
+
   return (
     <button
       type="button"
       data-testid="right_edge_draggable_bell_handle"
-      aria-label="اعلان‌ها و یادآوری‌های هوشمند (قابل کشیدن با دست)"
-      title="کشیدن به چپ یا لمس برای باز کردن اسلایدر نوتیفیکیشن • کشیدن بالا/پایین برای جابجایی دائمی"
+      aria-label="اعلان‌ها و یادآوری‌ها"
+      title="باز کردن لیست اعلان‌ها"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      className="fixed right-0 md:right-20 lg:right-64 z-40 touch-none select-none flex items-center justify-center focus:outline-none"
+      onPointerCancel={handlePointerCancel}
+      onClick={handleClick}
+      className="fixed right-0 md:right-20 lg:right-64 z-[45] touch-none select-none flex items-center justify-center focus:outline-none cursor-pointer"
       style={{
         top: `${yPct}%`,
         transform: `translate(${pullOffsetX}px, -50%) scale(${dragging ? 1.05 : 1})`,
-        width: '40px',
+        width: '42px',
         height: '86px',
         transition: dragging ? 'none' : 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)',
       }}
     >
-      {/* Authentic QBank Smooth Curved Right-Edge Ear Silhouette (Screenshot 3 & 4 exact ear curve) */}
+      {/* Smooth Curved Right-Edge Ear Silhouette */}
       <svg
         viewBox="0 0 40 86"
         aria-hidden="true"
@@ -166,8 +200,8 @@ export function DraggableNotificationHandle({ notifCount, open, onOpen }: Props)
         />
       </svg>
 
-      {/* Authentic QBank Filled Dark-Slate Swinging Bell + Bright Red Alert Dot/Count */}
-      <div className="relative z-10 flex items-center justify-center pl-1.5">
+      {/* Filled Dark-Slate Swinging Bell + Red Alert Badge */}
+      <div className="relative z-10 flex items-center justify-center pl-1.5 pointer-events-none">
         <Bell
           size={19}
           strokeWidth={2.2}

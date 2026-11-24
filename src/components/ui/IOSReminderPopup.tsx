@@ -226,7 +226,7 @@ export function IOSReminderPopup({
                       border: `1px solid ${deviceNotifOn ? '#A7F3D0' : '#BFDBFE'}`,
                     }}
                   >
-                    {deviceNotifOn ? 'متصل به گوشی' : 'اسلاید با دست'}
+                    {deviceNotifOn ? 'متصل به گوشی' : 'فعال'}
                   </span>
                 </div>
                 <p className="text-[11px] font-extrabold text-slate-900 truncate">{current.title}</p>
@@ -317,7 +317,7 @@ export function IOSReminderPopup({
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-black text-slate-900 truncate">
-                    رادار هوشمند یادآوری
+                    یادآوری مطب
                   </span>
                   <span
                     className="text-[9.5px] font-black px-2 py-0.5 rounded-full shrink-0"
@@ -332,8 +332,8 @@ export function IOSReminderPopup({
                 </div>
                 <p className="text-[10px] font-semibold text-slate-600 truncate">
                   {deviceNotifOn
-                    ? 'متصل به نوتیفیکیشن گوشی • اسلاید با دست چپ/راست'
-                    : 'پاپ‌آپ داخلی iOS 27 • اسلاید با دست بین یادآوری‌ها'}
+                    ? 'متصل به نوتیفیکیشن گوشی'
+                    : 'چپ و راست بکشید برای یادآوری بعدی'}
                 </p>
               </div>
             </div>
@@ -502,7 +502,7 @@ export function IOSReminderPopup({
               }}
               className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-[10.5px] font-extrabold transition-all text-center"
             >
-              مشاهده لیست کامل همه یادآوری‌ها در کشوی کناری ({items.length.toLocaleString('fa-IR')} مورد)
+              مشاهده همه یادآوری‌ها ({items.length.toLocaleString('fa-IR')})
             </button>
           </div>
         </div>

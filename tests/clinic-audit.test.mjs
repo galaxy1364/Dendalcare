@@ -351,7 +351,7 @@ describe('Phase 8 [TRC-MINA-QBANK-9008-H]: Authentic QBank Curved-Notch UI, Proj
     const dashSrc = read('src/components/sections/Dashboard.tsx');
     const dockSrc = read('src/components/BottomDock.tsx');
 
-    assert.ok(tileSrc.includes('viewBox="0 0 220 120"'), 'QBankTile must render smooth curved SVG notch silhouette');
+    assert.ok(tileSrc.includes('viewBox="0 0 220 76"'), 'QBankTile must render 1/3 shorter smooth curved SVG notch silhouette');
     assert.ok(tileSrc.includes('qbank-notch-card'), 'QBankTile must apply qbank-notch-card press physics');
     assert.ok(tileSrc.includes('playTactileFeedback'), 'QBankTile must trigger iOS 27 tactile feedback on tap');
     assert.ok(dashSrc.includes('<QBankTile'), 'Dashboard must use QBankTile for all module cards');
@@ -361,6 +361,7 @@ describe('Phase 8 [TRC-MINA-QBANK-9008-H]: Authentic QBank Curved-Notch UI, Proj
 
   test('App.tsx enforces ultra-clean 2-button Top Bar, Project Folder Sheet, Right-Edge Draggable Handle, Auto-Hide Banners & Real OS Notifications', () => {
     const appSrc = read('src/App.tsx');
+    const drawerSrc = read('src/components/ui/NotificationDrawer.tsx');
     const handleSrc = read('src/components/ui/DraggableNotificationHandle.tsx');
     const osNotifSrc = read('src/lib/deviceNotifications.ts');
 
@@ -368,7 +369,7 @@ describe('Phase 8 [TRC-MINA-QBANK-9008-H]: Authentic QBank Curved-Notch UI, Proj
     assert.ok(appSrc.includes('topbar_project_folder_button'), 'Top bar must provide Project Folder button');
     assert.ok(appSrc.includes('پوشه پروژه مینادنتال'), 'Project Folder Sheet must house project tools cleanly');
     assert.ok(appSrc.includes('<DraggableNotificationHandle'), 'App must mount right-edge DraggableNotificationHandle');
-    assert.ok(appSrc.includes('drawer-slide-in-right'), 'Notification drawer must slide from right edge');
+    assert.ok(appSrc.includes('<NotificationDrawer') && drawerSrc.includes('drawer-slide-in-right'), 'Notification drawer must slide from right edge');
     assert.ok(appSrc.includes('!notifOpen &&'), 'Floating version/OTA/toast banners must auto-hide when notification drawer opens');
     assert.ok(appSrc.includes('requestDeviceNotificationPermission'), 'Notification drawer must connect to real OS device notifications');
     assert.ok(handleSrc.includes('minadental_right_bell_y_pct'), 'Right-edge handle must permanently lock its dragged Y position in localStorage');
@@ -497,14 +498,15 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(popupSrc.includes('ios_reminder_popup_snooze_btn'), 'IOSReminderPopup must provide 15-minute smart snooze button');
     assert.ok(popupSrc.includes('ios_reminder_popup_phone_btn'), 'IOSReminderPopup must provide 1-click push to real phone notification');
 
-    // 3. App.tsx & Reminders.tsx integration
+    // 3. App.tsx, NotificationDrawer & Reminders.tsx integration
+    const drawerSrc = read('src/components/ui/NotificationDrawer.tsx');
     assert.ok(appSrc.includes('<IOSReminderPopup'), 'App.tsx must mount global IOSReminderPopup across all sections');
     assert.ok(appSrc.includes('unifiedGlobalAlerts'), 'App.tsx must unify 360-degree liveSmartAlerts and database pendingReminders');
-    assert.ok(appSrc.includes('trigger_ios_reminder_popup_btn') && appSrc.includes('reset_acknowledged_reminders_btn'), 'Notification drawer must allow triggering iOS 27 popup and restoring acknowledged reminders');
+    assert.ok(drawerSrc.includes('trigger_ios_reminder_popup_btn') && drawerSrc.includes('reset_acknowledged_reminders_btn'), 'Notification drawer must allow triggering iOS 27 popup and restoring acknowledged reminders');
     assert.ok(remSrc.includes('reminders_section_trigger_ios_popup_btn'), 'Reminders section must provide 1-click iOS 27 popup + phone notification trigger');
   });
 
-  test('MemPalace permanently locks 4-Stage Global Benchmark & 10/10 Gate Protocol and Dashboard implements CareStack/Curve/QBank Executive KPIs & Morning Huddle', () => {
+  test('MemPalace permanently locks 4-Stage Global Benchmark & 10/10 Gate Protocol and Dashboard displays pure Clinical KPIs & Morning Huddle without developer bloat', () => {
     const memSrc = read('src/lib/memPalace.ts');
     const dashSrc = read('src/components/sections/Dashboard.tsx');
 
@@ -513,7 +515,7 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(memSrc.includes('WEB_SEARCH_GLOBAL') && memSrc.includes('WORLD_CLASS_BENCHMARK') && memSrc.includes('NATIVE_IMPLEMENTATION') && memSrc.includes('LIVE_10_OF_10_GATE'), 'Protocol must lock all 4 mandatory steps');
     assert.ok(memSrc.includes('getGlobalBenchmarkProtocol'), 'MemPalace must expose getGlobalBenchmarkProtocol()');
 
-    // 2. Global Dental Executive KPIs & 3-Day Morning Huddle in Dashboard.tsx
+    // 2. Global Dental Executive KPIs & 3-Day Morning Huddle in Dashboard.tsx (Pure Clinical UI, zero developer roadmap bloat)
     assert.ok(dashSrc.includes('dashboard_global_kpi_strip'), 'Dashboard must render Global Executive KPI Strip');
     assert.ok(dashSrc.includes('kpi_pc_ratio'), 'Dashboard must compute Production vs Collection Ratio (P/C %)');
     assert.ok(dashSrc.includes('kpi_case_acceptance'), 'Dashboard must compute Case Acceptance Rate (%)');
@@ -522,7 +524,8 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(dashSrc.includes('dashboard_morning_huddle_bar'), 'Dashboard must render Morning Huddle Continuity Panel');
     assert.ok(dashSrc.includes("id: 'yesterday'") && dashSrc.includes("id: 'today'") && dashSrc.includes("id: 'tomorrow'") && dashSrc.includes('huddle_tab_${tab.id}'), 'Morning Huddle must support Yesterday, Today & Tomorrow views');
     assert.ok(memSrc.includes('TRC-MINA-DASH-9010-J') && memSrc.includes('PERMANENT_MODULE_BENCHMARK_PHASES') && memSrc.includes('getModuleBenchmarkPhases'), 'MemPalace must lock Phase 10 and 13-Module Section-by-Section Phased Plan');
-    assert.ok(dashSrc.includes('dashboard_module_phase_roadmap') && dashSrc.includes('dashboard_daily_goal_bar') && dashSrc.includes('dashboard_trigger_ios_reminder_popup_btn'), 'Dashboard must render Daily Production Goal Bar, 1-click iOS 27 Reminder Popup Trigger, and 13-Module Phased Tracker');
+    assert.ok(!dashSrc.includes('dashboard_module_phase_roadmap') && !dashSrc.includes('dashboard_active_ui_libs_strip'), 'Dashboard must NOT show non-clinical roadmap or UI-library cards');
+    assert.ok(dashSrc.includes('dashboard_daily_goal_bar') && dashSrc.includes('dashboard_trigger_ios_reminder_popup_btn'), 'Dashboard must render Daily Production Goal Bar & 1-click Reminder Popup Trigger');
   });
 
   test('29. Autonomous Cloud SQL (20-Table) + Google Drive Activation & Unified Atomic Auto/Manual Update Engine', () => {
@@ -602,9 +605,9 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(metaJson.name.includes('مینادنتال'), 'metadata.json name must be مینادنتال');
     assert.ok(stringsXml.includes('<string name="app_name">مینادنتال</string>'), 'strings.xml app_name must be مینادنتال');
 
-    // 2. Dashboard 8 UI Libraries Ribbon + 13 Phased Modules + Morning Huddle + 4 Global KPIs
-    assert.ok(dashSrc.includes('dashboard_active_ui_libs_strip'), 'Dashboard must render active 8 UI Libraries & 7 Simultaneous Skills ribbon');
-    assert.ok(dashSrc.includes('dashboard_global_kpi_strip') && dashSrc.includes('dashboard_morning_huddle_bar') && dashSrc.includes('dashboard_module_phase_roadmap'), 'Dashboard must render Global KPI Strip, 3-Day Morning Huddle, and 13-Module Phased Roadmap');
+    // 2. Pure Clinical Dashboard (no developer roadmap/UI-libs strips) + Morning Huddle + 4 Global KPIs
+    assert.ok(!dashSrc.includes('dashboard_active_ui_libs_strip') && !dashSrc.includes('dashboard_module_phase_roadmap'), 'Dashboard must remain 100% pure clinical UI');
+    assert.ok(dashSrc.includes('dashboard_global_kpi_strip') && dashSrc.includes('dashboard_morning_huddle_bar'), 'Dashboard must render Global KPI Strip and 3-Day Morning Huddle');
 
     // 3. All Clinical, Lab, Implant, Calendar, Financial, Inventory, Reminder, Staff, Message & Settings Workflows
     assert.ok(patientsSrc.includes('getPatientFileNo') && patientsSrc.includes('insurance_number') && patientsSrc.includes('expandedCardId') && patientsSrc.includes('searchOpen'), 'Patients must support sliding chip bar, animated search lens, collapsible cards, and editable patient file number');
@@ -663,11 +666,9 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(appSrc.slice(headerStart, headerStart + 250).includes('bg-[#F3F6FB]'), 'Header must have opaque top gutter so scrolled cards never peek through');
     assert.ok(appSrc.slice(mainStart, mainEnd).includes('<IOSReminderPopup'), 'IOSReminderPopup must mount inside <main> flow for zero overlap');
 
-    const drawerStart = appSrc.indexOf('data-testid="slide_over_notification_drawer"');
-    const drawerEnd = appSrc.indexOf('</aside>', drawerStart);
-    const drawerSnippet = appSrc.slice(drawerStart, drawerEnd);
-    assert.ok(drawerSnippet.includes('bg-[#F8FAFC]') && drawerSnippet.includes('bg-white'), 'Slide-over notification drawer must use 100% opaque daylight surfaces');
-    assert.ok(!drawerSnippet.includes('glass-dark') && !drawerSnippet.includes('bg-white/8'), 'Slide-over notification drawer must NOT use glass-dark or bg-white/8');
+    const drawerSrc = read('src/components/ui/NotificationDrawer.tsx');
+    assert.ok(drawerSrc.includes('slide_over_notification_drawer') && drawerSrc.includes('bg-[#F4F6FA]') && drawerSrc.includes('bg-white'), 'Slide-over notification drawer must use 100% opaque daylight surfaces');
+    assert.ok(!drawerSrc.includes('glass-dark') && !drawerSrc.includes('bg-white/8'), 'Slide-over notification drawer must NOT use glass-dark or bg-white/8');
     assert.ok(!appSrc.includes('bg-amber-950/95') && !appSrc.includes('bg-rose-950/95') && !appSrc.includes('max-w-lg mx-auto mt-2 glass-dark'), 'App.tsx banners and shortcuts popover must NOT use muddy dark translucent surfaces');
 
     // 4. QBank Colored Spring Chevrons & Daylight Compliance Across Modules
@@ -679,16 +680,17 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(!financeSrc.includes('#0F172A 0%, #1E293B'), 'Finance hero banners must use clean daylight QBank cards');
   });
 
-  test('33. Authentic QBank Folders Grid, Global Search & Back Capsules, Dashboard Slide Banner & Touch/Hand Swipeable Notifications', () => {
+  test('33. 1/3 Shorter QBank Tiles (72px/64px), Reliable Right-Edge Bell Tap/Swipe & Modern Gesture NotificationDrawer', () => {
     const tileSrc = read('src/components/ui/QBankTile.tsx');
     const dockSrc = read('src/components/BottomDock.tsx');
     const dashSrc = read('src/components/sections/Dashboard.tsx');
     const popupSrc = read('src/components/ui/IOSReminderPopup.tsx');
     const handleSrc = read('src/components/ui/DraggableNotificationHandle.tsx');
+    const drawerSrc = read('src/components/ui/NotificationDrawer.tsx');
     const appSrc = read('src/App.tsx');
 
-    // 1. Sleeker QBank tile proportions + compact 3-col mode
-    assert.ok(tileSrc.includes('compact = false') && tileSrc.includes("'102px'"), 'QBankTile must support compact 3-col mode and sleek 102px 2-col QBank proportions');
+    // 1. 1/3 Shorter QBank tile proportions + compact 3-col mode
+    assert.ok(tileSrc.includes('compact = false') && tileSrc.includes("'72px'") && tileSrc.includes("'64px'"), 'QBankTile must reduce height by 1/3 (72px default, 64px compact)');
 
     // 2. QBank 4-Square Folders Menu, Global Search & Back Bar
     assert.ok(dockSrc.includes('qbank_all_folders_menu') && dockSrc.includes('LayoutGrid'), 'BottomDock must render QBank 4-square Folders Menu overlay');
@@ -700,10 +702,18 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(appSrc.includes('folder_global_search_btn'), 'Project Folder must provide 1-tap Global Search & Folders trigger');
     assert.ok(dashSrc.includes('dashboard_qbank_slide_banner'), 'Dashboard must render touch-swipeable QBank Service Slide Banner');
 
-    // 4. Touch/Hand-Swipe Notifications (Ear Handle + Dynamic Island Pill/Popup + Slide-Over Drawer Carousel & Cards)
+    // 4. Reliable Right-Edge Bell Click/Swipe + Modern Gesture NotificationDrawer
+    assert.ok(handleSrc.includes('z-[45]') && handleSrc.includes('onClick={handleClick}') && handleSrc.includes('Math.abs(dy) > 14'), 'DraggableNotificationHandle must reliably open on click/tap with z-[45] and >14px drag guard');
     assert.ok(handleSrc.includes('pullOffsetX') && handleSrc.includes("fill={notifCount > 0 ? '#0F172A' : 'none'}"), 'DraggableNotificationHandle must match QBank right-edge bell ear with live pull drag');
     assert.ok(popupSrc.includes('ios_reminder_slide_dots') && popupSrc.includes('handleCardPointerMove'), 'IOSReminderPopup must support finger horizontal swipe slides and QBank pagination dots');
-    assert.ok(appSrc.includes('drawer_notification_slide_carousel') && appSrc.includes('drawerDragX') && appSrc.includes('swipedAlertDx'), 'Slide-over notification drawer must support hand-swipe close, spotlight slide carousel, and swipe-to-acknowledge alert cards');
+    assert.ok(
+      drawerSrc.includes('SwipeableAlertRow') &&
+        drawerSrc.includes('drawer_notification_slide_carousel') &&
+        drawerSrc.includes('urgentGroup') &&
+        drawerSrc.includes('upcomingGroup') &&
+        drawerSrc.includes('drawerDragX'),
+      'NotificationDrawer must implement modern grouped cards, swipe-to-act reveal trays, spotlight deck, and swipe-to-dismiss drawer gesture'
+    );
   });
 });
 

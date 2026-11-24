@@ -18,8 +18,8 @@ import { Messages } from '@/components/sections/Messages';
 import { SettingsSection } from '@/components/sections/SettingsSection';
 import {
   Cloud, Sparkles, X, Keyboard, WifiOff, Download, ShieldAlert, Archive, UploadCloud,
-  BellRing, ArrowLeft, User, ShieldCheck, RefreshCw, Plus, CheckCircle2, LogOut, PhoneIncoming, PhoneCall,
-  FolderKanban, Volume2, Vibrate, Smartphone, Search, ChevronRight, Clock,
+  BellRing, User, ShieldCheck, Plus, CheckCircle2, LogOut, PhoneIncoming, PhoneCall,
+  FolderKanban, Volume2, Vibrate, Search, ChevronRight,
 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
@@ -61,6 +61,7 @@ import {
 import { activateCloudSqlAndGoogleDrive } from '@/lib/integrationsEngine';
 import { getOfflineQueue, processOfflineQueue, clearOfflineQueue } from '@/lib/offlineQueue';
 import { DraggableNotificationHandle } from '@/components/ui/DraggableNotificationHandle';
+import { NotificationDrawer } from '@/components/ui/NotificationDrawer';
 import { QBankTile } from '@/components/ui/QBankTile';
 import {
   playTactileFeedback,
@@ -88,7 +89,6 @@ function App() {
   const [syncPulse, setSyncPulse] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [drawerTab, setDrawerTab] = useState<'all' | 'finance' | 'clinical' | 'ops'>('all');
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [installModalOpen, setInstallModalOpen] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(() =>
@@ -118,16 +118,6 @@ function App() {
   const [zeroLossTick, setZeroLossTick] = useState(0);
   const [forceExpandReminderKey, setForceExpandReminderKey] = useState(0);
   const [navHistory, setNavHistory] = useState<SectionId[]>([]);
-  const [drawerDragX, setDrawerDragX] = useState(0);
-  const [drawerDragging, setDrawerDragging] = useState(false);
-  const [drawerSlideIdx, setDrawerSlideIdx] = useState(0);
-  const [drawerCarouselDragX, setDrawerCarouselDragX] = useState(0);
-  const [drawerCarouselDragging, setDrawerCarouselDragging] = useState(false);
-  const [swipedAlertId, setSwipedAlertId] = useState<string | null>(null);
-  const [swipedAlertDx, setSwipedAlertDx] = useState(0);
-  const drawerSwipeRef = useRef<{ id: number | null; x: number; y: number }>({ id: null, x: 0, y: 0 });
-  const carouselSwipeRef = useRef<{ id: number | null; x: number; moved: boolean }>({ id: null, x: 0, moved: false });
-  const rowSwipeRef = useRef<{ id: number | null; alertId: string | null; x: number; y: number }>({ id: null, alertId: null, x: 0, y: 0 });
   const lastScrollY = useRef(0);
 
   useEffect(() => {
@@ -286,19 +276,6 @@ function App() {
     }
     return 'happy';
   }, [liveSmartAlerts, pendingReminders, active]);
-
-  const filteredDrawerAlerts = useMemo(() => {
-    if (drawerTab === 'finance') {
-      return liveSmartAlerts.filter(a => a.domain === 'check' || a.domain === 'safteh' || a.domain === 'installment' || a.domain === 'debt');
-    }
-    if (drawerTab === 'clinical') {
-      return liveSmartAlerts.filter(a => a.domain === 'implant' || a.domain === 'lab');
-    }
-    if (drawerTab === 'ops') {
-      return liveSmartAlerts.filter(a => a.domain === 'appointment' || a.domain === 'inventory');
-    }
-    return liveSmartAlerts;
-  }, [liveSmartAlerts, drawerTab]);
 
   // Merge 360° Live Smart Alerts + Stored Pending Reminders into Zero-Loss Global Queue
   const unifiedGlobalAlerts: GlobalReminderPopupItem[] = useMemo(() => {
@@ -948,7 +925,7 @@ function App() {
                   </span>
                 </div>
                 <p className="text-[10px] font-semibold text-slate-600 leading-tight truncate">
-                  {platformInfo.labelFa} • {onlinePeersCount.toLocaleString('fa-IR')} دستگاه آنلاین • سینک زنده
+                  {onlinePeersCount.toLocaleString('fa-IR')} کاربر آنلاین
                 </p>
               </div>
             </div>
@@ -1223,21 +1200,20 @@ function App() {
         </div>
       </Sheet>
 
-      {/* Project Folder Sheet (پوشه پروژه — ابزارهای جانبی بدون شلوغ کردن داک بالا) */}
+      {/* Project Folder Sheet (ابزارهای کلینیک) */}
       <Sheet
         open={projectFolderOpen}
         onClose={() => setProjectFolderOpen(false)}
         title="پوشه پروژه مینادنتال"
-        subtitle={`نسخه v${CURRENT_APP_VERSION} (بیلد #${CURRENT_APP_BUILD}) • تمام ابزارهای جانبی در یک جای تمیز`}
+        subtitle={`نسخه ${CURRENT_APP_VERSION}`}
         icon={<FolderKanban size={20} />}
         color="#7C3AED"
       >
         <div className="space-y-3" data-testid="project_folder_sheet_content">
-          {/* Authentic QBank Curved-Notch Cards Inside Project Folder (۱۰۰٪ مطابق هندسه کیوبانک) */}
           <div className="grid grid-cols-2 gap-2.5">
             <QBankTile
               label="کالر آیدی هوشمند"
-              sub="تشخیص تماس بیمار و نوبت خودکار"
+              sub="تشخیص تماس بیمار"
               color="#10B981"
               surfaceBg="#FFFFFF"
               surfaceBgEnd="#ECFDF5"
@@ -1251,7 +1227,7 @@ function App() {
 
             <QBankTile
               label="نصب ۴ پلتفرم"
-              sub="آیفون، اندروید، آیپد و ویندوز"
+              sub="آیفون، اندروید، آیپد، ویندوز"
               color="#7C3AED"
               surfaceBg="#FFFFFF"
               surfaceBgEnd="#F5F3FF"
@@ -1265,7 +1241,7 @@ function App() {
 
             <QBankTile
               label="تنظیمات و نسخه‌ها"
-              sub="تعرفه‌ها، بکاپ ابری و مدیریت"
+              sub="تعرفه‌ها، بکاپ و مدیریت"
               color="#4F46E5"
               surfaceBg="#FFFFFF"
               surfaceBgEnd="#EEF2FF"
@@ -1279,7 +1255,7 @@ function App() {
 
             <QBankTile
               label="سینک ابری و لوکال"
-              sub="پشتیبان ابری + گاوصندوق ضدحذف"
+              sub="بک‌آپ فوری و بازیابی"
               color="#0284C7"
               surfaceBg="#FFFFFF"
               surfaceBgEnd="#F0F9FF"
@@ -1291,8 +1267,8 @@ function App() {
             />
 
             <QBankTile
-              label="جستجوی سراسری و پوشه‌ها"
-              sub="یافتن سریع بیمار، چک و خدمات"
+              label="جستجوی پوشه‌ها"
+              sub="یافتن بیمار، چک و خدمات"
               color="#D97706"
               surfaceBg="#FFFFFF"
               surfaceBgEnd="#FFFBEB"
@@ -1305,19 +1281,16 @@ function App() {
             />
           </div>
 
-          {/* Live Smart Cross-Role Workflow Popup Triggers (تست زنده پاپ‌آپ هوشمند نوبت و درمان) */}
-          <div className="rounded-3xl bg-white border border-slate-200/85 p-3.5 space-y-2.5 shadow-sm">
+          {/* Workflow Alerts Preview */}
+          <div className="rounded-3xl bg-white border border-slate-200/85 p-3 space-y-2 shadow-sm">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-black text-slate-800">
-                پاپ‌آپ هوشمند گردش کار بین‌پرسنلی (ضد فراموشی)
+                پیش‌نمایش اعلان ثبت نوبت و درمان
               </h4>
               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                فعال و زنده
+                فعال
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              با هر ثبت نوبت یا تکمیل درمان به‌طور خودکار باز می‌شود؛ همچنین می‌توانید عملکرد زنده آن را همین‌جا بررسی کنید:
-            </p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -1425,501 +1398,76 @@ function App() {
         </div>
       </Sheet>
 
-      {/* Right-Edge Draggable QBank Notification Ear Handle (Locks permanently wherever dropped) */}
+      {/* Right-Edge Draggable Bell Ear Handle */}
       <DraggableNotificationHandle
         notifCount={notifCount}
         open={notifOpen}
         onOpen={() => setNotifOpen(true)}
       />
 
-      {/* World-Class iOS Right-Side Slide-Over Notification & Smart Reminder Drawer (100% Opaque + Hand-Swipe Slides) */}
-      {notifOpen && (
-        <div
-          className="fixed inset-0 z-50 flex justify-start"
-          onClick={() => {
-            playTactileFeedback('soft');
-            setNotifOpen(false);
-          }}
-          data-testid="slide_over_notification_drawer"
-        >
-          <div className="absolute inset-0 bg-slate-900/65 backdrop-blur-md animate-fade-in" />
-          <aside
-            className="relative w-full max-w-sm h-full bg-[#F8FAFC] text-slate-900 border-l border-slate-200 p-4 flex flex-col drawer-slide-in-right safe-top safe-bottom touch-pan-y"
-            onClick={e => e.stopPropagation()}
-            onPointerDown={(e) => {
-              if ((e.target as HTMLElement)?.closest('button, a, [data-no-drawer-drag="true"]')) return;
-              drawerSwipeRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
-              setDrawerDragging(true);
-            }}
-            onPointerMove={(e) => {
-              const st = drawerSwipeRef.current;
-              if (st.id !== e.pointerId) return;
-              const dx = e.clientX - st.x;
-              const dy = e.clientY - st.y;
-              if (dx > 0 && Math.abs(dx) > Math.abs(dy)) {
-                setDrawerDragX(Math.min(260, dx));
-              }
-            }}
-            onPointerUp={(e) => {
-              const st = drawerSwipeRef.current;
-              if (st.id !== e.pointerId) return;
-              const dx = e.clientX - st.x;
-              st.id = null;
-              setDrawerDragging(false);
-              setDrawerDragX(0);
-              if (dx > 68) {
-                playTactileFeedback('soft');
-                setNotifOpen(false);
-              }
-            }}
-            onPointerCancel={() => {
-              drawerSwipeRef.current.id = null;
-              setDrawerDragging(false);
-              setDrawerDragX(0);
-            }}
-            style={{
-              boxShadow: '-16px 0 48px rgba(15, 23, 42, 0.28)',
-              transform: `translateX(${drawerDragX}px)`,
-              transition: drawerDragging ? 'none' : 'transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
-            }}
-          >
-            {/* Drawer Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 bg-white -mx-4 -mt-4 px-4 pt-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-rose-600 flex items-center justify-center text-white shadow-sm">
-                  <BellRing size={18} className="bell-swing" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900">رادار هوشمند یادآوری و اعلان‌ها</h3>
-                  <p className="text-[10.5px] font-bold text-rose-700">
-                    {notifCount.toLocaleString('fa-IR')} هشدار فعال • کشیدن به راست برای بستن
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  playTactileFeedback('soft');
-                  setNotifOpen(false);
-                }}
-                aria-label="بستن یادآوری‌ها"
-                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center justify-center text-slate-700 transition-all"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Real OS Device Notification Bridge */}
-            <div
-              className={`mt-2.5 p-2.5 rounded-2xl border flex items-center justify-between gap-2 ${
-                deviceNotifOn
-                  ? 'bg-emerald-50 border-emerald-200'
-                  : 'bg-white border-slate-200 shadow-sm'
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Smartphone size={15} className={deviceNotifOn ? 'text-emerald-700 shrink-0' : 'text-amber-700 shrink-0'} />
-                <div className="min-w-0">
-                  <p className="text-[11px] font-black text-slate-900 truncate">
-                    {deviceNotifOn ? 'متصل به نوتیفیکیشن واقعی گوشی' : 'اتصال به اعلان واقعی گوشی'}
-                  </p>
-                  <p className="text-[9.5px] font-semibold text-slate-600 truncate">
-                    {deviceNotifPerm === 'denied'
-                      ? 'مجوز اعلان در مرورگر مسدود است'
-                      : deviceNotifOn
-                      ? 'یادآوری چک، قسط، ایمپلنت و نوبت روی گوشی ارسال می‌شود'
-                      : 'نمایش هشدارهای حیاتی در نوار اعلان گوشی'}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {deviceNotifOn ? (
-                  <>
-                    <button
-                      type="button"
-                      data-testid="test_real_device_notif_btn"
-                      onClick={async () => {
-                        playTactileFeedback('success');
-                        await sendRealDeviceNotification({
-                          title: 'مینادنتال • تست اعلان واقعی گوشی',
-                          body: `رادار هوشمند با ${notifCount.toLocaleString('fa-IR')} هشدار فعال به نوتیفیکیشن گوشی متصل است.`,
-                          tag: `minadental-test-${Date.now()}`,
-                        });
-                      }}
-                      className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black"
-                    >
-                      تست
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeviceNotificationsEnabled(false);
-                        setDeviceNotifOn(false);
-                      }}
-                      className="px-2 py-1 rounded-xl bg-white border border-slate-200 text-slate-700 text-[10px] font-bold"
-                    >
-                      خاموش
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    data-testid="enable_real_device_notif_btn"
-                    onClick={async () => {
-                      playTactileFeedback('tap');
-                      const perm = await requestDeviceNotificationPermission();
-                      setDeviceNotifPerm(perm);
-                      const enabled = perm === 'granted';
-                      setDeviceNotifOn(enabled);
-                      if (enabled) {
-                        await sendRealDeviceNotification({
-                          title: 'مینادنتال متصل شد',
-                          body: 'یادآوری‌های کلینیک از این پس روی نوتیفیکیشن واقعی گوشی نمایش داده می‌شوند.',
-                          tag: 'minadental-connected',
-                        });
-                      }
-                    }}
-                    className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black shadow-sm"
-                  >
-                    فعال‌سازی
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Interactive Touch-Swipe Spotlight Slide Carousel inside Drawer */}
-            {zeroLossPopupQueue.length > 0 && (() => {
-              const safeSlide = drawerSlideIdx % zeroLossPopupQueue.length;
-              const slideItem = zeroLossPopupQueue[safeSlide];
-              const isCrit = slideItem.urgency === 'critical';
-              const sBg = isCrit ? '#FFF1F2' : slideItem.urgency === 'today' ? '#FFFBEB' : '#EFF6FF';
-              const sBorder = isCrit ? '#FDA4AF' : slideItem.urgency === 'today' ? '#FCD34D' : '#BFDBFE';
-              const sAccent = isCrit ? '#E11D48' : slideItem.urgency === 'today' ? '#D97706' : '#2563EB';
-              const dotsCount = Math.min(zeroLossPopupQueue.length, 5);
-              return (
-                <div
-                  data-no-drawer-drag="true"
-                  data-testid="drawer_notification_slide_carousel"
-                  className="mt-2 rounded-2xl p-2.5 border shadow-sm select-none touch-pan-y"
-                  style={{
-                    background: sBg,
-                    borderColor: sBorder,
-                    transform: `translateX(${drawerCarouselDragX}px)`,
-                    transition: drawerCarouselDragging ? 'none' : 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                  }}
-                  onPointerDown={(e) => {
-                    if ((e.target as HTMLElement)?.closest('button')) return;
-                    carouselSwipeRef.current = { id: e.pointerId, x: e.clientX, moved: false };
-                    setDrawerCarouselDragging(true);
-                  }}
-                  onPointerMove={(e) => {
-                    const st = carouselSwipeRef.current;
-                    if (st.id !== e.pointerId) return;
-                    const dx = e.clientX - st.x;
-                    if (Math.abs(dx) > 6) st.moved = true;
-                    setDrawerCarouselDragX(Math.max(-72, Math.min(72, dx * 0.55)));
-                  }}
-                  onPointerUp={(e) => {
-                    const st = carouselSwipeRef.current;
-                    if (st.id !== e.pointerId) return;
-                    const dx = e.clientX - st.x;
-                    st.id = null;
-                    setDrawerCarouselDragging(false);
-                    setDrawerCarouselDragX(0);
-                    if (zeroLossPopupQueue.length > 1 && Math.abs(dx) > 34) {
-                      playTactileFeedback('soft');
-                      setDrawerSlideIdx((prev) =>
-                        dx < 0
-                          ? (prev + 1) % zeroLossPopupQueue.length
-                          : (prev - 1 + zeroLossPopupQueue.length) % zeroLossPopupQueue.length
-                      );
-                    }
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-[9.5px] font-black px-2 py-0.5 rounded-full bg-white border" style={{ color: sAccent, borderColor: sBorder }}>
-                      اسلاید یادآوری {(safeSlide + 1).toLocaleString('fa-IR')}/{zeroLossPopupQueue.length.toLocaleString('fa-IR')}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          playTactileFeedback('success');
-                          acknowledgeZeroLossAlert(slideItem.id);
-                          setZeroLossTick((t) => t + 1);
-                        }}
-                        className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[9.5px] font-black"
-                      >
-                        تایید
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          playTactileFeedback('soft');
-                          snoozeZeroLossAlert(slideItem.id, 15);
-                          setZeroLossTick((t) => t + 1);
-                        }}
-                        className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-slate-800 text-[9.5px] font-extrabold"
-                      >
-                        ۱۵ دقیقه
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-[11px] font-black text-slate-900 truncate">{slideItem.title}</p>
-                  <p className="text-[10px] font-semibold text-slate-700 truncate mt-0.5">{slideItem.subtitle}</p>
-                  {zeroLossPopupQueue.length > 1 && (
-                    <div className="flex items-center justify-center gap-1.5 mt-1.5">
-                      {Array.from({ length: dotsCount }).map((_, idx) => {
-                        const act = safeSlide % dotsCount === idx;
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            aria-label={`اسلاید اعلان ${(idx + 1).toLocaleString('fa-IR')}`}
-                            onClick={() => {
-                              playTactileFeedback('soft');
-                              setDrawerSlideIdx(idx);
-                            }}
-                            className="h-1.5 rounded-full transition-all duration-200"
-                            style={{
-                              width: act ? '18px' : '6px',
-                              background: act ? sAccent : '#CBD5E1',
-                            }}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Instant iOS 27 Internal Popup Trigger & Zero-Loss Queue Restore Bar */}
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                data-testid="trigger_ios_reminder_popup_btn"
-                onClick={() => {
-                  playTactileFeedback('success');
-                  resetAllZeroLossAlertsForToday();
-                  setZeroLossTick((t) => t + 1);
-                  setNotifOpen(false);
-                  setForceExpandReminderKey((k) => k + 1);
-                }}
-                className="py-2 px-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10.5px] font-black flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
-              >
-                <BellRing size={13} />
-                <span>پاپ‌آپ مدرن آیفونی (زنده)</span>
-              </button>
-              <button
-                type="button"
-                data-testid="reset_acknowledged_reminders_btn"
-                onClick={() => {
-                  playTactileFeedback('tap');
-                  resetAllZeroLossAlertsForToday();
-                  setZeroLossTick((t) => t + 1);
-                  setLiveSyncToast('تمام یادآوری‌های امروز در صف ضد فراموشی بازگردانی شدند');
-                  setTimeout(() => setLiveSyncToast(null), 3000);
-                }}
-                className="py-2 px-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 text-[10.5px] font-extrabold flex items-center justify-center gap-1 active:scale-95 transition-all"
-              >
-                <RefreshCw size={12} className="text-indigo-600" />
-                <span>بازگردانی صف ({unifiedGlobalAlerts.length.toLocaleString('fa-IR')})</span>
-              </button>
-            </div>
-
-            {/* Category Filter Chips inside Slide-Over Drawer */}
-            <div className="flex items-center gap-1.5 py-2 overflow-x-auto no-scrollbar">
-              {[
-                { id: 'all' as const, label: 'همه بخش‌ها', count: liveSmartAlerts.length },
-                {
-                  id: 'finance' as const,
-                  label: 'چک، قسط و بدهی',
-                  count: liveSmartAlerts.filter(a => a.domain === 'check' || a.domain === 'safteh' || a.domain === 'installment' || a.domain === 'debt').length,
-                },
-                {
-                  id: 'clinical' as const,
-                  label: 'ایمپلنت و لابراتوار',
-                  count: liveSmartAlerts.filter(a => a.domain === 'implant' || a.domain === 'lab').length,
-                },
-                {
-                  id: 'ops' as const,
-                  label: 'نوبت و انبار',
-                  count: liveSmartAlerts.filter(a => a.domain === 'appointment' || a.domain === 'inventory').length,
-                },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setDrawerTab(tab.id)}
-                  className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition-all border ${
-                    drawerTab === tab.id
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  {tab.label} ({tab.count.toLocaleString('fa-IR')})
-                </button>
-              ))}
-            </div>
-
-            {/* Live Smart Alerts List (100% Opaque Solid White Cards + Hand-Swipe Ack/Snooze) */}
-            <div className="flex-1 overflow-y-auto space-y-2 py-1 pr-0.5">
-              {filteredDrawerAlerts.length === 0 && pendingReminders.length === 0 && unreadMessages.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-2xl border border-slate-200">
-                  <p className="text-sm text-slate-900 font-black">هیچ هشدار یا یادآوری فعالی وجود ندارد</p>
-                  <p className="text-xs text-slate-600 font-medium mt-1">تمامی بخش‌های کلینیک در وضعیت پایدار هستند</p>
-                </div>
-              ) : (
-                <>
-                  {filteredDrawerAlerts.map(alert => {
-                    const isCritical = alert.urgency === 'critical';
-                    const isToday = alert.urgency === 'today';
-                    const accentColor = isCritical ? '#DC2626' : isToday ? '#D97706' : '#2563EB';
-                    const dateBg = isCritical ? '#FFF1F2' : isToday ? '#FFFBEB' : '#EFF6FF';
-                    const dateText = isCritical ? '#9F1239' : isToday ? '#92400E' : '#1E40AF';
-                    const rowOffset = swipedAlertId === alert.id ? swipedAlertDx : 0;
-                    return (
-                      <div
-                        key={alert.id}
-                        data-no-drawer-drag="true"
-                        className="relative overflow-hidden rounded-2xl"
-                      >
-                        <div
-                          onPointerDown={(e) => {
-                            if ((e.target as HTMLElement)?.closest('[data-row-action="true"]')) return;
-                            rowSwipeRef.current = { id: e.pointerId, alertId: alert.id, x: e.clientX, y: e.clientY };
-                            setSwipedAlertId(alert.id);
-                          }}
-                          onPointerMove={(e) => {
-                            const st = rowSwipeRef.current;
-                            if (st.id !== e.pointerId || st.alertId !== alert.id) return;
-                            const dx = e.clientX - st.x;
-                            const dy = e.clientY - st.y;
-                            if (Math.abs(dx) > Math.abs(dy)) {
-                              setSwipedAlertDx(Math.max(-84, Math.min(84, dx * 0.7)));
-                            }
-                          }}
-                          onPointerUp={(e) => {
-                            const st = rowSwipeRef.current;
-                            if (st.id !== e.pointerId || st.alertId !== alert.id) return;
-                            const dx = e.clientX - st.x;
-                            rowSwipeRef.current = { id: null, alertId: null, x: 0, y: 0 };
-                            setSwipedAlertId(null);
-                            setSwipedAlertDx(0);
-                            if (dx < -48) {
-                              playTactileFeedback('success');
-                              acknowledgeZeroLossAlert(alert.id);
-                              setZeroLossTick((t) => t + 1);
-                            } else if (dx > 48) {
-                              playTactileFeedback('soft');
-                              snoozeZeroLossAlert(alert.id, 15);
-                              setZeroLossTick((t) => t + 1);
-                            } else if (Math.abs(dx) < 8) {
-                              handleNavigate(alert.targetSection);
-                              setNotifOpen(false);
-                            }
-                          }}
-                          className="w-full text-right rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 p-3 shadow-sm cursor-pointer select-none touch-pan-y"
-                          style={{
-                            borderRightWidth: '4px',
-                            borderRightColor: accentColor,
-                            transform: `translateX(${rowOffset}px)`,
-                            transition: swipedAlertId === alert.id ? 'none' : 'transform 0.2s ease',
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-1.5">
-                                <span className="text-xs font-black text-slate-900 truncate">
-                                  {alert.title}
-                                </span>
-                                <span
-                                  className="text-[10px] px-2 py-0.5 rounded-full shrink-0 font-extrabold"
-                                  style={{ background: dateBg, color: dateText }}
-                                >
-                                  {toJalaliStr(alert.dueDate)}
-                                </span>
-                              </div>
-                              <p className="text-[11px] font-semibold text-slate-600 mt-1 leading-relaxed line-clamp-2">
-                                {alert.subtitle}
-                              </p>
-                              <div className="flex items-center justify-between gap-2 mt-2 pt-1.5 border-t border-slate-100">
-                                <span className="text-[9px] font-bold text-slate-400">
-                                  اسلاید چپ: تایید • اسلاید راست: ۱۵ دقیقه
-                                </span>
-                                <div className="flex items-center gap-1" data-row-action="true">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      playTactileFeedback('soft');
-                                      snoozeZeroLossAlert(alert.id, 15);
-                                      setZeroLossTick((t) => t + 1);
-                                    }}
-                                    className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-amber-50 text-slate-700 text-[9.5px] font-bold flex items-center gap-1"
-                                  >
-                                    <Clock size={10} /> ۱۵د
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      playTactileFeedback('success');
-                                      acknowledgeZeroLossAlert(alert.id);
-                                      setZeroLossTick((t) => t + 1);
-                                    }}
-                                    className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[9.5px] font-extrabold flex items-center gap-1"
-                                  >
-                                    <CheckCircle2 size={10} /> تایید
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {unreadMessages.slice(0, 5).map(m => (
-                    <button
-                      key={m.id}
-                      onClick={() => {
-                        handleNavigate('messages');
-                        setNotifOpen(false);
-                      }}
-                      className="w-full text-right rounded-2xl bg-white hover:bg-sky-50 border border-sky-200 p-3 shadow-sm transition-all"
-                      style={{ borderRightWidth: '4px', borderRightColor: '#0284C7' }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-sky-600 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-black text-slate-900 truncate">پیام جدید: {m.subject}</p>
-                          <p className="text-[10.5px] font-semibold text-slate-600 truncate">{m.body?.slice(0, 50)}</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
-
-            {/* Footer CTA to Open Full Smart Reminders Command Center */}
-            <div className="pt-3 border-t border-slate-200 mt-2">
-              <button
-                onClick={() => {
-                  handleNavigate('reminders');
-                  setNotifOpen(false);
-                }}
-                className="w-full py-2.5 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all"
-              >
-                <BellRing size={15} />
-                <span>ورود به مرکز فرماندهی جامع یادآوری‌ها</span>
-                <ArrowLeft size={14} />
-              </button>
-            </div>
-          </aside>
-        </div>
-      )}
+      {/* Modern Gesture-Based Slide-Over Notification Drawer */}
+      <NotificationDrawer
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        notifCount={notifCount}
+        deviceNotifOn={deviceNotifOn}
+        deviceNotifPerm={deviceNotifPerm}
+        onToggleDeviceNotif={(next) => {
+          setDeviceNotificationsEnabled(next);
+          setDeviceNotifOn(next);
+        }}
+        onRequestDeviceNotif={async () => {
+          playTactileFeedback('tap');
+          const perm = await requestDeviceNotificationPermission();
+          setDeviceNotifPerm(perm);
+          const enabled = perm === 'granted';
+          setDeviceNotifOn(enabled);
+          if (enabled) {
+            await sendRealDeviceNotification({
+              title: 'مینادنتال متصل شد',
+              body: 'یادآوری‌های کلینیک روی نوتیفیکیشن گوشی نمایش داده می‌شوند.',
+              tag: 'minadental-connected',
+            });
+          }
+        }}
+        onTestDeviceNotif={async () => {
+          playTactileFeedback('success');
+          await sendRealDeviceNotification({
+            title: 'مینادنتال • تست اعلان گوشی',
+            body: `${notifCount.toLocaleString('fa-IR')} یادآوری فعال در کلینیک ثبت شده است.`,
+            tag: `minadental-test-${Date.now()}`,
+          });
+        }}
+        spotlightQueue={zeroLossPopupQueue}
+        alerts={liveSmartAlerts}
+        unreadMessages={unreadMessages}
+        totalAlertsCount={unifiedGlobalAlerts.length}
+        onNavigate={(sec) => handleNavigate(sec)}
+        onAcknowledge={(id) => {
+          acknowledgeZeroLossAlert(id);
+          setZeroLossTick((t) => t + 1);
+        }}
+        onSnooze={(id, mins) => {
+          snoozeZeroLossAlert(id, mins);
+          setZeroLossTick((t) => t + 1);
+          setLiveSyncToast(`یادآوری برای ${mins.toLocaleString('fa-IR')} دقیقه بعد تنظیم شد`);
+          setTimeout(() => setLiveSyncToast(null), 2600);
+        }}
+        onResetQueue={() => {
+          playTactileFeedback('tap');
+          resetAllZeroLossAlertsForToday();
+          setZeroLossTick((t) => t + 1);
+          setLiveSyncToast('تمام یادآوری‌های امروز بازگردانی شدند');
+          setTimeout(() => setLiveSyncToast(null), 2600);
+        }}
+        onOpenIOSPopup={() => {
+          playTactileFeedback('success');
+          resetAllZeroLossAlertsForToday();
+          setZeroLossTick((t) => t + 1);
+          setNotifOpen(false);
+          setForceExpandReminderKey((k) => k + 1);
+        }}
+      />
 
       {/* Main content — adaptive for Phone, iPad (Rail) & Windows Desktop (Sidebar) */}
       <main
