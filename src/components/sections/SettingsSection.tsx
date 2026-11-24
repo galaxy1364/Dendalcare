@@ -388,37 +388,38 @@ function ClinicSettingsTab({
 
   return (
     <div className="space-y-3 animate-fade-in">
-      {/* Single Unified World-Class Automatic & Manual Atomic Update Center */}
+      {/* Single Unified World-Class Automatic & Manual Atomic Update Center (60-30-10 Daylight Card) */}
       <div
         data-testid="settings_unified_update_center"
-        className="p-4 rounded-3xl bg-gradient-to-br from-indigo-900 via-purple-950 to-slate-900 text-white border border-purple-500/30 shadow-xl space-y-3"
+        className="p-4 rounded-3xl bg-white text-slate-900 border border-slate-200/95 shadow-sm space-y-3"
+        style={{ background: 'linear-gradient(155deg, #FFFFFF 0%, #F5F3FF 60%, #EDE9FE 100%)' }}
       >
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-400 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-cyan-500/30">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shadow-sm">
               <RefreshCw size={20} className={checkingUpdates ? 'animate-spin' : ''} />
             </div>
             <div>
-              <h3 className="text-sm font-black text-white flex items-center gap-2">
+              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                 مرکز یکپارچه بروزرسانی اتوماتیک و دستی مینادنتال
               </h3>
-              <p className="text-[11px] text-cyan-200">
-                نسخه نصب‌شده: <strong className="text-white font-mono">v{installedRelease.version}</strong> • بیلد فعال: <strong className="text-emerald-300 font-mono" data-testid="installed_build_badge">Build #{installedRelease.build}</strong>
+              <p className="text-[11px] text-slate-600 font-semibold">
+                نسخه نصب‌شده: <strong className="text-slate-900 font-mono">v{installedRelease.version}</strong> • بیلد فعال: <strong className="text-emerald-700 font-mono" data-testid="installed_build_badge">Build #{installedRelease.build}</strong>
               </p>
             </div>
           </div>
-          <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-mono font-bold">
+          <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-extrabold">
             Atomic Installer v64
           </span>
         </div>
 
         {/* Auto Update Toggle */}
-        <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between">
+        <div className="p-3 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-xs font-bold text-white block">
+            <span className="text-xs font-extrabold text-slate-900 block">
               نصب و ارتقای خودکار بیلدهای جدید (Atomic Auto-Update)
             </span>
-            <span className="text-[10px] text-slate-300">
+            <span className="text-[10.5px] text-slate-600">
               دریافت و نصب اتمیک بیلد جدید بدون نیاز به رفرش تکراری یا از دست رفتن دیتا
             </span>
           </div>
@@ -430,20 +431,20 @@ function ClinicSettingsTab({
               onChange={(e) => handleToggleAutoUpdate(e.target.checked)}
               className="sr-only peer"
             />
-            <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+            <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
           </label>
         </div>
 
         {/* Live 4-Stage Atomic Update Progress Bar */}
         {atomicProgress && (
-          <div className="p-3 rounded-2xl bg-slate-950/70 border border-cyan-400/35 space-y-1.5" data-testid="atomic_update_progress_box">
-            <div className="flex items-center justify-between text-xs font-bold">
-              <span className="text-cyan-200">{atomicProgress.label}</span>
-              <span className="font-mono text-emerald-300">{atomicProgress.percent}%</span>
+          <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 space-y-1.5" data-testid="atomic_update_progress_box">
+            <div className="flex items-center justify-between text-xs font-extrabold">
+              <span className="text-sky-900">{atomicProgress.label}</span>
+              <span className="font-mono text-emerald-700">{atomicProgress.percent}%</span>
             </div>
-            <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+            <div className="w-full h-2 rounded-full bg-sky-200 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-emerald-400 to-teal-300 transition-all duration-200"
+                className="h-full rounded-full bg-sky-600 transition-all duration-200"
                 style={{ width: `${atomicProgress.percent}%` }}
               />
             </div>
@@ -457,7 +458,7 @@ function ClinicSettingsTab({
             onClick={handleManualCheckUpdate}
             disabled={checkingUpdates}
             data-testid="manual_check_and_install_update_btn"
-            className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-md shadow-emerald-600/30 active:scale-95 transition-all disabled:opacity-50"
+            className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-sm active:scale-95 transition-all disabled:opacity-50"
           >
             <RefreshCw size={14} className={checkingUpdates ? 'animate-spin' : ''} />
             {checkingUpdates ? 'در حال نصب و ارتقای اتمیک...' : 'بررسی و نصب دستی بروزرسانی'}
@@ -469,16 +470,16 @@ function ClinicSettingsTab({
               onClick={handlePublishAndInstallNextBuild}
               disabled={checkingUpdates}
               data-testid="manager_publish_new_build_btn"
-              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-extrabold shadow-md shadow-purple-600/30 active:scale-95 transition-all disabled:opacity-50"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white hover:bg-violet-50 border border-violet-300 text-violet-900 text-xs font-extrabold shadow-sm active:scale-95 transition-all disabled:opacity-50"
             >
-              <Zap size={14} className="text-amber-300" />
+              <Zap size={14} className="text-amber-600" />
               انتشار و نصب بیلد جدید (#{(installedRelease.build + 1).toLocaleString('fa-IR')})
             </button>
           ) : (
             <button
               type="button"
               onClick={() => clearAllCachesAndHardReload()}
-              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-bold active:scale-95 transition-all"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-extrabold active:scale-95 transition-all"
             >
               <RotateCcw size={14} />
               بازنشانی کش و بارگذاری مجدد
@@ -488,12 +489,12 @@ function ClinicSettingsTab({
 
         {/* Update feedback message */}
         {updateMessage && (
-          <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+          <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 ${
             updateMessage.type === 'success'
-              ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/30'
+              ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
               : updateMessage.type === 'info'
-              ? 'bg-blue-500/20 text-blue-200 border border-blue-400/30'
-              : 'bg-rose-500/20 text-rose-200 border border-rose-400/30'
+              ? 'bg-blue-50 text-blue-900 border border-blue-200'
+              : 'bg-rose-50 text-rose-900 border border-rose-200'
           }`}>
             <CheckCircle2 size={16} className="shrink-0" />
             <span className="leading-relaxed">{updateMessage.text}</span>
@@ -501,27 +502,27 @@ function ClinicSettingsTab({
         )}
       </div>
 
-      {/* 8 Installed UI Libraries & Simultaneous Active Project Skills Engine Panel */}
+      {/* 8 Installed UI Libraries & Simultaneous Active Project Skills Engine Panel (Daylight QBank Card) */}
       {(() => {
         const uiSummary = getActiveUILibrariesSummary();
         return (
           <div
             data-testid="settings_active_ui_libraries_panel"
-            className="p-4 rounded-3xl bg-gradient-to-br from-slate-900 via-violet-950 to-indigo-950 text-white border border-violet-400/35 shadow-xl space-y-3"
+            className="p-4 rounded-3xl bg-white text-slate-900 border border-slate-200/95 shadow-sm space-y-3"
           >
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
-                <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
-                  <Zap size={16} className="text-amber-300" />
+                <h3 className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-2">
+                  <Zap size={16} className="text-indigo-600" />
                   موتور همزمان ۸ کتابخانه برتر UI و ۷ اسکیل فعال پروژه
                 </h3>
-                <p className="text-[11px] text-violet-200 mt-0.5">
+                <p className="text-[11px] text-slate-600 font-medium mt-0.5">
                   تمامی کتابخانه‌های رابط کاربری و اسکیل‌های معماری به‌صورت دائمی نصب، قفل و روی کل ۱۳ ماژول فعال هستند
                 </p>
               </div>
               <span
                 data-testid="active_ui_libs_badge"
-                className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-extrabold"
+                className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold"
               >
                 {uiSummary.totalLibraries.toLocaleString('fa-IR')} کتابخانه UI + {uiSummary.totalSkills.toLocaleString('fa-IR')} اسکیل همزمان • فعال
               </span>
@@ -532,27 +533,27 @@ function ClinicSettingsTab({
                 <div
                   key={lib.id}
                   data-testid={`ui_lib_card_${lib.id}`}
-                  className="p-2.5 rounded-2xl bg-white/10 border border-white/15 hover:bg-white/15 transition-all space-y-1"
+                  className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-indigo-50/50 transition-all space-y-1"
                 >
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-black text-white truncate">{lib.name}</span>
-                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md shrink-0 bg-violet-500/30 text-violet-100 border border-violet-400/40">
+                    <span className="text-xs font-black text-slate-900 truncate">{lib.name}</span>
+                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md shrink-0 bg-indigo-50 text-indigo-800 border border-indigo-200">
                       v{lib.version}
                     </span>
                   </div>
-                  <p className="text-[10px] font-bold text-amber-200 truncate">{lib.persianRole}</p>
-                  <p className="text-[9.5px] text-slate-300 line-clamp-2 leading-snug">{lib.capabilities[0]}</p>
+                  <p className="text-[10px] font-extrabold text-indigo-700 truncate">{lib.persianRole}</p>
+                  <p className="text-[9.5px] text-slate-600 line-clamp-2 leading-snug">{lib.capabilities[0]}</p>
                 </div>
               ))}
             </div>
 
-            <div className="pt-2 border-t border-white/10 flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-extrabold text-violet-200 ml-1">اسکیل‌های فعال همزمان:</span>
+            <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-extrabold text-slate-700 ml-1">اسکیل‌های فعال همزمان:</span>
               {uiSummary.skills.map((sk) => (
                 <span
                   key={sk.id}
                   data-testid={`active_skill_chip_${sk.id}`}
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-xl bg-emerald-500/15 border border-emerald-400/35 text-emerald-200"
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800"
                 >
                   ✓ {sk.name} ({sk.domain})
                 </span>
@@ -688,23 +689,23 @@ function ClinicSettingsTab({
         return (
           <div
             data-testid="settings_manager_audit_section"
-            className="p-4 rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-950 text-white border border-indigo-400/30 shadow-lg space-y-3"
+            className="p-4 rounded-3xl bg-white text-slate-900 border border-indigo-200 shadow-sm space-y-3"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-500/25 border border-indigo-400/40 flex items-center justify-center text-indigo-200">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700">
                   <ShieldCheck size={20} />
                 </div>
                 <div>
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="text-xs font-black text-white">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h3 className="text-xs font-black text-slate-900">
                       فوق ممیزی، گزارش سلامت و قفل معماری سیستم
                     </h3>
-                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200">
                       مختص مدیر و ارتقادهنده
                     </span>
                   </div>
-                  <p className="text-[11px] text-indigo-200/80 mt-0.5">
+                  <p className="text-[11px] text-slate-600 mt-0.5">
                     دسترسی انحصاری دکتر مهدی امیری • بررسی زنده ۹ فاز، دفتر کل ممیزی و قفل نسخه
                   </p>
                 </div>
@@ -715,7 +716,7 @@ function ClinicSettingsTab({
               type="button"
               onClick={onOpenAuditModal}
               data-testid="settings_manager_audit_btn"
-              className="w-full py-2.5 px-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+              className="w-full py-2.5 px-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all"
             >
               <ShieldCheck size={16} />
               باز کردن پنل فوق ممیزی و گزارش سلامت (۹ فاز)

@@ -566,42 +566,42 @@ function DebtorsAndReceivablesTab({
 
   return (
     <div className="space-y-3 animate-fade-in">
-      {/* Clinic Receivables Command Banner */}
+      {/* Clinic Receivables Command Banner (60-30-10 Daylight QBank Card) */}
       <div
-        className="bento-tile"
+        className="qbank-tile border border-emerald-200"
         style={{
-          background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 55%, #065F46 100%)',
-          boxShadow: '0 10px 30px rgba(6, 95, 70, 0.25)',
+          background: 'linear-gradient(155deg, #FFFFFF 0%, #F1FDF5 60%, #DCFCE7 100%)',
+          boxShadow: '0 6px 20px rgba(15, 23, 42, 0.06)',
         }}
       >
         <div className="flex items-start justify-between mb-3">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[10px] font-bold mb-1">
-              <ShieldAlert size={11} />
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-900 text-[10px] font-extrabold mb-1">
+              <ShieldAlert size={11} className="text-emerald-700" />
               <span>مرکز کنترل مطالبات مطب (مستقل از کارکرد پزشکان)</span>
             </div>
-            <p className="text-xs text-slate-300">کل مطالبات و بدهی‌های بیماران به مطب</p>
-            <p className="text-2xl font-black text-white tracking-tight mt-0.5">
-              {fmt(summary.totalReceivables)} <span className="text-xs font-normal text-emerald-300">تومان</span>
+            <p className="text-xs font-semibold text-slate-600">کل مطالبات و بدهی‌های بیماران به مطب</p>
+            <p className="text-2xl font-black text-slate-900 tracking-tight mt-0.5 tabular-nums">
+              {fmt(summary.totalReceivables)} <span className="text-xs font-bold text-emerald-700">تومان</span>
             </p>
           </div>
-          <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
+          <div className="w-11 h-11 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-sm">
             <Wallet size={22} />
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10">
-          <div className="bg-white/5 rounded-xl p-2">
-            <p className="text-[9px] text-rose-300 font-semibold">بدهی باز (بدون چک/قسط)</p>
-            <p className="text-xs font-black text-white mt-0.5">{fmt(summary.totalUncovered)} ت</p>
+        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-emerald-200/70">
+          <div className="bg-white border border-rose-200 rounded-xl p-2">
+            <p className="text-[9px] text-rose-800 font-bold">بدهی باز (بدون چک/قسط)</p>
+            <p className="text-xs font-black text-slate-900 mt-0.5 tabular-nums">{fmt(summary.totalUncovered)} ت</p>
           </div>
-          <div className="bg-white/5 rounded-xl p-2">
-            <p className="text-[9px] text-amber-300 font-semibold">چک‌های نزد مطب</p>
-            <p className="text-xs font-black text-white mt-0.5">{fmt(summary.totalChecksInHand)} ت</p>
+          <div className="bg-white border border-amber-200 rounded-xl p-2">
+            <p className="text-[9px] text-amber-800 font-bold">چک‌های نزد مطب</p>
+            <p className="text-xs font-black text-slate-900 mt-0.5 tabular-nums">{fmt(summary.totalChecksInHand)} ت</p>
           </div>
-          <div className="bg-white/5 rounded-xl p-2">
-            <p className="text-[9px] text-cyan-300 font-semibold">اقساط در جریان</p>
-            <p className="text-xs font-black text-white mt-0.5">{fmt(summary.totalInstallmentsActive)} ت</p>
+          <div className="bg-white border border-sky-200 rounded-xl p-2">
+            <p className="text-[9px] text-sky-800 font-bold">اقساط در جریان</p>
+            <p className="text-xs font-black text-slate-900 mt-0.5 tabular-nums">{fmt(summary.totalInstallmentsActive)} ت</p>
           </div>
         </div>
       </div>
@@ -1251,23 +1251,23 @@ function DoctorTab({
         )}
       </div>
 
-      {/* Doctor Monthly Payout Hero Card */}
+      {/* Doctor Monthly Payout Hero Card (60-30-10 Daylight QBank Card) */}
       <div
-        className="bento-tile"
+        className="qbank-tile border border-violet-200"
         style={{
-          background: 'linear-gradient(135deg, #6D28D9 0%, #4C1D95 60%, #311068 100%)',
-          boxShadow: '0 10px 28px rgba(109, 40, 217, 0.3)',
+          background: 'linear-gradient(155deg, #FFFFFF 0%, #F6F3FF 60%, #EDE9FE 100%)',
+          boxShadow: '0 6px 20px rgba(109, 40, 217, 0.08)',
         }}
       >
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-[11px] font-semibold text-violet-200 mb-0.5">
+            <p className="text-[11px] font-bold text-violet-800 mb-0.5">
               سهم قطعی قابل پرداخت به {currentDocObj.name}
             </p>
-            <p className="text-2xl font-black text-white tracking-tight">
-              {fmt(stats.calculatedDoctorShare)} <span className="text-xs font-normal text-violet-200">تومان</span>
+            <p className="text-2xl font-black text-slate-900 tracking-tight tabular-nums">
+              {fmt(stats.calculatedDoctorShare)} <span className="text-xs font-bold text-violet-700">تومان</span>
             </p>
-            <p className="text-[10px] text-violet-200/80 mt-1">
+            <p className="text-[10.5px] font-semibold text-slate-600 mt-1">
               فرمول فعال:{' '}
               {formulaMode === 'net_after_lab_half'
                 ? '(کل کارکرد − هزینه لابراتوار) ÷ ۲'
@@ -1276,27 +1276,27 @@ function DoctorTab({
                 : `${customPercent.toLocaleString('fa-IR')}٪ از خالص کارکرد پس از کسر لابراتوار`}
             </p>
           </div>
-          <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center text-white">
+          <div className="w-11 h-11 rounded-2xl bg-white border border-violet-200 flex items-center justify-center text-violet-700 shadow-sm">
             <Stethoscope size={22} />
           </div>
         </div>
 
-        <div className="mt-3 pt-2.5 border-t border-white/15 grid grid-cols-4 gap-2 text-center">
-          <div className="bg-white/10 rounded-xl p-1.5">
-            <p className="text-[9px] text-violet-200">کل کارکرد ماه</p>
-            <p className="text-[11px] font-bold text-white">{fmt(stats.grossWorkTotal)}</p>
+        <div className="mt-3 pt-2.5 border-t border-violet-200/70 grid grid-cols-4 gap-2 text-center">
+          <div className="bg-white border border-slate-200 rounded-xl p-1.5">
+            <p className="text-[9px] text-slate-600 font-bold">کل کارکرد ماه</p>
+            <p className="text-[11px] font-black text-slate-900 tabular-nums">{fmt(stats.grossWorkTotal)}</p>
           </div>
-          <div className="bg-white/10 rounded-xl p-1.5">
-            <p className="text-[9px] text-pink-200">کسر لابراتوار</p>
-            <p className="text-[11px] font-bold text-pink-200">-{fmt(stats.labTotal)}</p>
+          <div className="bg-white border border-rose-200 rounded-xl p-1.5">
+            <p className="text-[9px] text-rose-700 font-bold">کسر لابراتوار</p>
+            <p className="text-[11px] font-black text-rose-800 tabular-nums">-{fmt(stats.labTotal)}</p>
           </div>
-          <div className="bg-white/10 rounded-xl p-1.5">
-            <p className="text-[9px] text-emerald-200">سهم خالص مطب</p>
-            <p className="text-[11px] font-bold text-emerald-300">{fmt(stats.clinicShare)}</p>
+          <div className="bg-white border border-emerald-200 rounded-xl p-1.5">
+            <p className="text-[9px] text-emerald-700 font-bold">سهم خالص مطب</p>
+            <p className="text-[11px] font-black text-emerald-800 tabular-nums">{fmt(stats.clinicShare)}</p>
           </div>
-          <div className="bg-white/10 rounded-xl p-1.5">
-            <p className="text-[9px] text-amber-200">تسویه‌شده</p>
-            <p className="text-[11px] font-bold text-amber-300">{fmt(stats.paidOutThisMonth)}</p>
+          <div className="bg-white border border-amber-200 rounded-xl p-1.5">
+            <p className="text-[9px] text-amber-800 font-bold">تسویه‌شده</p>
+            <p className="text-[11px] font-black text-amber-900 tabular-nums">{fmt(stats.paidOutThisMonth)}</p>
           </div>
         </div>
 
@@ -1307,7 +1307,7 @@ function DoctorTab({
               onClick={handleSettleDoctorMonthlyShare}
               disabled={settling}
               data-testid="settle_doctor_monthly_share_button"
-              className="w-full py-2.5 px-3 rounded-xl bg-white text-violet-950 hover:bg-violet-50 text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50"
+              className="w-full py-2.5 px-3 rounded-xl bg-violet-700 hover:bg-violet-800 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 disabled:opacity-50"
             >
               <CheckCheck size={16} className="text-emerald-600" />
               {settling

@@ -538,24 +538,21 @@ export function Reminders() {
         )}
       </div>
 
-      {/* Executive Smart Radar Summary Banner */}
+      {/* Executive Smart Radar Summary Banner (60-30-10 Daylight QBank Standard) */}
       <div
-        className="bento-tile"
-        style={{
-          background: 'linear-gradient(135deg, #881337 0%, #BE123C 55%, #E11D48 100%)',
-          boxShadow: '0 10px 30px rgba(190, 18, 60, 0.28)',
-        }}
+        className="rounded-[24px] p-4 bg-white border-2 border-rose-200 shadow-sm space-y-3"
+        style={{ background: 'linear-gradient(155deg, #FFFFFF 0%, #FFF2F4 58%, #FFE4E6 100%)' }}
       >
         <div className="flex items-start justify-between flex-wrap gap-2">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 text-rose-100 text-[10px] font-bold mb-1">
-              <Sparkles size={11} />
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-200 text-[10px] font-black mb-1">
+              <Sparkles size={11} className="text-rose-700" />
               <span>رادار هوشمند ۳۶۰ درجه کلینیک مینادنتال</span>
             </div>
-            <h2 className="text-base font-black text-white">
+            <h2 className="text-base font-black text-slate-900">
               {radarCounts.total.toLocaleString('fa-IR')} رویداد و هشدار فعال در کل بخش‌های مطب
             </h2>
-            <p className="text-[11px] text-rose-100/80 mt-0.5">
+            <p className="text-[11px] font-semibold text-slate-600 mt-0.5">
               پایش همزمان نوبت‌ها، چک صیادی، اقساط، بدهکاران، مراحل ایمپلنت، لابراتوار و موجودی انبار
             </p>
           </div>
@@ -575,9 +572,9 @@ export function Reminders() {
                 });
               }}
               data-testid="reminders_section_trigger_ios_popup_btn"
-              className="px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-950/80 text-white border border-white/25 text-xs font-extrabold shadow-lg flex items-center gap-1.5 transition-all active:scale-95"
+              className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
             >
-              <BellRing size={14} className="text-amber-300" />
+              <BellRing size={14} />
               <span>پاپ‌آپ مدرن آیفونی + اعلان گوشی</span>
             </button>
 
@@ -585,7 +582,7 @@ export function Reminders() {
               onClick={handleSyncToDatabase}
               disabled={scanningAll}
               data-testid="smart_auto_scan_reminders_button"
-              className="px-3.5 py-2 rounded-xl bg-white text-rose-900 hover:bg-rose-50 text-xs font-extrabold shadow-lg flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+              className="px-3.5 py-2 rounded-xl bg-white text-rose-900 hover:bg-rose-50 border border-rose-300 text-xs font-extrabold shadow-sm flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
             >
               <Sparkles size={14} className="text-rose-600" />
               {scanningAll ? 'در حال ثبت در دیتابیس...' : 'ثبت خودکار همه در دیتابیس یادآوری'}
@@ -593,22 +590,22 @@ export function Reminders() {
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 mt-3 pt-2.5 border-t border-white/15 text-center">
-          <div className="bg-white/10 rounded-xl p-1.5">
-            <p className="text-sm font-black text-white">{radarCounts.critical.toLocaleString('fa-IR')}</p>
-            <p className="text-[9px] text-rose-200 font-bold">بحرانی / معوق</p>
+        <div className="grid grid-cols-4 gap-2 pt-2.5 border-t border-rose-200/80 text-center">
+          <div className="bg-white border border-rose-200 rounded-xl p-1.5 shadow-sm">
+            <p className="text-sm font-black text-rose-800 tabular-nums">{radarCounts.critical.toLocaleString('fa-IR')}</p>
+            <p className="text-[9.5px] text-rose-950 font-extrabold">بحرانی / معوق</p>
           </div>
-          <div className="bg-white/10 rounded-xl p-1.5">
-            <p className="text-sm font-black text-amber-200">{radarCounts.finance.toLocaleString('fa-IR')}</p>
-            <p className="text-[9px] text-rose-200 font-bold">چک / قسط / بدهی</p>
+          <div className="bg-white border border-amber-200 rounded-xl p-1.5 shadow-sm">
+            <p className="text-sm font-black text-amber-800 tabular-nums">{radarCounts.finance.toLocaleString('fa-IR')}</p>
+            <p className="text-[9.5px] text-amber-950 font-extrabold">چک / قسط / بدهی</p>
           </div>
-          <div className="bg-white/10 rounded-xl p-1.5">
-            <p className="text-sm font-black text-cyan-200">{radarCounts.impLab.toLocaleString('fa-IR')}</p>
-            <p className="text-[9px] text-rose-200 font-bold">ایمپلنت و لابراتوار</p>
+          <div className="bg-white border border-cyan-200 rounded-xl p-1.5 shadow-sm">
+            <p className="text-sm font-black text-cyan-800 tabular-nums">{radarCounts.impLab.toLocaleString('fa-IR')}</p>
+            <p className="text-[9.5px] text-cyan-950 font-extrabold">ایمپلنت و لابراتوار</p>
           </div>
-          <div className="bg-white/10 rounded-xl p-1.5">
-            <p className="text-sm font-black text-orange-200">{radarCounts.inv.toLocaleString('fa-IR')}</p>
-            <p className="text-[9px] text-rose-200 font-bold">هشدار انبار</p>
+          <div className="bg-white border border-orange-200 rounded-xl p-1.5 shadow-sm">
+            <p className="text-sm font-black text-orange-800 tabular-nums">{radarCounts.inv.toLocaleString('fa-IR')}</p>
+            <p className="text-[9.5px] text-orange-950 font-extrabold">هشدار انبار</p>
           </div>
         </div>
       </div>

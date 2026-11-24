@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { SECTIONS, type SectionId, getSection } from '@/lib/sections';
+import { getModuleToken } from '@/lib/designTokens';
 import { MoreHorizontal, X } from 'lucide-react';
 import { QBankTile } from '@/components/ui/QBankTile';
 import { playTactileFeedback } from '@/lib/hapticsAudio';
@@ -9,16 +10,15 @@ type Props = { active: SectionId; onChange: (id: SectionId) => void };
 // 5 core clinical modules for the primary dock
 const PRIMARY_SECTION_IDS: SectionId[] = ['dashboard', 'patients', 'appointments', 'treatments', 'finance'];
 
-// Calm, non-confusing unique pastel surfaces for every module in the "More" sheet
-const MORE_TILE_PASTELS: Record<string, { bg: string; bgEnd: string; sub: string }> = {
-  calendar:  { bg: '#FFFFFF', bgEnd: '#FDF4FF', sub: 'شمسی • قمری • میلادی' },
-  lab:       { bg: '#FFFFFF', bgEnd: '#FDF2F8', sub: 'ارسال و دریافت پروتز' },
-  implants:  { bg: '#FFFFFF', bgEnd: '#ECFEFF', sub: 'جراحی، هیلینگ و روکش' },
-  inventory: { bg: '#FFFFFF', bgEnd: '#FFF7ED', sub: 'موجودی مواد و آلارم' },
-  reminders: { bg: '#FFFFFF', bgEnd: '#FFF1F2', sub: 'رادار هوشمند پیگیری' },
-  staff:     { bg: '#FFFFFF', bgEnd: '#EEF2FF', sub: 'پرسنل، پزشکان و سهم' },
-  messages:  { bg: '#FFFFFF', bgEnd: '#F0F9FF', sub: 'پیامک، نوبت و تبلیغات' },
-  settings:  { bg: '#FFFFFF', bgEnd: '#F8FAFC', sub: 'تعاریف، تعرفه و بک‌آپ' },
+const MORE_SUBTITLES: Record<string, string> = {
+  calendar:  'شمسی • قمری • میلادی',
+  lab:       'ارسال و دریافت پروتز',
+  implants:  'جراحی، هیلینگ و روکش',
+  inventory: 'موجودی مواد و آلارم',
+  reminders: 'رادار هوشمند پیگیری',
+  staff:     'پرسنل، پزشکان و سهم',
+  messages:  'پیامک، نوبت و تبلیغات',
+  settings:  'تعاریف، تعرفه و بک‌آپ',
 };
 
 export function BottomDock({ active, onChange }: Props) {
@@ -180,20 +180,19 @@ export function BottomDock({ active, onChange }: Props) {
               {moreSections.map((sec) => {
                 const Icon = sec.icon;
                 const isCurrent = active === sec.id;
-                const pastel = MORE_TILE_PASTELS[sec.id] || {
-                  bg: '#FFFFFF',
-                  bgEnd: '#F8FAFC',
-                  sub: 'ماژول تخصصی مطب',
-                };
+                const tok = getModuleToken(sec.id);
+                const subLabel = MORE_SUBTITLES[sec.id] || 'ماژول تخصصی مطب';
                 return (
                   <QBankTile
                     key={sec.id}
-                    color={sec.color}
-                    surfaceBg={pastel.bg}
-                    surfaceBgEnd={pastel.bgEnd}
+                    color={tok.primary}
+                    darkColor={tok.primaryDark}
+                    surfaceBg={tok.surfaceTintStart}
+                    surfaceBgEnd={tok.surfaceTintEnd}
+                    borderColor={tok.surfaceBorder}
                     icon={<Icon size={20} strokeWidth={2.3} />}
                     label={sec.label}
-                    sub={pastel.sub}
+                    sub={subLabel}
                     badge={isCurrent ? 'فعال' : undefined}
                     selected={isCurrent}
                     testId={`more_tile_${sec.id}`}

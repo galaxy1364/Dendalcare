@@ -14,21 +14,9 @@ import {
   MessageSquare,
   type LucideIcon,
 } from 'lucide-react';
+import { MODULE_COLOR_TOKENS, type ModuleTokenId } from './designTokens';
 
-export type SectionId =
-  | 'dashboard'
-  | 'patients'
-  | 'appointments'
-  | 'calendar'
-  | 'treatments'
-  | 'lab'
-  | 'implants'
-  | 'finance'
-  | 'inventory'
-  | 'reminders'
-  | 'staff'
-  | 'messages'
-  | 'settings';
+export type SectionId = ModuleTokenId;
 
 export type SectionConfig = {
   id: SectionId;
@@ -37,26 +25,47 @@ export type SectionConfig = {
   color: string;
   lightColor: string;
   darkColor: string;
+  surfaceTintStart: string;
+  surfaceTintEnd: string;
+  surfaceBorder: string;
   orbSecondary: string;
   gradient: string;
   themeClass: string;
 };
 
-export const SECTIONS: SectionConfig[] = [
-  { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard, color: '#3B82F6', lightColor: '#DBEAFE', darkColor: '#1E40AF', orbSecondary: '#38BDF8', gradient: 'from-blue-400 to-blue-600', themeClass: 'theme-dashboard' },
-  { id: 'patients', label: 'بیماران', icon: Users, color: '#10B981', lightColor: '#D1FAE5', darkColor: '#065F46', orbSecondary: '#34D399', gradient: 'from-emerald-400 to-emerald-600', themeClass: 'theme-patients' },
-  { id: 'appointments', label: 'نوبت‌دهی', icon: CalendarDays, color: '#F59E0B', lightColor: '#FEF3C7', darkColor: '#92400E', orbSecondary: '#FBBF24', gradient: 'from-amber-400 to-amber-600', themeClass: 'theme-appointments' },
-  { id: 'calendar', label: 'تقویم فارسی', icon: CalendarRange, color: '#D946EF', lightColor: '#FAE8FF', darkColor: '#86198F', orbSecondary: '#F472B6', gradient: 'from-fuchsia-500 to-purple-600', themeClass: 'theme-calendar' },
-  { id: 'treatments', label: 'درمان‌ها', icon: Stethoscope, color: '#8B5CF6', lightColor: '#EDE9FE', darkColor: '#5B21B6', orbSecondary: '#A78BFA', gradient: 'from-violet-400 to-violet-600', themeClass: 'theme-treatments' },
-  { id: 'lab', label: 'لابراتوار', icon: FlaskConical, color: '#EC4899', lightColor: '#FCE7F3', darkColor: '#9F1239', orbSecondary: '#FB7185', gradient: 'from-pink-400 to-pink-600', themeClass: 'theme-lab' },
-  { id: 'implants', label: 'ایمپلنت', icon: Anchor, color: '#06B6D4', lightColor: '#CFFAFE', darkColor: '#0E7490', orbSecondary: '#2DD4BF', gradient: 'from-cyan-400 to-cyan-600', themeClass: 'theme-implants' },
-  { id: 'finance', label: 'مالی', icon: Wallet, color: '#22C55E', lightColor: '#DCFCE7', darkColor: '#15803D', orbSecondary: '#84CC16', gradient: 'from-green-400 to-green-600', themeClass: 'theme-finance' },
-  { id: 'inventory', label: 'انبار', icon: Package, color: '#F97316', lightColor: '#FFEDD5', darkColor: '#9A3412', orbSecondary: '#FB923C', gradient: 'from-orange-400 to-orange-600', themeClass: 'theme-inventory' },
-  { id: 'reminders', label: 'یادآوری', icon: BellRing, color: '#EF4444', lightColor: '#FEE2E2', darkColor: '#991B1B', orbSecondary: '#F43F5E', gradient: 'from-red-400 to-red-600', themeClass: 'theme-reminders' },
-  { id: 'staff', label: 'پرسنل', icon: UserCog, color: '#6366F1', lightColor: '#E0E7FF', darkColor: '#3730A3', orbSecondary: '#818CF8', gradient: 'from-indigo-400 to-indigo-600', themeClass: 'theme-staff' },
-  { id: 'messages', label: 'پیام‌ها', icon: MessageSquare, color: '#0EA5E9', lightColor: '#E0F2FE', darkColor: '#075985', orbSecondary: '#60A5FA', gradient: 'from-sky-400 to-sky-600', themeClass: 'theme-messages' },
-  { id: 'settings', label: 'تنظیمات', icon: Settings, color: '#64748B', lightColor: '#F1F5F9', darkColor: '#334155', orbSecondary: '#94A3B8', gradient: 'from-slate-400 to-slate-600', themeClass: 'theme-settings' },
+const SECTION_META: Array<{ id: SectionId; label: string; icon: LucideIcon; gradient: string }> = [
+  { id: 'dashboard',    label: 'داشبورد',      icon: LayoutDashboard, gradient: 'from-blue-500 to-blue-700' },
+  { id: 'patients',     label: 'بیماران',      icon: Users,           gradient: 'from-emerald-500 to-emerald-700' },
+  { id: 'appointments', label: 'نوبت‌دهی',     icon: CalendarDays,    gradient: 'from-amber-500 to-amber-700' },
+  { id: 'calendar',     label: 'تقویم فارسی',  icon: CalendarRange,   gradient: 'from-fuchsia-500 to-purple-700' },
+  { id: 'treatments',   label: 'درمان‌ها',     icon: Stethoscope,     gradient: 'from-violet-500 to-violet-700' },
+  { id: 'lab',          label: 'لابراتوار',    icon: FlaskConical,    gradient: 'from-pink-500 to-pink-700' },
+  { id: 'implants',     label: 'ایمپلنت',      icon: Anchor,          gradient: 'from-cyan-500 to-cyan-700' },
+  { id: 'finance',      label: 'مالی',         icon: Wallet,          gradient: 'from-green-500 to-green-700' },
+  { id: 'inventory',    label: 'انبار',        icon: Package,         gradient: 'from-orange-500 to-orange-700' },
+  { id: 'reminders',    label: 'یادآوری',      icon: BellRing,        gradient: 'from-rose-500 to-rose-700' },
+  { id: 'staff',        label: 'پرسنل',        icon: UserCog,         gradient: 'from-indigo-500 to-indigo-700' },
+  { id: 'messages',     label: 'پیام‌ها',      icon: MessageSquare,   gradient: 'from-sky-500 to-sky-700' },
+  { id: 'settings',     label: 'تنظیمات',      icon: Settings,        gradient: 'from-slate-500 to-slate-700' },
 ];
+
+export const SECTIONS: SectionConfig[] = SECTION_META.map((m) => {
+  const tok = MODULE_COLOR_TOKENS[m.id];
+  return {
+    id: m.id,
+    label: m.label,
+    icon: m.icon,
+    color: tok.primary,
+    lightColor: tok.lightColor,
+    darkColor: tok.primaryDark,
+    surfaceTintStart: tok.surfaceTintStart,
+    surfaceTintEnd: tok.surfaceTintEnd,
+    surfaceBorder: tok.surfaceBorder,
+    orbSecondary: tok.orbSecondary,
+    gradient: m.gradient,
+    themeClass: `theme-${m.id}`,
+  };
+});
 
 export const getSection = (id: SectionId): SectionConfig =>
   SECTIONS.find((s) => s.id === id) ?? SECTIONS[0];

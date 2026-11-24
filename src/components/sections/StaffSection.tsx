@@ -955,16 +955,16 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
 
   return (
     <div className="space-y-3 animate-fade-in">
-      {/* Live 3-Mode Doctor Share & Manager Net Margin Calculator (TRC-MINA-GUARD-9007-G) */}
-      <div className="rounded-3xl p-4 bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 text-white border border-indigo-400/30 shadow-xl space-y-3">
+      {/* Live 3-Mode Doctor Share & Manager Net Margin Calculator (60-30-10 Daylight Standard) */}
+      <div className="rounded-3xl p-4 bg-white text-slate-900 border border-indigo-200 shadow-sm space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-2xl bg-indigo-500/25 border border-indigo-400/40 flex items-center justify-center text-indigo-300 shrink-0">
+            <div className="w-9 h-9 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shrink-0">
               <Calculator size={18} />
             </div>
             <div>
-              <h3 className="text-xs font-black text-white">ماشین‌حساب هوشمند ۳مدله سهم پزشکان</h3>
-              <p className="text-[10px] text-indigo-200/80">
+              <h3 className="text-xs font-black text-slate-900">ماشین‌حساب هوشمند ۳مدله سهم پزشکان</h3>
+              <p className="text-[10px] font-semibold text-slate-600">
                 نصف خالص پس از کسر لابراتوار • ثابت هر جراحی • درصدی • حالت مدیر کلینیک
               </p>
             </div>
@@ -975,8 +975,8 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
             onClick={() => setCalcIsManager(!calcIsManager)}
             className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black transition-all border ${
               calcIsManager
-                ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-lg'
-                : 'bg-white/10 text-indigo-100 border-white/15 hover:bg-white/15'
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                : 'bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200'
             }`}
           >
             {calcIsManager ? '✓ حالت دکتر مهدی امیری' : 'حالت مدیر کلینیک'}
@@ -1003,8 +1003,8 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
                 }}
                 className={`py-2 px-1.5 rounded-xl text-[10px] font-extrabold transition-all border ${
                   calcMode === opt.id
-                    ? 'bg-indigo-500 text-white border-indigo-300 shadow'
-                    : 'bg-white/5 text-indigo-200 border-white/10 hover:bg-white/10'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
                 {opt.label}
@@ -1015,51 +1015,51 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
 
         <div className="grid grid-cols-2 gap-2">
           <label className="block">
-            <span className="text-[10px] text-indigo-200 block mb-1">کل کارکرد (تومان)</span>
+            <span className="text-[10px] font-bold text-slate-700 block mb-1">کل کارکرد (تومان)</span>
             <input
               type="number"
               value={calcGross}
               onChange={(e) => setCalcGross(e.target.value)}
-              className="w-full rounded-xl bg-white/10 border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-indigo-400"
+              className="w-full rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs font-extrabold text-slate-900 outline-none focus:border-indigo-500 focus:bg-white"
             />
           </label>
           <label className="block">
-            <span className="text-[10px] text-indigo-200 block mb-1">کل هزینه لابراتوار (تومان)</span>
+            <span className="text-[10px] font-bold text-slate-700 block mb-1">کل هزینه لابراتوار (تومان)</span>
             <input
               type="number"
               value={calcLab}
               onChange={(e) => setCalcLab(e.target.value)}
-              className="w-full rounded-xl bg-white/10 border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-indigo-400"
+              className="w-full rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs font-extrabold text-slate-900 outline-none focus:border-indigo-500 focus:bg-white"
             />
           </label>
           <label className="block col-span-2">
-            <span className="text-[10px] text-cyan-200 block mb-1">هزینه فیکسچر ایمپلنت (۱۰۰٪ به عهده مطب — بدون کسر از سهم پزشک)</span>
+            <span className="text-[10px] font-bold text-cyan-800 block mb-1">هزینه فیکسچر ایمپلنت (۱۰۰٪ به عهده مطب — بدون کسر از سهم پزشک)</span>
             <input
               type="number"
               value={calcFixture}
               onChange={(e) => setCalcFixture(e.target.value)}
-              className="w-full rounded-xl bg-cyan-500/15 border border-cyan-400/30 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-cyan-300"
+              className="w-full rounded-xl bg-cyan-50/70 border border-cyan-300 px-2.5 py-1.5 text-xs font-extrabold text-slate-900 outline-none focus:border-cyan-500 focus:bg-white"
             />
           </label>
           {!calcIsManager && calcMode === 'fixed' && (
             <>
               <label className="block">
-                <span className="text-[10px] text-indigo-200 block mb-1">دستمزد ثابت هر درمان/جراحی</span>
+                <span className="text-[10px] font-bold text-slate-700 block mb-1">دستمزد ثابت هر درمان/جراحی</span>
                 <input
                   type="number"
                   value={calcValue}
                   onChange={(e) => setCalcValue(e.target.value)}
-                  className="w-full rounded-xl bg-white/10 border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-indigo-400"
+                  className="w-full rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs font-extrabold text-slate-900 outline-none focus:border-indigo-500 focus:bg-white"
                 />
               </label>
               <label className="block">
-                <span className="text-[10px] text-indigo-200 block mb-1">تعداد درمان/جراحی</span>
+                <span className="text-[10px] font-bold text-slate-700 block mb-1">تعداد درمان/جراحی</span>
                 <input
                   type="number"
                   min={1}
                   value={calcCount}
                   onChange={(e) => setCalcCount(e.target.value)}
-                  className="w-full rounded-xl bg-white/10 border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-indigo-400"
+                  className="w-full rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs font-extrabold text-slate-900 outline-none focus:border-indigo-500 focus:bg-white"
                 />
               </label>
             </>
@@ -1067,20 +1067,20 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
           {!calcIsManager && calcMode === 'percentage' && (
             <>
               <label className="block">
-                <span className="text-[10px] text-indigo-200 block mb-1">درصد سهم پزشک (٪)</span>
+                <span className="text-[10px] font-bold text-slate-700 block mb-1">درصد سهم پزشک (٪)</span>
                 <input
                   type="number"
                   min={0}
                   max={100}
                   value={calcValue}
                   onChange={(e) => setCalcValue(e.target.value)}
-                  className="w-full rounded-xl bg-white/10 border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-indigo-400"
+                  className="w-full rounded-xl bg-slate-50 border border-slate-300 px-2.5 py-1.5 text-xs font-extrabold text-slate-900 outline-none focus:border-indigo-500 focus:bg-white"
                 />
               </label>
               <button
                 type="button"
                 onClick={() => setCalcDeductLabInPct(!calcDeductLabInPct)}
-                className="self-end py-2 px-2.5 rounded-xl bg-white/10 border border-white/15 text-[10px] font-bold text-indigo-100 hover:bg-white/15"
+                className="self-end py-2 px-2.5 rounded-xl bg-slate-100 border border-slate-300 text-[10px] font-extrabold text-slate-800 hover:bg-slate-200"
               >
                 {calcDeductLabInPct ? '✓ پس از کسر لابراتوار' : 'روی کل کارکرد ناخالص'}
               </button>
@@ -1088,24 +1088,24 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10 text-center">
-          <div className="bg-white/5 rounded-2xl p-2 border border-white/10">
-            <span className="text-[9px] text-indigo-200 block">خالص پس از لابراتوار</span>
-            <span className="text-xs font-black text-sky-300 tabular-nums">
+        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 text-center">
+          <div className="bg-sky-50 rounded-2xl p-2 border border-sky-200">
+            <span className="text-[9.5px] font-bold text-sky-900 block">خالص پس از لابراتوار</span>
+            <span className="text-xs font-black text-sky-800 tabular-nums">
               {calcResult.netAfterLab.toLocaleString('fa-IR')} ت
             </span>
           </div>
-          <div className="bg-emerald-500/15 rounded-2xl p-2 border border-emerald-400/35">
-            <span className="text-[9px] text-emerald-200 block">
+          <div className="bg-emerald-50 rounded-2xl p-2 border border-emerald-200">
+            <span className="text-[9.5px] font-bold text-emerald-900 block">
               {calcIsManager ? 'سهم دکتر مهدی امیری' : 'سهم پزشک'}
             </span>
-            <span className="text-xs font-black text-emerald-300 tabular-nums" data-testid="share_calc_doctor_result">
+            <span className="text-xs font-black text-emerald-800 tabular-nums" data-testid="share_calc_doctor_result">
               {calcResult.doctorShare.toLocaleString('fa-IR')} ت
             </span>
           </div>
-          <div className="bg-purple-500/15 rounded-2xl p-2 border border-purple-400/35">
-            <span className="text-[9px] text-purple-200 block">سهم کلینیک</span>
-            <span className="text-xs font-black text-purple-200 tabular-nums">
+          <div className="bg-indigo-50 rounded-2xl p-2 border border-indigo-200">
+            <span className="text-[9.5px] font-bold text-indigo-900 block">سهم کلینیک</span>
+            <span className="text-xs font-black text-indigo-800 tabular-nums">
               {calcResult.clinicShare.toLocaleString('fa-IR')} ت
             </span>
           </div>

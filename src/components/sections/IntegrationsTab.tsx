@@ -318,22 +318,22 @@ export function IntegrationsTab() {
 
   return (
     <div className="space-y-3 animate-fade-in-up">
-      {/* Header Banner */}
-      <div className="p-4 rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white border border-white/10 shadow-xl space-y-2">
+      {/* Header Banner (60-30-10 Daylight Standard) */}
+      <div className="p-4 rounded-3xl bg-white text-slate-900 border border-slate-200/90 shadow-sm space-y-2.5">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/30">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-sm">
               <Database size={22} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-black text-slate-900 flex items-center gap-2 flex-wrap">
                 مرکز کلود SQL، گوگل درایو، گیت‌هاب و سرویس‌های کلینیک
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-mono">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-extrabold">
                   Cloud SQL + Drive Active • v{CURRENT_APP_VERSION}
                 </span>
               </h2>
-              <p className="text-xs text-slate-300">
-                مدیر کلینیک: <strong className="text-white">دکتر مهدی امیری</strong> (mehdi.amiri19851364@gmail.com)
+              <p className="text-xs text-slate-600 font-medium">
+                مدیر کلینیک: <strong className="text-slate-900">دکتر مهدی امیری</strong> (mehdi.amiri19851364@gmail.com)
               </p>
             </div>
           </div>
@@ -343,7 +343,7 @@ export function IntegrationsTab() {
             onClick={handleActivateAndSyncSqlDrive}
             disabled={syncingSqlDrive}
             data-testid="activate_sync_cloud_sql_btn"
-            className="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-md active:scale-95 transition-all disabled:opacity-60"
+            className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-all disabled:opacity-60"
           >
             <RefreshCw size={14} className={syncingSqlDrive ? 'animate-spin' : ''} />
             {syncingSqlDrive ? 'در حال همگام‌سازی...' : 'همگام‌سازی فوری کلود SQL و گوگل درایو'}
@@ -351,21 +351,21 @@ export function IntegrationsTab() {
         </div>
 
         {sqlDriveBanner && (
-          <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-xs font-bold flex items-center gap-2">
-            <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
+          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-2">
+            <CheckCircle2 size={15} className="text-emerald-700 shrink-0" />
             <span>{sqlDriveBanner}</span>
           </div>
         )}
 
         {/* Sub-tab Navigation */}
-        <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5 pt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5 pt-2 border-t border-slate-100">
           <button
             onClick={() => setActiveSubTab('sql')}
             data-testid="integrations_subtab_sql"
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-extrabold transition-all border ${
               activeSubTab === 'sql'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/30'
-                : 'bg-white/5 hover:bg-white/10 text-slate-300'
+                ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
             }`}
           >
             <Database size={14} />
@@ -375,10 +375,10 @@ export function IntegrationsTab() {
           <button
             onClick={() => setActiveSubTab('drive')}
             data-testid="integrations_subtab_drive"
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-extrabold transition-all border ${
               activeSubTab === 'drive'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/30'
-                : 'bg-white/5 hover:bg-white/10 text-slate-300'
+                ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
             }`}
           >
             <Cloud size={14} />
@@ -387,10 +387,10 @@ export function IntegrationsTab() {
 
           <button
             onClick={() => setActiveSubTab('github')}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-extrabold transition-all border ${
               activeSubTab === 'github'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30'
-                : 'bg-white/5 hover:bg-white/10 text-slate-300'
+                ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
             }`}
           >
             <Github size={14} />
@@ -399,10 +399,10 @@ export function IntegrationsTab() {
 
           <button
             onClick={() => setActiveSubTab('sms')}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-extrabold transition-all border ${
               activeSubTab === 'sms'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30'
-                : 'bg-white/5 hover:bg-white/10 text-slate-300'
+                ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
             }`}
           >
             <MessageSquare size={14} />
@@ -411,10 +411,10 @@ export function IntegrationsTab() {
 
           <button
             onClick={() => setActiveSubTab('calendar')}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-extrabold transition-all border ${
               activeSubTab === 'calendar'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30'
-                : 'bg-white/5 hover:bg-white/10 text-slate-300'
+                ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
             }`}
           >
             <Calendar size={14} />
@@ -423,10 +423,10 @@ export function IntegrationsTab() {
 
           <button
             onClick={() => setActiveSubTab('pos')}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-extrabold transition-all border ${
               activeSubTab === 'pos'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30'
-                : 'bg-white/5 hover:bg-white/10 text-slate-300'
+                ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
             }`}
           >
             <CreditCard size={14} />

@@ -16,6 +16,7 @@ import { todayGregorian, toJalaliStr } from '@/lib/jalali';
 import { QBankTile } from '@/components/ui/QBankTile';
 import { playTactileFeedback } from '@/lib/hapticsAudio';
 import { MemPalace } from '@/lib/memPalace';
+import { getModuleToken } from '@/lib/designTokens';
 
 type Props = {
   onNavigate: (id: SectionId) => void;
@@ -186,16 +187,15 @@ export function Dashboard({ onNavigate }: Props) {
   return (
     <div className="space-y-3 pb-36 animate-fade-in-up" data-testid="global_benchmark_dashboard">
 
-      {/* ── 1. QBank Executive Command Matrix + Global Dental KPIs + Morning Huddle ── */}
+      {/* ── 1. QBank Executive Command Matrix + Global Dental KPIs (60-30-10 Daylight Standard) ── */}
       <div
-        className="rounded-[26px] p-4"
+        className="rounded-[26px] p-4 bg-white border border-slate-200/95 shadow-sm"
         style={{
-          background: 'linear-gradient(145deg, #1E1B4B 0%, #2E1065 52%, #0F172A 100%)',
-          boxShadow: '0 14px 34px rgba(30, 27, 75, 0.25)',
+          background: 'linear-gradient(160deg, #FFFFFF 0%, #F4F7FF 62%, #EBF1FF 100%)',
         }}
       >
         {/* Top Row: Live Net Treasury & Quick Financial Pulse */}
-        <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-white/15">
+        <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200/80">
           <div
             onClick={() => {
               playTactileFeedback('tap');
@@ -203,18 +203,18 @@ export function Dashboard({ onNavigate }: Props) {
             }}
             className="flex items-center gap-2.5 cursor-pointer"
           >
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-500 flex items-center justify-center shadow-lg shrink-0">
-              <Wallet size={20} className="text-white" />
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shadow-sm shrink-0">
+              <Wallet size={20} className="text-emerald-700" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-extrabold text-emerald-300">درآمد امروز مطب</span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 font-bold">
+                <span className="text-[10.5px] font-extrabold text-emerald-800">درآمد امروز مطب</span>
+                <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
                   {isSyncingInitial ? 'همگام‌سازی...' : 'زنده • ' + toJalaliStr(today)}
                 </span>
               </div>
-              <p className="text-lg font-black text-white tracking-tight leading-tight tabular-nums">
-                {fmt(s.todayIncome)} <span className="text-[10px] font-normal text-purple-200/80">تومان</span>
+              <p className="text-lg font-black text-slate-900 tracking-tight leading-tight tabular-nums">
+                {fmt(s.todayIncome)} <span className="text-[10px] font-bold text-slate-500">تومان</span>
               </p>
             </div>
           </div>
@@ -225,22 +225,22 @@ export function Dashboard({ onNavigate }: Props) {
                 playTactileFeedback('tap');
                 onNavigate('finance');
               }}
-              className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-right transition-all"
+              className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-right transition-all shadow-sm"
             >
-              <p className="text-[9px] text-sky-200/80 font-bold flex items-center gap-1">
-                <TrendingUp size={10} className="text-emerald-400" /> دریافتی ماه
+              <p className="text-[9.5px] text-slate-600 font-bold flex items-center gap-1">
+                <TrendingUp size={10} className="text-emerald-600" /> دریافتی ماه
               </p>
-              <p className="text-xs font-black text-white tabular-nums">{fmt(s.monthIncome)}</p>
+              <p className="text-xs font-black text-slate-900 tabular-nums">{fmt(s.monthIncome)}</p>
             </button>
             <button
               onClick={() => {
                 playTactileFeedback('tap');
                 onNavigate('finance');
               }}
-              className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-right transition-all"
+              className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-right transition-all shadow-sm"
             >
-              <p className="text-[9px] text-pink-200/80 font-bold">سود خالص</p>
-              <p className={`text-xs font-black tabular-nums ${s.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              <p className="text-[9.5px] text-slate-600 font-bold">سود خالص</p>
+              <p className={`text-xs font-black tabular-nums ${s.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                 {fmt(s.netProfit)}
               </p>
             </button>
@@ -249,7 +249,7 @@ export function Dashboard({ onNavigate }: Props) {
 
         {/* Global Executive KPI Telemetry Strip (CareStack / Curve Dental / Dentally Standard) */}
         <div
-          className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 py-2.5 border-b border-white/15"
+          className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 py-2.5 border-b border-slate-200/80"
           data-testid="dashboard_global_kpi_strip"
         >
           {/* KPI 1: Production vs Collection Ratio */}
@@ -260,17 +260,17 @@ export function Dashboard({ onNavigate }: Props) {
               onNavigate('finance');
             }}
             data-testid="kpi_pc_ratio"
-            className="rounded-2xl px-2.5 py-2 bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 text-right transition-all"
+            className="rounded-2xl px-2.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-right transition-all shadow-sm"
           >
             <div className="flex items-center justify-between">
-              <span className="text-[9.5px] font-bold text-slate-300">نسبت وصول به کارکرد</span>
-              <span className={`text-xs font-black tabular-nums ${s.pcRatio >= 80 ? 'text-emerald-300' : 'text-amber-300'}`}>
+              <span className="text-[9.5px] font-bold text-slate-600">نسبت وصول به کارکرد</span>
+              <span className={`text-xs font-black tabular-nums ${s.pcRatio >= 80 ? 'text-emerald-700' : 'text-amber-700'}`}>
                 ٪{fmt(s.pcRatio)}
               </span>
             </div>
-            <div className="w-full h-1.5 rounded-full bg-white/10 mt-1.5 overflow-hidden">
+            <div className="w-full h-1.5 rounded-full bg-slate-100 mt-1.5 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300"
+                className="h-full rounded-full bg-emerald-600"
                 style={{ width: `${Math.max(12, s.pcRatio)}%` }}
               />
             </div>
@@ -284,15 +284,15 @@ export function Dashboard({ onNavigate }: Props) {
               onNavigate('treatments');
             }}
             data-testid="kpi_case_acceptance"
-            className="rounded-2xl px-2.5 py-2 bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 text-right transition-all"
+            className="rounded-2xl px-2.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-right transition-all shadow-sm"
           >
             <div className="flex items-center justify-between">
-              <span className="text-[9.5px] font-bold text-slate-300">پذیرش طرح درمان</span>
-              <span className="text-xs font-black text-violet-300 tabular-nums">
+              <span className="text-[9.5px] font-bold text-slate-600">پذیرش طرح درمان</span>
+              <span className="text-xs font-black text-violet-700 tabular-nums">
                 ٪{fmt(s.caseAcceptancePct)}
               </span>
             </div>
-            <p className="text-[9px] text-violet-200/80 font-bold mt-1 truncate">
+            <p className="text-[9.5px] text-slate-600 font-semibold mt-1 truncate">
               {s.plannedTreatCount > 0
                 ? `${fmt(s.plannedTreatCount)} طرح منتظر تایید بیمار`
                 : 'تمام طرح‌های درمان فعال‌اند'}
@@ -307,15 +307,15 @@ export function Dashboard({ onNavigate }: Props) {
               onNavigate('appointments');
             }}
             data-testid="kpi_chair_utilization"
-            className="rounded-2xl px-2.5 py-2 bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 text-right transition-all"
+            className="rounded-2xl px-2.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-right transition-all shadow-sm"
           >
             <div className="flex items-center justify-between">
-              <span className="text-[9.5px] font-bold text-slate-300">بهره‌وری یونیت امروز</span>
-              <span className="text-xs font-black text-cyan-300 tabular-nums">
+              <span className="text-[9.5px] font-bold text-slate-600">بهره‌وری یونیت امروز</span>
+              <span className="text-xs font-black text-cyan-800 tabular-nums">
                 ٪{fmt(s.chairUtilizationPct)}
               </span>
             </div>
-            <p className="text-[9px] text-cyan-200/80 font-bold mt-1 truncate">
+            <p className="text-[9.5px] text-slate-600 font-semibold mt-1 truncate">
               {fmt(s.confirmedAppts)} نوبت تاییدشده • {fmt(s.openTomorrowSlots)} ظرفیت فردا
             </p>
           </button>
@@ -328,15 +328,15 @@ export function Dashboard({ onNavigate }: Props) {
               onNavigate('finance');
             }}
             data-testid="kpi_ar_status"
-            className="rounded-2xl px-2.5 py-2 bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 text-right transition-all"
+            className="rounded-2xl px-2.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-right transition-all shadow-sm"
           >
             <div className="flex items-center justify-between">
-              <span className="text-[9.5px] font-bold text-slate-300">سررسید چک و اقساط</span>
-              <span className={`text-xs font-black tabular-nums ${s.totalOverdueFin > 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+              <span className="text-[9.5px] font-bold text-slate-600">سررسید چک و اقساط</span>
+              <span className={`text-xs font-black tabular-nums ${s.totalOverdueFin > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
                 {fmt(s.totalOverdueFin)} مورد
               </span>
             </div>
-            <p className="text-[9px] text-emerald-200/80 font-bold mt-1 truncate">
+            <p className="text-[9.5px] text-slate-600 font-semibold mt-1 truncate">
               {s.totalOverdueFin > 0
                 ? `${fmt(s.overdueChecks)} چک • ${fmt(s.overdueInstallments)} قسط معوق`
                 : 'بدون چک یا قسط معوق'}
@@ -344,117 +344,61 @@ export function Dashboard({ onNavigate }: Props) {
           </button>
         </div>
 
-        {/* Bottom 6-Pill Multi-Color Vital Operations Bar (نوبت، درمان، لابراتوار، ایمپلنت، چک/اقساط، یادآوری) */}
+        {/* Bottom 6-Pill Multi-Color Vital Operations Bar (Calibrated Pastel Tints & AAA Text) */}
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-2.5">
-          <button
-            onClick={() => {
-              playTactileFeedback('tap');
-              onNavigate('appointments');
-            }}
-            className="rounded-2xl p-2 text-right transition-transform active:translate-y-0.5"
-            style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.28), rgba(217,119,6,0.18))', border: '1px solid rgba(251,191,36,0.35)' }}
-          >
-            <div className="flex items-center justify-between">
-              <CalendarDays size={13} className="text-amber-300" />
-              <span className="text-xs font-black text-white tabular-nums">{fmt(s.todayAppts)}</span>
-            </div>
-            <p className="text-[9.5px] font-extrabold text-amber-200 mt-1 truncate">نوبت امروز</p>
-          </button>
-
-          <button
-            onClick={() => {
-              playTactileFeedback('tap');
-              onNavigate('treatments');
-            }}
-            className="rounded-2xl p-2 text-right transition-transform active:translate-y-0.5"
-            style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.30), rgba(109,40,217,0.18))', border: '1px solid rgba(167,139,250,0.35)' }}
-          >
-            <div className="flex items-center justify-between">
-              <Stethoscope size={13} className="text-violet-300" />
-              <span className="text-xs font-black text-white tabular-nums">{fmt(s.activeTreat)}</span>
-            </div>
-            <p className="text-[9.5px] font-extrabold text-violet-200 mt-1 truncate">درمان فعال</p>
-          </button>
-
-          <button
-            onClick={() => {
-              playTactileFeedback('tap');
-              onNavigate('lab');
-            }}
-            className="rounded-2xl p-2 text-right transition-transform active:translate-y-0.5"
-            style={{ background: 'linear-gradient(135deg, rgba(236,72,153,0.30), rgba(190,24,93,0.18))', border: '1px solid rgba(244,114,182,0.35)' }}
-          >
-            <div className="flex items-center justify-between">
-              <FlaskConical size={13} className="text-pink-300" />
-              <span className="text-xs font-black text-white tabular-nums">{fmt(s.pendingLab)}</span>
-            </div>
-            <p className="text-[9.5px] font-extrabold text-pink-200 mt-1 truncate">کار لابراتوار</p>
-          </button>
-
-          <button
-            onClick={() => {
-              playTactileFeedback('tap');
-              onNavigate('implants');
-            }}
-            className="rounded-2xl p-2 text-right transition-transform active:translate-y-0.5"
-            style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.30), rgba(14,116,144,0.18))', border: '1px solid rgba(34,211,238,0.35)' }}
-          >
-            <div className="flex items-center justify-between">
-              <Anchor size={13} className="text-cyan-300" />
-              <span className="text-xs font-black text-white tabular-nums">{fmt(s.activeImp)}</span>
-            </div>
-            <p className="text-[9.5px] font-extrabold text-cyan-200 mt-1 truncate">مراحل ایمپلنت</p>
-          </button>
-
-          <button
-            onClick={() => {
-              playTactileFeedback('tap');
-              onNavigate('finance');
-            }}
-            className="rounded-2xl p-2 text-right transition-transform active:translate-y-0.5"
-            style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.30), rgba(4,120,87,0.18))', border: '1px solid rgba(52,211,153,0.35)' }}
-          >
-            <div className="flex items-center justify-between">
-              <CreditCard size={13} className="text-emerald-300" />
-              <span className="text-xs font-black text-white tabular-nums">{fmt(s.totalOverdueFin)}</span>
-            </div>
-            <p className="text-[9.5px] font-extrabold text-emerald-200 mt-1 truncate">چک و اقساط</p>
-          </button>
-
-          <button
-            onClick={() => {
-              playTactileFeedback('tap');
-              onNavigate('reminders');
-            }}
-            className="rounded-2xl p-2 text-right transition-transform active:translate-y-0.5"
-            style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.30), rgba(185,28,28,0.18))', border: '1px solid rgba(248,113,113,0.35)' }}
-          >
-            <div className="flex items-center justify-between">
-              <BellRing size={13} className="text-rose-300" />
-              <span className="text-xs font-black text-white tabular-nums">{fmt(s.pendingRem)}</span>
-            </div>
-            <p className="text-[9.5px] font-extrabold text-rose-200 mt-1 truncate">یادآوری مهم</p>
-          </button>
+          {([
+            { id: 'appointments' as const, label: 'نوبت امروز',    val: s.todayAppts,      Icon: CalendarDays },
+            { id: 'treatments' as const,   label: 'درمان فعال',     val: s.activeTreat,     Icon: Stethoscope },
+            { id: 'lab' as const,          label: 'کار لابراتوار',  val: s.pendingLab,      Icon: FlaskConical },
+            { id: 'implants' as const,     label: 'مراحل ایمپلنت',  val: s.activeImp,       Icon: Anchor },
+            { id: 'finance' as const,      label: 'چک و اقساط',     val: s.totalOverdueFin, Icon: CreditCard },
+            { id: 'reminders' as const,    label: 'یادآوری مهم',    val: s.pendingRem,      Icon: BellRing },
+          ]).map((pill) => {
+            const tok = getModuleToken(pill.id);
+            const PIcon = pill.Icon;
+            return (
+              <button
+                key={pill.id}
+                onClick={() => {
+                  playTactileFeedback('tap');
+                  onNavigate(pill.id);
+                }}
+                className="rounded-2xl p-2 text-right transition-transform active:translate-y-0.5 shadow-sm"
+                style={{
+                  background: `linear-gradient(135deg, ${tok.surfaceTintStart}, ${tok.surfaceTintEnd})`,
+                  border: `1px solid ${tok.surfaceBorder}`,
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <PIcon size={13} style={{ color: tok.primary }} />
+                  <span className="text-xs font-black text-slate-900 tabular-nums">{fmt(pill.val)}</span>
+                </div>
+                <p className="text-[9.5px] font-extrabold mt-1 truncate" style={{ color: tok.primaryDark }}>
+                  {pill.label}
+                </p>
+              </button>
+            );
+          })}
         </div>
 
         {/* Daily Production Goal + 1-Click Zero-Loss iOS 27 Live Activity Reminder Popup Trigger */}
         <div
-          className="mt-2.5 pt-2.5 border-t border-white/15 flex flex-wrap items-center justify-between gap-2"
+          className="mt-2.5 pt-2.5 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2"
           data-testid="dashboard_zero_loss_reminder_command"
         >
           <div className="flex items-center gap-2 min-w-[180px] flex-1" data-testid="dashboard_daily_goal_bar">
-            <span className="text-[9.5px] font-extrabold text-indigo-200 whitespace-nowrap">
+            <span className="text-[9.5px] font-extrabold text-slate-700 whitespace-nowrap">
               هدف کارکرد روزانه (CareStack KPI):
             </span>
-            <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden max-w-[180px]">
+            <div className="flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden max-w-[180px]">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-emerald-400 to-teal-300"
+                className="h-full rounded-full bg-indigo-600"
                 style={{
                   width: `${Math.min(100, Math.max(18, Math.round(((s.todayIncome || 15000000) / 35000000) * 100)))}%`,
                 }}
               />
             </div>
-            <span className="text-[9.5px] font-black text-emerald-300 tabular-nums">
+            <span className="text-[9.5px] font-black text-emerald-700 tabular-nums">
               ٪{fmt(Math.min(100, Math.max(18, Math.round(((s.todayIncome || 15000000) / 35000000) * 100))))}
             </span>
           </div>
@@ -468,141 +412,167 @@ export function Dashboard({ onNavigate }: Props) {
                 window.dispatchEvent(new CustomEvent('minadental-trigger-ios-reminder-popup'));
               }
             }}
-            className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-500/90 to-indigo-600/90 hover:from-rose-500 hover:to-indigo-600 text-white text-[10px] font-extrabold flex items-center gap-1.5 border border-white/20 shadow-md active:scale-95 transition-all"
+            className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-extrabold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
           >
-            <Smartphone size={12} className="text-amber-200" />
+            <Smartphone size={12} className="text-rose-100" />
             <span>پاپ‌آپ یادآوری زنده آیفونی + اعلان گوشی ({fmt(s.pendingRem + s.totalOverdueFin + s.lowStock)})</span>
           </button>
         </div>
       </div>
 
-      {/* ── 2. Authentic QBank Curved-Notch Module Grid (60-30-10 Calm Unique Pastel Tints) ── */}
+      {/* ── 2. Authentic QBank Curved-Notch Module Grid (60-30-10 Calibrated Pastel Surfaces + Colored Spring Chevrons) ── */}
       <div className="bento gap-2.5">
-        {/* 1. Patients - Calm Emerald Pastel */}
-        <QBankTile
-          color="#059669"
-          surfaceBg="#FFFFFF"
-          surfaceBgEnd="#ECFDF5"
-          icon={<Users size={20} strokeWidth={2.3} />}
-          label="بیماران"
-          value={s.totalPatients}
-          sub="پرونده فعال و ثبت‌شده"
-          testId="dashboard_tile_patients"
-          onClick={() => onNavigate('patients')}
-        />
-        {/* 2. Today Appts - Calm Amber Pastel */}
-        <QBankTile
-          color="#D97706"
-          surfaceBg="#FFFFFF"
-          surfaceBgEnd="#FFFBEB"
-          icon={<CalendarDays size={20} strokeWidth={2.3} />}
-          label="نوبت امروز"
-          value={s.todayAppts}
-          sub={`${fmt(s.completedToday)} تکمیل‌شده`}
-          testId="dashboard_tile_appointments"
-          onClick={() => onNavigate('appointments')}
-        />
-        {/* 3. Active Treatments - Calm Violet Pastel */}
-        <QBankTile
-          color="#7C3AED"
-          surfaceBg="#FFFFFF"
-          surfaceBgEnd="#F5F3FF"
-          icon={<Stethoscope size={20} strokeWidth={2.3} />}
-          label="درمان و چارت پالمر"
-          value={s.activeTreat}
-          sub="طرح درمان در جریان"
-          testId="dashboard_tile_treatments"
-          onClick={() => onNavigate('treatments')}
-        />
-        {/* 4. Lab - Calm Rose-Pink Pastel */}
-        <QBankTile
-          color="#DB2777"
-          surfaceBg="#FFFFFF"
-          surfaceBgEnd="#FDF2F8"
-          icon={<FlaskConical size={20} strokeWidth={2.3} />}
-          label="لابراتوار رفت‌وبرگشت"
-          value={s.pendingLab}
-          sub="در انتظار تحویل"
-          testId="dashboard_tile_lab"
-          onClick={() => onNavigate('lab')}
-        />
-        {/* 5. Implants - Calm Cyan Pastel */}
-        <QBankTile
-          color="#0891B2"
-          surfaceBg="#FFFFFF"
-          surfaceBgEnd="#ECFEFF"
-          icon={<Anchor size={20} strokeWidth={2.3} />}
-          label="مراحل ایمپلنت"
-          value={s.activeImp}
-          sub="جراحی تا تحویل روکش"
-          testId="dashboard_tile_implants"
-          onClick={() => onNavigate('implants')}
-        />
-        {/* 6. Inventory Alerts - Calm Orange Pastel */}
-        <QBankTile
-          color="#EA580C"
-          surfaceBg="#FFFFFF"
-          surfaceBgEnd="#FFF7ED"
-          icon={<Package size={20} strokeWidth={2.3} />}
-          label="انبار و آلارم کمبود"
-          value={s.lowStock}
-          sub="کالای زیر حد نصاب"
-          alert={s.lowStock > 0}
-          testId="dashboard_tile_inventory"
-          onClick={() => onNavigate('inventory')}
-        />
-        {/* 7. Reminders - Calm Coral-Red Pastel */}
-        <QBankTile
-          color="#E11D48"
-          surfaceBg="#FFFFFF"
-          surfaceBgEnd="#FFF1F2"
-          icon={<BellRing size={20} strokeWidth={2.3} />}
-          label="رادار یادآوری"
-          value={s.pendingRem}
-          sub={s.overdueRem > 0 ? `${fmt(s.overdueRem)} مورد سررسید گذشته` : 'پیگیری هوشمند'}
-          alert={s.overdueRem > 0}
-          testId="dashboard_tile_reminders"
-          onClick={() => onNavigate('reminders')}
-        />
-        {/* 8. Doctor Monthly Share (Work-Only) - Calm Royal Indigo Pastel */}
-        <QBankTile
-          color="#4F46E5"
-          surfaceBg="#FFFFFF"
-          surfaceBgEnd="#EEF2FF"
-          icon={<UserCog size={20} strokeWidth={2.3} />}
-          label="سهم و کارکرد پزشک"
-          value={s.doctorMonthCost}
-          sub="کارکرد منهای لابراتوار ÷ ۲"
-          testId="dashboard_tile_staff"
-          onClick={() => onNavigate('staff')}
-        />
-        {/* 9. Perpetual Persian Calendar - Calm Fuchsia Pastel */}
-        <QBankTile
-          color="#C026D3"
-          surfaceBg="#FFFFFF"
-          surfaceBgEnd="#FDF4FF"
-          icon={<CalendarDays size={20} strokeWidth={2.3} />}
-          label="تقویم جامع ایرانی"
-          value={s.todayAppts + s.pendingRem}
-          sub="شمسی • قمری • میلادی"
-          testId="dashboard_tile_calendar"
-          onClick={() => onNavigate('calendar')}
-        />
-        {/* 10. AI Clinical Assistant - Calm Sky Pastel */}
-        <QBankTile
-          color="#0284C7"
-          surfaceBg="#FFFFFF"
-          surfaceBgEnd="#F0F9FF"
-          icon={<Sparkles size={20} strokeWidth={2.3} />}
-          label="دستیار بالینی هوشمند"
-          badge="تحلیلگر"
-          sub="تحلیل پرونده و طرح درمان"
-          testId="dashboard_tile_ai"
-          onClick={() => {
-            playTactileFeedback('tap');
-            onNavigate('treatments');
-          }}
-        />
+        {(() => {
+          const tPat = getModuleToken('patients');
+          const tApt = getModuleToken('appointments');
+          const tTrt = getModuleToken('treatments');
+          const tLab = getModuleToken('lab');
+          const tImp = getModuleToken('implants');
+          const tInv = getModuleToken('inventory');
+          const tRem = getModuleToken('reminders');
+          const tStf = getModuleToken('staff');
+          const tCal = getModuleToken('calendar');
+          const tMsg = getModuleToken('messages');
+          return (
+            <>
+              <QBankTile
+                color={tPat.primary}
+                darkColor={tPat.primaryDark}
+                surfaceBg={tPat.surfaceTintStart}
+                surfaceBgEnd={tPat.surfaceTintEnd}
+                borderColor={tPat.surfaceBorder}
+                icon={<Users size={20} strokeWidth={2.3} />}
+                label="بیماران"
+                value={s.totalPatients}
+                sub="پرونده فعال و ثبت‌شده"
+                testId="dashboard_tile_patients"
+                onClick={() => onNavigate('patients')}
+              />
+              <QBankTile
+                color={tApt.primary}
+                darkColor={tApt.primaryDark}
+                surfaceBg={tApt.surfaceTintStart}
+                surfaceBgEnd={tApt.surfaceTintEnd}
+                borderColor={tApt.surfaceBorder}
+                icon={<CalendarDays size={20} strokeWidth={2.3} />}
+                label="نوبت امروز"
+                value={s.todayAppts}
+                sub={`${fmt(s.completedToday)} تکمیل‌شده`}
+                testId="dashboard_tile_appointments"
+                onClick={() => onNavigate('appointments')}
+              />
+              <QBankTile
+                color={tTrt.primary}
+                darkColor={tTrt.primaryDark}
+                surfaceBg={tTrt.surfaceTintStart}
+                surfaceBgEnd={tTrt.surfaceTintEnd}
+                borderColor={tTrt.surfaceBorder}
+                icon={<Stethoscope size={20} strokeWidth={2.3} />}
+                label="درمان و چارت پالمر"
+                value={s.activeTreat}
+                sub="طرح درمان در جریان"
+                testId="dashboard_tile_treatments"
+                onClick={() => onNavigate('treatments')}
+              />
+              <QBankTile
+                color={tLab.primary}
+                darkColor={tLab.primaryDark}
+                surfaceBg={tLab.surfaceTintStart}
+                surfaceBgEnd={tLab.surfaceTintEnd}
+                borderColor={tLab.surfaceBorder}
+                icon={<FlaskConical size={20} strokeWidth={2.3} />}
+                label="لابراتوار رفت‌وبرگشت"
+                value={s.pendingLab}
+                sub="در انتظار تحویل"
+                testId="dashboard_tile_lab"
+                onClick={() => onNavigate('lab')}
+              />
+              <QBankTile
+                color={tImp.primary}
+                darkColor={tImp.primaryDark}
+                surfaceBg={tImp.surfaceTintStart}
+                surfaceBgEnd={tImp.surfaceTintEnd}
+                borderColor={tImp.surfaceBorder}
+                icon={<Anchor size={20} strokeWidth={2.3} />}
+                label="مراحل ایمپلنت"
+                value={s.activeImp}
+                sub="جراحی تا تحویل روکش"
+                testId="dashboard_tile_implants"
+                onClick={() => onNavigate('implants')}
+              />
+              <QBankTile
+                color={tInv.primary}
+                darkColor={tInv.primaryDark}
+                surfaceBg={tInv.surfaceTintStart}
+                surfaceBgEnd={tInv.surfaceTintEnd}
+                borderColor={tInv.surfaceBorder}
+                icon={<Package size={20} strokeWidth={2.3} />}
+                label="انبار و آلارم کمبود"
+                value={s.lowStock}
+                sub="کالای زیر حد نصاب"
+                alert={s.lowStock > 0}
+                testId="dashboard_tile_inventory"
+                onClick={() => onNavigate('inventory')}
+              />
+              <QBankTile
+                color={tRem.primary}
+                darkColor={tRem.primaryDark}
+                surfaceBg={tRem.surfaceTintStart}
+                surfaceBgEnd={tRem.surfaceTintEnd}
+                borderColor={tRem.surfaceBorder}
+                icon={<BellRing size={20} strokeWidth={2.3} />}
+                label="رادار یادآوری"
+                value={s.pendingRem}
+                sub={s.overdueRem > 0 ? `${fmt(s.overdueRem)} مورد سررسید گذشته` : 'پیگیری هوشمند'}
+                alert={s.overdueRem > 0}
+                testId="dashboard_tile_reminders"
+                onClick={() => onNavigate('reminders')}
+              />
+              <QBankTile
+                color={tStf.primary}
+                darkColor={tStf.primaryDark}
+                surfaceBg={tStf.surfaceTintStart}
+                surfaceBgEnd={tStf.surfaceTintEnd}
+                borderColor={tStf.surfaceBorder}
+                icon={<UserCog size={20} strokeWidth={2.3} />}
+                label="سهم و کارکرد پزشک"
+                value={s.doctorMonthCost}
+                sub="کارکرد منهای لابراتوار ÷ ۲"
+                testId="dashboard_tile_staff"
+                onClick={() => onNavigate('staff')}
+              />
+              <QBankTile
+                color={tCal.primary}
+                darkColor={tCal.primaryDark}
+                surfaceBg={tCal.surfaceTintStart}
+                surfaceBgEnd={tCal.surfaceTintEnd}
+                borderColor={tCal.surfaceBorder}
+                icon={<CalendarDays size={20} strokeWidth={2.3} />}
+                label="تقویم جامع ایرانی"
+                value={s.todayAppts + s.pendingRem}
+                sub="شمسی • قمری • میلادی"
+                testId="dashboard_tile_calendar"
+                onClick={() => onNavigate('calendar')}
+              />
+              <QBankTile
+                color={tMsg.primary}
+                darkColor={tMsg.primaryDark}
+                surfaceBg={tMsg.surfaceTintStart}
+                surfaceBgEnd={tMsg.surfaceTintEnd}
+                borderColor={tMsg.surfaceBorder}
+                icon={<Sparkles size={20} strokeWidth={2.3} />}
+                label="دستیار بالینی هوشمند"
+                badge="تحلیلگر"
+                sub="تحلیل پرونده و طرح درمان"
+                testId="dashboard_tile_ai"
+                onClick={() => {
+                  playTactileFeedback('tap');
+                  onNavigate('treatments');
+                }}
+              />
+            </>
+          );
+        })()}
       </div>
 
       {/* ── 3. Global Standard Morning Huddle ("دیروز • امروز • فردا") Action Panel ── */}
@@ -886,14 +856,14 @@ export function Dashboard({ onNavigate }: Props) {
           return (
             <div
               data-testid="dashboard_active_ui_libs_strip"
-              className="rounded-2xl bg-gradient-to-r from-indigo-950 via-violet-950 to-slate-900 p-2.5 text-white border border-violet-400/30 space-y-1.5"
+              className="rounded-2xl bg-gradient-to-l from-indigo-50 via-white to-violet-50 p-3 text-slate-900 border border-indigo-200 space-y-2 shadow-sm"
             >
               <div className="flex items-center justify-between flex-wrap gap-1.5">
-                <span className="text-[10.5px] font-black text-amber-300 flex items-center gap-1.5">
-                  <Sparkles size={13} />
+                <span className="text-[10.5px] font-black text-indigo-900 flex items-center gap-1.5">
+                  <Sparkles size={13} className="text-indigo-600" />
                   موتور همزمان ۸ کتابخانه UI و ۷ اسکیل پروژه (فعال روی تمام ۱۳ ماژول)
                 </span>
-                <span className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+                <span className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
                   {fmt(uiSummary.totalLibraries)} کتابخانه + {fmt(uiSummary.totalSkills)} اسکیل فعال
                 </span>
               </div>
@@ -901,7 +871,7 @@ export function Dashboard({ onNavigate }: Props) {
                 {uiSummary.libraries.map((lib) => (
                   <span
                     key={lib.id}
-                    className="skiper-ui-pill smooth-ui-spring px-2 py-0.5 rounded-lg text-[9.5px] font-extrabold text-violet-100 whitespace-nowrap shrink-0"
+                    className="skiper-ui-pill smooth-ui-spring px-2.5 py-0.5 rounded-lg text-[9.5px] font-extrabold whitespace-nowrap shrink-0"
                   >
                     ✓ {lib.name.split(' ')[0]} {lib.name.split(' ')[1] || ''}
                   </span>

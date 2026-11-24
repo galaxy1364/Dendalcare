@@ -875,9 +875,9 @@ function App() {
       <header className={`fixed top-0 left-0 right-0 md:right-20 lg:right-64 z-30 px-2 md:px-4 pt-2 safe-top transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}>
         <div className="max-w-xl md:max-w-5xl xl:max-w-6xl mx-auto">
           <div
-            className="glass-dark rounded-[22px] px-3.5 py-2 flex items-center justify-between"
+            className="rounded-[22px] px-3.5 py-2 flex items-center justify-between bg-white border border-slate-200/95 text-slate-900"
             style={{
-              boxShadow: '0 8px 28px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.10)',
+              boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08), inset 0 1px 0 #FFFFFF',
             }}
           >
             {/* Right Side (RTL Start): Mascot Logo + Brand Name + Active User */}
@@ -894,18 +894,18 @@ function App() {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h1 className="text-sm font-black text-white leading-tight truncate">
+                  <h1 className="text-sm font-black text-slate-900 leading-tight truncate">
                     <span className="md:hidden">مینادنتال</span>
                     <span className="hidden md:inline">{section.label}</span>
                   </h1>
                   <span
-                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-md text-white truncate max-w-[130px]"
-                    style={{ background: `${currentUser?.avatarColor || '#8B5CF6'}CC` }}
+                    className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-md text-white truncate max-w-[130px] shadow-sm"
+                    style={{ background: section.color }}
                   >
                     {currentUser?.fullName || currentUser?.name || 'دکتر مهدی امیری'}
                   </span>
                 </div>
-                <p className="text-[10px] text-purple-200/75 leading-tight truncate">
+                <p className="text-[10px] font-semibold text-slate-600 leading-tight truncate">
                   {platformInfo.labelFa} • {onlinePeersCount.toLocaleString('fa-IR')} دستگاه آنلاین • سینک زنده
                 </p>
               </div>
@@ -915,7 +915,7 @@ function App() {
             <div className="flex items-center gap-1.5 shrink-0">
               {/* 1. User Account, Username/Password & Role Switcher */}
               <button
-                className="topbar-btn relative bg-white/10 hover:bg-white/15 border border-white/15"
+                className="topbar-btn relative bg-slate-100 hover:bg-slate-200/80 border border-slate-200"
                 onClick={() => {
                   playTactileFeedback('tap');
                   setUserModalOpen(true);
@@ -924,16 +924,16 @@ function App() {
                 title={`${currentUser?.fullName || 'دکتر مهدی امیری'} (${ROLE_LABELS[currentUser?.role || 'manager']})`}
                 data-testid="topbar_user_avatar_button"
               >
-                <User size={18} className="text-purple-200" />
+                <User size={18} className="text-indigo-700" />
                 <span
-                  className="absolute bottom-1 right-1 w-2 h-2 rounded-full border border-slate-900"
-                  style={{ background: currentUser?.avatarColor || '#8B5CF6' }}
+                  className="absolute bottom-1 right-1 w-2 h-2 rounded-full border border-white"
+                  style={{ background: currentUser?.avatarColor || '#4F46E5' }}
                 />
               </button>
 
               {/* 2. Project Folder (Houses Caller-ID, PWA Install, 8-Phase Super-Audit, Sync & iOS Haptics) */}
               <button
-                className="topbar-btn relative bg-white/10 hover:bg-white/15 border border-white/15"
+                className="topbar-btn relative bg-amber-50 hover:bg-amber-100 border border-amber-200"
                 onClick={() => {
                   playTactileFeedback('tap');
                   setProjectFolderOpen(true);
@@ -942,24 +942,24 @@ function App() {
                 title="پوشه برنامه: کالرآیدی، نصب روی آیفون/اندروید/آیپد/ویندوز، وضعیت سیستم و سینک"
                 data-testid="topbar_project_folder_button"
               >
-                <FolderKanban size={18} className="text-amber-300" />
+                <FolderKanban size={18} className="text-amber-700" />
                 {syncPulse && (
-                  <span className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-emerald-600 border border-white" />
                 )}
               </button>
             </div>
           </div>
 
-          {/* Shortcuts Panel */}
+          {/* Shortcuts Panel (100% Opaque Daylight Surface) */}
           {shortcutsOpen && (
-            <div className="max-w-lg mx-auto mt-2 glass-dark rounded-3xl p-4 notif-panel animate-scale-in" style={{ scrollbarWidth: 'none' }}>
+            <div className="max-w-lg mx-auto mt-2 bg-white border border-slate-200 shadow-2xl rounded-3xl p-4 notif-panel animate-scale-in text-slate-900" style={{ scrollbarWidth: 'none' }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <Keyboard size={16} className="text-blue-300" />
-                  <h3 className="text-sm font-bold text-white">کلیدهای میانبر سریع کلینیک</h3>
+                  <Keyboard size={16} className="text-indigo-600" />
+                  <h3 className="text-sm font-black text-slate-900">کلیدهای میانبر سریع کلینیک</h3>
                 </div>
-                <button onClick={() => setShortcutsOpen(false)} className="topbar-btn">
-                  <X size={16} className="text-gray-400" />
+                <button onClick={() => setShortcutsOpen(false)} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center justify-center">
+                  <X size={16} className="text-slate-700" />
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
@@ -975,15 +975,15 @@ function App() {
                   { key: 'F9', desc: 'تقویم دائمی فارسی' },
                   { key: 'Esc', desc: 'بستن پنجره‌ها' },
                 ].map(sc => (
-                  <div key={sc.key} className="flex items-center justify-between bg-white/5 rounded-xl px-2.5 py-1.5 border border-white/10">
-                    <span className="text-gray-300 text-[11px]">{sc.desc}</span>
-                    <span className="font-mono font-bold text-cyan-300 bg-cyan-950/60 px-1.5 py-0.5 rounded text-[10px] border border-cyan-500/30">
+                  <div key={sc.key} className="flex items-center justify-between bg-slate-50 rounded-xl px-2.5 py-1.5 border border-slate-200">
+                    <span className="text-slate-800 font-bold text-[11px]">{sc.desc}</span>
+                    <span className="font-mono font-black text-indigo-800 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px] border border-indigo-200">
                       {sc.key}
                     </span>
                   </div>
                 ))}
               </div>
-              <div className="pt-2.5 border-t border-white/10 mt-3">
+              <div className="pt-2.5 border-t border-slate-200 mt-3">
                 <button
                   onClick={() => {
                     exportClinicBackupToJson(`MinaDental_Backup_${new Date().toISOString().slice(0, 10)}`, {
@@ -994,7 +994,7 @@ function App() {
                       version: CURRENT_APP_VERSION,
                     });
                   }}
-                  className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-2xl bg-cyan-600/90 hover:bg-cyan-600 text-white text-xs font-bold transition-all shadow-md active:scale-95"
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold transition-all shadow-sm active:scale-95"
                 >
                   <Download size={14} />
                   دانلود فایل پشتیبان آفلاین کلینیک (JSON)
@@ -1415,7 +1415,7 @@ function App() {
         onOpen={() => setNotifOpen(true)}
       />
 
-      {/* World-Class iOS Right-Side Slide-Over Notification & Smart Reminder Drawer */}
+      {/* World-Class iOS Right-Side Slide-Over Notification & Smart Reminder Drawer (100% Opaque Zero-Bleed Daylight Surface) */}
       {notifOpen && (
         <div
           className="fixed inset-0 z-50 flex justify-start"
@@ -1425,21 +1425,21 @@ function App() {
           }}
           data-testid="slide_over_notification_drawer"
         >
-          <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm animate-fade-in" />
+          <div className="absolute inset-0 bg-slate-900/65 backdrop-blur-md animate-fade-in" />
           <aside
-            className="relative w-full max-w-sm h-full glass-dark border-l border-white/15 p-4 flex flex-col drawer-slide-in-right safe-top safe-bottom"
+            className="relative w-full max-w-sm h-full bg-[#F8FAFC] text-slate-900 border-l border-slate-200 p-4 flex flex-col drawer-slide-in-right safe-top safe-bottom"
             onClick={e => e.stopPropagation()}
-            style={{ boxShadow: '-12px 0 45px rgba(0,0,0,0.5)' }}
+            style={{ boxShadow: '-16px 0 48px rgba(15, 23, 42, 0.28)' }}
           >
             {/* Drawer Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 bg-white -mx-4 -mt-4 px-4 pt-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-amber-400 to-rose-500 flex items-center justify-center text-white shadow-lg">
+                <div className="w-9 h-9 rounded-2xl bg-rose-600 flex items-center justify-center text-white shadow-sm">
                   <BellRing size={18} className="bell-swing" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-extrabold text-white">رادار هوشمند یادآوری و اعلان‌ها</h3>
-                  <p className="text-[10px] text-amber-200/80">
+                  <h3 className="text-sm font-black text-slate-900">رادار هوشمند یادآوری و اعلان‌ها</h3>
+                  <p className="text-[10.5px] font-bold text-rose-700">
                     {notifCount.toLocaleString('fa-IR')} هشدار فعال در کل بخش‌های مطب
                   </p>
                 </div>
@@ -1450,21 +1450,27 @@ function App() {
                   setNotifOpen(false);
                 }}
                 aria-label="بستن یادآوری‌ها"
-                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all"
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center justify-center text-slate-700 transition-all"
               >
                 <X size={16} />
               </button>
             </div>
 
             {/* Real OS Device Notification Bridge (اتصال به نوتیفیکیشن واقعی گوشی) */}
-            <div className="mt-2.5 p-2.5 rounded-2xl bg-white/8 border border-white/12 flex items-center justify-between gap-2">
+            <div
+              className={`mt-3 p-2.5 rounded-2xl border flex items-center justify-between gap-2 ${
+                deviceNotifOn
+                  ? 'bg-emerald-50 border-emerald-200'
+                  : 'bg-white border-slate-200 shadow-sm'
+              }`}
+            >
               <div className="flex items-center gap-2 min-w-0">
-                <Smartphone size={15} className={deviceNotifOn ? 'text-emerald-400 shrink-0' : 'text-amber-300 shrink-0'} />
+                <Smartphone size={15} className={deviceNotifOn ? 'text-emerald-700 shrink-0' : 'text-amber-700 shrink-0'} />
                 <div className="min-w-0">
-                  <p className="text-[11px] font-extrabold text-white truncate">
+                  <p className="text-[11px] font-black text-slate-900 truncate">
                     {deviceNotifOn ? 'متصل به نوتیفیکیشن واقعی گوشی' : 'اتصال به اعلان واقعی گوشی'}
                   </p>
-                  <p className="text-[9.5px] text-gray-300 truncate">
+                  <p className="text-[9.5px] font-semibold text-slate-600 truncate">
                     {deviceNotifPerm === 'denied'
                       ? 'مجوز اعلان در مرورگر مسدود است'
                       : deviceNotifOn
@@ -1487,7 +1493,7 @@ function App() {
                           tag: `minadental-test-${Date.now()}`,
                         });
                       }}
-                      className="px-2 py-1 rounded-xl bg-emerald-500 text-slate-950 text-[10px] font-black"
+                      className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black"
                     >
                       تست
                     </button>
@@ -1497,7 +1503,7 @@ function App() {
                         setDeviceNotificationsEnabled(false);
                         setDeviceNotifOn(false);
                       }}
-                      className="px-2 py-1 rounded-xl bg-white/10 text-gray-200 text-[10px] font-bold"
+                      className="px-2 py-1 rounded-xl bg-white border border-slate-200 text-slate-700 text-[10px] font-bold"
                     >
                       خاموش
                     </button>
@@ -1520,7 +1526,7 @@ function App() {
                         });
                       }
                     }}
-                    className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 text-[10px] font-black"
+                    className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black shadow-sm"
                   >
                     فعال‌سازی
                   </button>
@@ -1540,7 +1546,7 @@ function App() {
                   setNotifOpen(false);
                   setForceExpandReminderKey((k) => k + 1);
                 }}
-                className="py-2 px-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-[10.5px] font-black flex items-center justify-center gap-1.5 shadow active:scale-95 transition-all"
+                className="py-2 px-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10.5px] font-black flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
               >
                 <BellRing size={13} />
                 <span>پاپ‌آپ مدرن آیفونی (زنده)</span>
@@ -1555,10 +1561,10 @@ function App() {
                   setLiveSyncToast('تمام یادآوری‌های امروز در صف ضد فراموشی بازگردانی شدند');
                   setTimeout(() => setLiveSyncToast(null), 3000);
                 }}
-                className="py-2 px-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/12 text-amber-200 text-[10.5px] font-extrabold flex items-center justify-center gap-1 active:scale-95 transition-all"
+                className="py-2 px-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 text-[10.5px] font-extrabold flex items-center justify-center gap-1 active:scale-95 transition-all"
               >
-                <RefreshCw size={12} />
-                <span>بازگردانی صف ضدحذف ({unifiedGlobalAlerts.length.toLocaleString('fa-IR')})</span>
+                <RefreshCw size={12} className="text-indigo-600" />
+                <span>بازگردانی صف ({unifiedGlobalAlerts.length.toLocaleString('fa-IR')})</span>
               </button>
             </div>
 
@@ -1585,10 +1591,10 @@ function App() {
                 <button
                   key={tab.id}
                   onClick={() => setDrawerTab(tab.id)}
-                  className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${
+                  className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition-all border ${
                     drawerTab === tab.id
-                      ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow-md'
-                      : 'bg-white/10 text-gray-300 hover:bg-white/15'
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
                   {tab.label} ({tab.count.toLocaleString('fa-IR')})
@@ -1596,19 +1602,21 @@ function App() {
               ))}
             </div>
 
-            {/* Live Smart Alerts List */}
+            {/* Live Smart Alerts List (100% Opaque Solid White Cards with Crisp Semantic Borders) */}
             <div className="flex-1 overflow-y-auto space-y-2 py-1 pr-0.5">
               {filteredDrawerAlerts.length === 0 && pendingReminders.length === 0 && unreadMessages.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-sm text-gray-300 font-bold">هیچ هشدار یا یادآوری فعالی وجود ندارد</p>
-                  <p className="text-xs text-gray-500 mt-1">تمامی بخش‌های کلینیک در وضعیت پایدار هستند</p>
+                <div className="text-center py-12 bg-white rounded-2xl border border-slate-200">
+                  <p className="text-sm text-slate-900 font-black">هیچ هشدار یا یادآوری فعالی وجود ندارد</p>
+                  <p className="text-xs text-slate-600 font-medium mt-1">تمامی بخش‌های کلینیک در وضعیت پایدار هستند</p>
                 </div>
               ) : (
                 <>
                   {filteredDrawerAlerts.map(alert => {
                     const isCritical = alert.urgency === 'critical';
                     const isToday = alert.urgency === 'today';
-                    const dotColor = isCritical ? '#EF4444' : isToday ? '#F59E0B' : '#38BDF8';
+                    const accentColor = isCritical ? '#DC2626' : isToday ? '#D97706' : '#2563EB';
+                    const dateBg = isCritical ? '#FFF1F2' : isToday ? '#FFFBEB' : '#EFF6FF';
+                    const dateText = isCritical ? '#9F1239' : isToday ? '#92400E' : '#1E40AF';
                     return (
                       <button
                         key={alert.id}
@@ -1616,23 +1624,23 @@ function App() {
                           setActive(alert.targetSection);
                           setNotifOpen(false);
                         }}
-                        className="w-full text-right rounded-2xl bg-white/8 hover:bg-white/15 border border-white/10 p-3 transition-all active:scale-98"
+                        className="w-full text-right rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 p-3 shadow-sm transition-all active:scale-[0.99]"
+                        style={{ borderRightWidth: '4px', borderRightColor: accentColor }}
                       >
-                        <div className="flex items-start gap-2.5">
-                          <div
-                            className="w-2.5 h-2.5 rounded-full mt-1 shrink-0"
-                            style={{ background: dotColor, boxShadow: `0 0 8px ${dotColor}` }}
-                          />
+                        <div className="flex items-start gap-2">
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-xs font-extrabold text-white truncate">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="text-xs font-black text-slate-900 truncate">
                                 {alert.title}
                               </span>
-                              <span className="text-[10px] text-amber-300 shrink-0 font-semibold">
+                              <span
+                                className="text-[10px] px-2 py-0.5 rounded-full shrink-0 font-extrabold"
+                                style={{ background: dateBg, color: dateText }}
+                              >
                                 {toJalaliStr(alert.dueDate)}
                               </span>
                             </div>
-                            <p className="text-[11px] text-gray-300/90 mt-1 leading-relaxed line-clamp-2">
+                            <p className="text-[11px] font-semibold text-slate-600 mt-1 leading-relaxed line-clamp-2">
                               {alert.subtitle}
                             </p>
                           </div>
@@ -1648,13 +1656,14 @@ function App() {
                         setActive('messages');
                         setNotifOpen(false);
                       }}
-                      className="w-full text-right rounded-2xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/20 p-3 transition-all"
+                      className="w-full text-right rounded-2xl bg-white hover:bg-sky-50 border border-sky-200 p-3 shadow-sm transition-all"
+                      style={{ borderRightWidth: '4px', borderRightColor: '#0284C7' }}
                     >
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-sky-400 shrink-0" />
+                        <div className="w-2 h-2 rounded-full bg-sky-600 shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-white truncate">پیام جدید: {m.subject}</p>
-                          <p className="text-[10px] text-sky-200/80 truncate">{m.body?.slice(0, 50)}</p>
+                          <p className="text-xs font-black text-slate-900 truncate">پیام جدید: {m.subject}</p>
+                          <p className="text-[10.5px] font-semibold text-slate-600 truncate">{m.body?.slice(0, 50)}</p>
                         </div>
                       </div>
                     </button>
@@ -1664,13 +1673,13 @@ function App() {
             </div>
 
             {/* Footer CTA to Open Full Smart Reminders Command Center */}
-            <div className="pt-3 border-t border-white/10 mt-2">
+            <div className="pt-3 border-t border-slate-200 mt-2">
               <button
                 onClick={() => {
                   setActive('reminders');
                   setNotifOpen(false);
                 }}
-                className="w-full py-2.5 px-4 rounded-2xl bg-gradient-to-r from-rose-500 via-amber-500 to-orange-500 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
+                className="w-full py-2.5 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all"
               >
                 <BellRing size={15} />
                 <span>ورود به مرکز فرماندهی جامع یادآوری‌ها</span>
@@ -1698,58 +1707,58 @@ function App() {
           {/* In-Flow Non-Overlapping Status Banners — Automatically hidden whenever Reminder Drawer is Open */}
           {!notifOpen && (
             <>
-              {/* Real-Time Multi-User Cloud Sync Toast */}
+              {/* Real-Time Multi-User Cloud Sync Toast (100% Opaque Daylight Surface) */}
               {liveSyncToast && (
-                <div className="px-3 py-2 rounded-2xl bg-slate-900/95 border border-emerald-400/40 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2 shadow-lg animate-fade-in">
-                  <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
+                <div className="px-3.5 py-2.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs font-extrabold flex items-center justify-center gap-2 shadow-sm animate-fade-in">
+                  <CheckCircle2 size={15} className="text-emerald-700 shrink-0" />
                   <span>{liveSyncToast}</span>
                 </div>
               )}
 
-              {/* App-Wide Zero-Delete / RBAC / Offline Guardian Toast (TRC-MINA-GUARD-9007-G) */}
+              {/* App-Wide Zero-Delete / RBAC / Offline Guardian Toast (100% Opaque Daylight Surface) */}
               {guardianToast && (
                 <div
                   data-testid="guardian_security_toast"
-                  className={`px-3 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-lg border animate-fade-in ${
+                  className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-sm border animate-fade-in ${
                     guardianToast.severity === 'security'
-                      ? 'bg-rose-950/95 border-rose-400/50 text-rose-100'
+                      ? 'bg-rose-50 border-rose-300 text-rose-950'
                       : guardianToast.severity === 'offline'
-                      ? 'bg-amber-950/95 border-amber-400/50 text-amber-100'
-                      : 'bg-emerald-950/95 border-emerald-400/50 text-emerald-100'
+                      ? 'bg-amber-50 border-amber-300 text-amber-950'
+                      : 'bg-emerald-50 border-emerald-300 text-emerald-950'
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     {guardianToast.severity === 'security' ? (
-                      <ShieldAlert size={16} className="text-rose-400 shrink-0" />
+                      <ShieldAlert size={16} className="text-rose-700 shrink-0" />
                     ) : guardianToast.severity === 'offline' ? (
-                      <WifiOff size={16} className="text-amber-400 shrink-0" />
+                      <WifiOff size={16} className="text-amber-700 shrink-0" />
                     ) : (
-                      <Archive size={16} className="text-emerald-400 shrink-0" />
+                      <Archive size={16} className="text-emerald-700 shrink-0" />
                     )}
                     <div className="min-w-0">
-                      <span className="leading-snug block">{guardianToast.message}</span>
-                      <span className="text-[9px] font-mono opacity-75">{guardianToast.traceId}</span>
+                      <span className="leading-snug block font-extrabold">{guardianToast.message}</span>
+                      <span className="text-[9.5px] font-mono opacity-80">{guardianToast.traceId}</span>
                     </div>
                   </div>
                   <button
                     onClick={() => setGuardianToast(null)}
                     aria-label="بستن هشدار"
-                    className="p-1 rounded-lg bg-white/10 hover:bg-white/20 shrink-0"
+                    className="p-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 shrink-0"
                   >
                     <X size={13} />
                   </button>
                 </div>
               )}
 
-              {/* Pending Offline Write-Ahead Queue Pill (In-Flow, Zero Overlap with Tabs) */}
+              {/* Pending Offline Write-Ahead Queue Pill (100% Opaque Daylight Amber Surface — Zero Bleed) */}
               {offlineQueueCount > 0 && (
                 <div
                   data-testid="offline_queue_pending_pill"
-                  className="px-3 py-2 rounded-2xl bg-amber-950/95 border border-amber-400/45 text-amber-100 text-[11px] font-bold flex items-center justify-between gap-2 shadow-md animate-fade-in"
+                  className="px-3.5 py-2.5 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-[11px] font-bold flex items-center justify-between gap-2 shadow-sm animate-fade-in"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <UploadCloud size={15} className="text-amber-300 shrink-0" />
-                    <span className="truncate">
+                    <UploadCloud size={15} className="text-amber-700 shrink-0" />
+                    <span className="truncate font-extrabold">
                       {offlineQueueCount.toLocaleString('fa-IR')} تغییر در صف آفلاین آماده ارسال به Cloud SQL است
                     </span>
                   </div>
@@ -1758,7 +1767,7 @@ function App() {
                       onClick={handleFlushOfflineQueue}
                       disabled={flushingQueue}
                       data-testid="flush_offline_queue_button"
-                      className="px-2.5 py-1 rounded-xl bg-amber-400 text-slate-950 font-black text-[10px] hover:bg-amber-300 active:scale-95 transition-all disabled:opacity-60"
+                      className="px-2.5 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-[10px] active:scale-95 transition-all disabled:opacity-60 shadow-sm"
                     >
                       {flushingQueue ? 'در حال ارسال...' : 'ارسال آنی'}
                     </button>
@@ -1766,7 +1775,7 @@ function App() {
                       onClick={handleClearOfflineQueue}
                       data-testid="clear_offline_queue_button"
                       title="پاک‌سازی و تطبیق صف با دیتابیس محلی"
-                      className="px-2 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-amber-100 font-bold text-[10px] active:scale-95 transition-all"
+                      className="px-2 py-1 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] active:scale-95 transition-all"
                     >
                       پاک‌سازی
                     </button>
@@ -1774,22 +1783,22 @@ function App() {
                 </div>
               )}
 
-              {/* Atomic Update Available / OTA Broadcast Banner */}
+              {/* Atomic Update Available / OTA Broadcast Banner (100% Opaque Daylight Surface) */}
               {updateAvailable && (
                 <div
                   data-testid="top_atomic_update_banner"
-                  className="p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white shadow-lg border border-white/20 animate-fade-in"
+                  className="p-3 rounded-2xl bg-indigo-50 text-slate-900 shadow-sm border border-indigo-300 animate-fade-in"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-xs font-bold min-w-0">
-                      <Sparkles size={16} className="text-yellow-300 animate-spin shrink-0" />
+                    <div className="flex items-center gap-2 text-xs font-extrabold min-w-0">
+                      <Sparkles size={16} className="text-indigo-700 animate-spin shrink-0" />
                       <div className="truncate">
-                        <span>
+                        <span className="text-indigo-950">
                           بیلد جدید ({otaUpdateInfo?.version || CURRENT_APP_VERSION}
                           {otaUpdateInfo?.build ? ` • #${otaUpdateInfo.build}` : ''}) آماده نصب است
                         </span>
                         {otaUpdateInfo?.releaseNotes && (
-                          <span className="block text-[10px] text-purple-100 truncate">{otaUpdateInfo.releaseNotes}</span>
+                          <span className="block text-[10px] font-semibold text-slate-700 truncate">{otaUpdateInfo.releaseNotes}</span>
                         )}
                       </div>
                     </div>
@@ -1797,7 +1806,7 @@ function App() {
                       onClick={() => handleApplyUpdate()}
                       disabled={installingUpdate}
                       data-testid="top_atomic_update_install_btn"
-                      className="px-3 py-1.5 rounded-xl bg-white text-purple-900 font-extrabold text-xs shadow hover:bg-white/90 active:scale-95 transition-all shrink-0 disabled:opacity-70"
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-sm active:scale-95 transition-all shrink-0 disabled:opacity-70"
                     >
                       {installingUpdate
                         ? `در حال نصب (${atomicProgress?.percent || 25}%)...`
@@ -1805,14 +1814,14 @@ function App() {
                     </button>
                   </div>
                   {atomicProgress && (
-                    <div className="mt-2 pt-1.5 border-t border-white/15">
-                      <div className="flex items-center justify-between text-[10px] font-bold text-purple-100 mb-1">
+                    <div className="mt-2 pt-1.5 border-t border-indigo-200">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-indigo-900 mb-1">
                         <span>{atomicProgress.label}</span>
                         <span>{atomicProgress.percent}%</span>
                       </div>
-                      <div className="w-full h-1.5 rounded-full bg-white/20 overflow-hidden">
+                      <div className="w-full h-1.5 rounded-full bg-indigo-200 overflow-hidden">
                         <div
-                          className="h-full bg-emerald-300 transition-all duration-200"
+                          className="h-full bg-indigo-600 transition-all duration-200"
                           style={{ width: `${atomicProgress.percent}%` }}
                         />
                       </div>

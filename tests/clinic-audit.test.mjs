@@ -202,20 +202,22 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
   test('all 13 modules have strictly unique non-repeating colors and CSS theme classes including theme-calendar', () => {
+    const tokensSrc = read('src/lib/designTokens.ts');
     const sectionsSrc = read('src/lib/sections.ts');
     const cssSrc = read('src/index.css');
 
-    const colorMatches = [...sectionsSrc.matchAll(/color:\s*'(#(?:[0-9A-Fa-f]{6}))'/g)].map((m) => m[1].toLowerCase());
-    const themeMatches = [...sectionsSrc.matchAll(/themeClass:\s*'(theme-[a-z]+)'/g)].map((m) => m[1]);
+    const colorMatches = [...tokensSrc.matchAll(/primary:\s*'(#(?:[0-9A-Fa-f]{6}))'/g)].map((m) => m[1].toLowerCase());
+    const idMatches = [...sectionsSrc.matchAll(/\{\s*id:\s*'([a-z]+)'\s*,/g)].map((m) => m[1]);
 
-    assert.equal(colorMatches.length, 13, 'Must define 13 section primary colors');
+    assert.equal(colorMatches.length, 13, 'Must define 13 section primary colors in SSOT designTokens.ts');
     assert.equal(new Set(colorMatches).size, 13, 'Zero duplicate primary colors allowed');
-    assert.equal(themeMatches.length, 13, 'Must define 13 section theme classes');
-    assert.equal(new Set(themeMatches).size, 13, 'Zero duplicate themeClass allowed');
-    assert.ok(themeMatches.includes('theme-calendar'), 'Calendar must have dedicated theme-calendar class');
+    assert.equal(idMatches.length, 13, 'Must define 13 section IDs in sections.ts');
+    assert.equal(new Set(idMatches).size, 13, 'Zero duplicate section IDs allowed');
+    assert.ok(sectionsSrc.includes('themeClass: `theme-${m.id}`'), 'sections.ts must map each module to theme-${m.id}');
+    assert.ok(idMatches.includes('calendar'), 'Calendar module must be present');
 
-    for (const cls of themeMatches) {
-      assert.ok(cssSrc.includes(`.${cls}`), `src/index.css must define .${cls}`);
+    for (const id of idMatches) {
+      assert.ok(cssSrc.includes(`.theme-${id}`), `src/index.css must define .theme-${id}`);
     }
   });
 
@@ -616,6 +618,58 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(staffSrc.includes('net_half_after_lab') && staffSrc.includes('doctor_calc_fixture_cost_input'), 'StaffSection must implement 3-mode doctor share calculator with 100% clinic-paid implant fixture');
     assert.ok(messagesSrc.includes('SMS_TEMPLATES') && messagesSrc.includes('activeChip') && messagesSrc.includes('searchOpen'), 'Messages must provide sliding chip bar, SMS templates, and clinic/patient messaging');
     assert.ok(settingsSrc.includes('settings_unified_update_center') && settingsSrc.includes('settings_active_ui_libraries_panel'), 'SettingsSection must house Unified Atomic Update Center and 8 Active UI Libraries panel');
+  });
+
+  test('32. Standard 60-30-10 SSOT Design Token Engine, Zero-Bleed Opaque Notifications, WCAG AAA Contrast & Colored Spring QBank Tiles', () => {
+    const tokensSrc = read('src/lib/designTokens.ts');
+    const sectionsSrc = read('src/lib/sections.ts');
+    const cssSrc = read('src/index.css');
+    const qbankSrc = read('src/components/ui/QBankTile.tsx');
+    const popupSrc = read('src/components/ui/IOSReminderPopup.tsx');
+    const handleSrc = read('src/components/ui/DraggableNotificationHandle.tsx');
+    const appSrc = read('src/App.tsx');
+    const dashSrc = read('src/components/sections/Dashboard.tsx');
+    const dockSrc = read('src/components/BottomDock.tsx');
+    const settingsSrc = read('src/components/sections/SettingsSection.tsx');
+    const financeSrc = read('src/components/sections/Finance.tsx');
+
+    // 1. SSOT Design Tokens Architecture
+    assert.ok(tokensSrc.includes('export type ModuleTokenId'), 'designTokens.ts must export ModuleTokenId');
+    assert.ok(tokensSrc.includes('export const DAYLIGHT_SURFACE_TOKENS'), 'designTokens.ts must export DAYLIGHT_SURFACE_TOKENS');
+    assert.ok(tokensSrc.includes('export const SEMANTIC_STATUS_TOKENS'), 'designTokens.ts must export SEMANTIC_STATUS_TOKENS');
+    assert.ok(tokensSrc.includes('export const NOTIFICATION_SURFACE_TOKENS'), 'designTokens.ts must export NOTIFICATION_SURFACE_TOKENS');
+    assert.ok(tokensSrc.includes('export const MODULE_COLOR_TOKENS'), 'designTokens.ts must export MODULE_COLOR_TOKENS');
+    assert.ok(tokensSrc.includes('computeWcagContrastRatio'), 'designTokens.ts must include WCAG contrast calculator');
+    assert.ok(sectionsSrc.includes("from './designTokens'"), 'sections.ts must consume MODULE_COLOR_TOKENS as SSOT');
+
+    // 2. Verify strictly 13 unique primary hexes & 13 unique pastel tint endings
+    const primaryMatches = [...tokensSrc.matchAll(/primary:\s*'(#[0-9A-Fa-f]{6})'/g)].map((m) => m[1]);
+    const tintEndMatches = [...tokensSrc.matchAll(/surfaceTintEnd:\s*'(#[0-9A-Fa-f]{6})'/g)].map((m) => m[1]);
+    assert.equal(primaryMatches.length, 13, 'Must define exactly 13 primary module accents');
+    assert.equal(new Set(primaryMatches).size, 13, 'All 13 primary module accents must be strictly unique');
+    assert.equal(tintEndMatches.length, 13, 'Must define exactly 13 calibrated pastel surfaces');
+    assert.equal(new Set(tintEndMatches).size, 13, 'All 13 pastel surfaces must be strictly unique');
+
+    // 3. Zero-Bleed Opaque Notification Surface Isolation
+    assert.ok(popupSrc.includes('NOTIFICATION_SURFACE_TOKENS'), 'IOSReminderPopup must use NOTIFICATION_SURFACE_TOKENS');
+    assert.ok(!popupSrc.includes('bg-slate-950/92') && !popupSrc.includes('bg-slate-950/95') && !popupSrc.includes('bg-white/8'), 'IOSReminderPopup must NOT use translucent dark/muddy overlays');
+    assert.ok(popupSrc.includes('bg-slate-900/45 backdrop-blur-sm'), 'Expanded IOSReminderPopup must isolate content with protective backdrop scrim');
+    assert.ok(handleSrc.includes('fill="#FFFFFF"') && handleSrc.includes('stroke="#CBD5E1"'), 'DraggableNotificationHandle must use opaque crisp white ear');
+
+    const drawerStart = appSrc.indexOf('data-testid="slide_over_notification_drawer"');
+    const drawerEnd = appSrc.indexOf('</aside>', drawerStart);
+    const drawerSnippet = appSrc.slice(drawerStart, drawerEnd);
+    assert.ok(drawerSnippet.includes('bg-[#F8FAFC]') && drawerSnippet.includes('bg-white'), 'Slide-over notification drawer must use 100% opaque daylight surfaces');
+    assert.ok(!drawerSnippet.includes('glass-dark') && !drawerSnippet.includes('bg-white/8'), 'Slide-over notification drawer must NOT use glass-dark or bg-white/8');
+    assert.ok(!appSrc.includes('bg-amber-950/95') && !appSrc.includes('bg-rose-950/95') && !appSrc.includes('max-w-lg mx-auto mt-2 glass-dark'), 'App.tsx banners and shortcuts popover must NOT use muddy dark translucent surfaces');
+
+    // 4. QBank Colored Spring Chevrons & Daylight Compliance Across Modules
+    assert.ok(qbankSrc.includes('qbank-spring-arrow') && qbankSrc.includes('borderColor'), 'QBankTile must render colored spring pocket chevron and crisp border');
+    assert.ok(cssSrc.includes('.qbank-spring-arrow') && cssSrc.includes('--section-tint-end'), 'index.css must define qbank-spring-arrow animation and pastel background variables');
+    assert.ok(dashSrc.includes('getModuleToken(') && !dashSrc.includes('from-indigo-950'), 'Dashboard must use getModuleToken() daylight surfaces without dark indigo blocks');
+    assert.ok(dockSrc.includes('getModuleToken('), 'BottomDock More sheet must use getModuleToken()');
+    assert.ok(!settingsSrc.includes('from-indigo-900 via-purple-950') && !settingsSrc.includes('from-slate-900 via-violet-950'), 'SettingsSection panels must use clean daylight QBank surfaces');
+    assert.ok(!financeSrc.includes('#0F172A 0%, #1E293B'), 'Finance hero banners must use clean daylight QBank cards');
   });
 });
 

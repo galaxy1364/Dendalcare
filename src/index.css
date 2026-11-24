@@ -8,8 +8,12 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --radius-card: 22px;
   --radius-pill: 999px;
-  --section: #3B82F6;
+  --section: #2563EB;
+  --section-dark: #1E3A8A;
   --section-soft: #DBEAFE;
+  --section-tint-start: #F2F7FF;
+  --section-tint-end: #E0ECFF;
+  --section-border: #BFDBFE;
   --section-orb-b: #38BDF8;
   --topbar-h: 64px;
   --dock-h: 78px;
@@ -48,7 +52,7 @@ body {
   inset: 0;
   z-index: -2;
   overflow: hidden;
-  background: linear-gradient(175deg, #F7F8FC 0%, #EFF2FA 46%, #F6F7FB 100%);
+  background: linear-gradient(175deg, #FFFFFF 0%, var(--section-tint-start, #F2F7FF) 52%, var(--section-tint-end, #E0ECFF) 100%);
   transition: background 0.7s ease;
 }
 
@@ -204,6 +208,11 @@ body {
 }
 
 /* Authentic QBank Notch-Cutout Card (TRC-MINA-QBANK-9008-H) */
+@keyframes qbankSpringBounce {
+  0%, 100% { transform: translateY(0); }
+  45% { transform: translateY(-2.5px); }
+  75% { transform: translateY(1.5px); }
+}
 .qbank-notch-card {
   transition: transform .16s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -211,7 +220,10 @@ body {
   transform: translateY(3px) scale(0.982);
 }
 .qbank-notch-card:active .qbank-pocket-btn {
-  transform: translateY(2px) scale(0.92);
+  transform: translateY(2.5px) scale(0.91);
+}
+.qbank-spring-arrow {
+  animation: qbankSpringBounce 2.2s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
 }
 
 /* iOS Right-Edge Slide-Over Drawer Animation */
@@ -351,20 +363,20 @@ body {
 ::-webkit-scrollbar { display:none; }
 * { scrollbar-width:none; -ms-overflow-style:none; }
 
-/* ===== Section themes (13 strictly unique, non-repeating color palettes) ===== */
-.theme-dashboard    { --section:#3B82F6; --section-soft:#DBEAFE; --section-orb-b:#38BDF8; }
-.theme-patients     { --section:#10B981; --section-soft:#D1FAE5; --section-orb-b:#34D399; }
-.theme-appointments { --section:#F59E0B; --section-soft:#FEF3C7; --section-orb-b:#FBBF24; }
-.theme-calendar     { --section:#D946EF; --section-soft:#FAE8FF; --section-orb-b:#F472B6; }
-.theme-treatments   { --section:#8B5CF6; --section-soft:#EDE9FE; --section-orb-b:#A78BFA; }
-.theme-lab          { --section:#EC4899; --section-soft:#FCE7F3; --section-orb-b:#FB7185; }
-.theme-implants     { --section:#06B6D4; --section-soft:#CFFAFE; --section-orb-b:#2DD4BF; }
-.theme-finance      { --section:#22C55E; --section-soft:#DCFCE7; --section-orb-b:#84CC16; }
-.theme-inventory    { --section:#F97316; --section-soft:#FFEDD5; --section-orb-b:#FB923C; }
-.theme-reminders    { --section:#EF4444; --section-soft:#FEE2E2; --section-orb-b:#F43F5E; }
-.theme-staff        { --section:#6366F1; --section-soft:#E0E7FF; --section-orb-b:#818CF8; }
-.theme-messages     { --section:#0EA5E9; --section-soft:#E0F2FE; --section-orb-b:#60A5FA; }
-.theme-settings     { --section:#64748B; --section-soft:#F1F5F9; --section-orb-b:#94A3B8; }
+/* ===== Section themes (13 strictly unique, non-repeating calibrated color palettes from SSOT designTokens.ts) ===== */
+.theme-dashboard    { --section:#2563EB; --section-dark:#1E3A8A; --section-soft:#DBEAFE; --section-tint-start:#F2F7FF; --section-tint-end:#E0ECFF; --section-border:#BFDBFE; --section-orb-b:#38BDF8; }
+.theme-patients     { --section:#059669; --section-dark:#064E3B; --section-soft:#D1FAE5; --section-tint-start:#F0FDF7; --section-tint-end:#D9F9E9; --section-border:#A7F3D0; --section-orb-b:#34D399; }
+.theme-appointments { --section:#D97706; --section-dark:#78350F; --section-soft:#FEF3C7; --section-tint-start:#FFFDF0; --section-tint-end:#FEF0C7; --section-border:#FDE68A; --section-orb-b:#FBBF24; }
+.theme-calendar     { --section:#C026D3; --section-dark:#701A75; --section-soft:#FAE8FF; --section-tint-start:#FDF4FF; --section-tint-end:#F7E2FE; --section-border:#F0ABFC; --section-orb-b:#F472B6; }
+.theme-treatments   { --section:#7C3AED; --section-dark:#4C1D95; --section-soft:#EDE9FE; --section-tint-start:#F6F3FF; --section-tint-end:#E9E2FF; --section-border:#DDD6FE; --section-orb-b:#A78BFA; }
+.theme-lab          { --section:#DB2777; --section-dark:#831843; --section-soft:#FCE7F3; --section-tint-start:#FFF2F8; --section-tint-end:#FCE1EE; --section-border:#FBCFE8; --section-orb-b:#FB7185; }
+.theme-implants     { --section:#0891B2; --section-dark:#164E63; --section-soft:#CFFAFE; --section-tint-start:#F0FDFF; --section-tint-end:#D5F6FB; --section-border:#A5F3FC; --section-orb-b:#2DD4BF; }
+.theme-finance      { --section:#16A34A; --section-dark:#14532D; --section-soft:#DCFCE7; --section-tint-start:#F1FDF5; --section-tint-end:#DCFCE7; --section-border:#BBF7D0; --section-orb-b:#84CC16; }
+.theme-inventory    { --section:#EA580C; --section-dark:#7C2D12; --section-soft:#FFEDD5; --section-tint-start:#FFF8F2; --section-tint-end:#FFE8D6; --section-border:#FED7AA; --section-orb-b:#FB923C; }
+.theme-reminders    { --section:#E11D48; --section-dark:#881337; --section-soft:#FFE4E6; --section-tint-start:#FFF2F4; --section-tint-end:#FFE0E5; --section-border:#FECDD3; --section-orb-b:#F43F5E; }
+.theme-staff        { --section:#4F46E5; --section-dark:#312E81; --section-soft:#E0E7FF; --section-tint-start:#F3F4FF; --section-tint-end:#E0E5FF; --section-border:#C7D2FE; --section-orb-b:#818CF8; }
+.theme-messages     { --section:#0284C7; --section-dark:#0C4A6E; --section-soft:#E0F2FE; --section-tint-start:#F0F9FF; --section-tint-end:#DCEFFF; --section-border:#BAE6FD; --section-orb-b:#60A5FA; }
+.theme-settings     { --section:#475569; --section-dark:#1E293B; --section-soft:#F1F5F9; --section-tint-start:#F8FAFC; --section-tint-end:#E9EEF5; --section-border:#CBD5E1; --section-orb-b:#94A3B8; }
 
 .section-glow {
   position:fixed; top:0; left:50%; transform:translateX(-50%);
@@ -555,7 +567,9 @@ input:focus, textarea:focus, select:focus { outline:none; }
 }
 .skiper-ui-pill {
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(30, 27, 75, 0.95), rgba(49, 46, 129, 0.92));
+  background: #EEF2FF;
+  border: 1px solid #C7D2FE;
+  color: #312E81;
 }
 .animmaster-shimmer {
   animation: shimmer 2.2s linear infinite;

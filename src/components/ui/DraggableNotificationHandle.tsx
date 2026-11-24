@@ -139,22 +139,22 @@ export function DraggableNotificationHandle({ notifCount, open, onOpen }: Props)
         transition: dragging ? 'transform 0.12s ease' : 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
       }}
     >
-      {/* QBank Smooth Curved Right-Edge Ear Silhouette */}
+      {/* QBank Smooth Curved Right-Edge Ear Silhouette (100% Opaque Isolation) */}
       <svg
         viewBox="0 0 44 84"
         aria-hidden="true"
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{
           filter: dragging
-            ? 'drop-shadow(-4px 6px 16px rgba(139, 92, 246, 0.35))'
+            ? 'drop-shadow(-4px 6px 16px rgba(79, 70, 229, 0.35))'
             : 'drop-shadow(-3px 4px 12px rgba(15, 23, 42, 0.16))',
         }}
       >
         <path
           d="M 44,0 C 44,12 36,14 24,17 C 11,20 4,28 4,42 C 4,56 11,64 24,67 C 36,70 44,72 44,84 Z"
-          fill="rgba(255, 255, 255, 0.96)"
-          stroke="rgba(139, 92, 246, 0.28)"
-          strokeWidth="1.2"
+          fill="#FFFFFF"
+          stroke="#CBD5E1"
+          strokeWidth="1.6"
         />
       </svg>
 
@@ -163,11 +163,11 @@ export function DraggableNotificationHandle({ notifCount, open, onOpen }: Props)
         <Bell
           size={20}
           strokeWidth={2.4}
-          className={notifCount > 0 ? 'text-violet-700 bell-swing' : 'text-slate-600'}
+          className={notifCount > 0 ? 'text-indigo-700 bell-swing' : 'text-slate-700'}
         />
         {notifCount > 0 && (
           <span
-            className="absolute -top-2 -left-2 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white shadow-sm"
+            className="absolute -top-2 -left-2 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-600 text-white text-[9px] font-black flex items-center justify-center border-2 border-white shadow-sm"
             data-testid="right_edge_bell_badge"
           >
             {notifCount > 99 ? '99+' : notifCount.toLocaleString('fa-IR')}
