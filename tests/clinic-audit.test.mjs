@@ -520,6 +520,30 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(dashSrc.includes('dashboard_morning_huddle_bar'), 'Dashboard must render Morning Huddle Continuity Panel');
     assert.ok(dashSrc.includes("id: 'yesterday'") && dashSrc.includes("id: 'today'") && dashSrc.includes("id: 'tomorrow'") && dashSrc.includes('huddle_tab_${tab.id}'), 'Morning Huddle must support Yesterday, Today & Tomorrow views');
   });
+
+  test('29. Autonomous Cloud SQL (20-Table) + Google Drive Activation & Unified Atomic Auto/Manual Update Engine', () => {
+    const integrationsEngineSrc = read('src/lib/integrationsEngine.ts');
+    const integrationsTabSrc = read('src/components/sections/IntegrationsTab.tsx');
+    const updateManagerSrc = read('src/lib/updateManager.ts');
+    const settingsSrc = read('src/components/sections/SettingsSection.tsx');
+    const appSrc = read('src/App.tsx');
+
+    // Cloud SQL & Google Drive autonomous activation
+    assert.ok(integrationsEngineSrc.includes('export async function activateCloudSqlAndGoogleDrive'), 'integrationsEngine must export activateCloudSqlAndGoogleDrive');
+    assert.ok(integrationsEngineSrc.includes('export function loadCloudSqlConfig'), 'integrationsEngine must export loadCloudSqlConfig');
+    assert.ok(integrationsEngineSrc.includes('mehdi.amiri19851364@gmail.com'), 'Google Drive default config must bind to manager account');
+    assert.ok(integrationsTabSrc.includes('cloud_sql_active_panel') && integrationsTabSrc.includes('cloud_sql_active_badge'), 'IntegrationsTab must render active Cloud SQL panel');
+    assert.ok(integrationsTabSrc.includes('google_drive_active_panel') && integrationsTabSrc.includes('google_drive_active_badge'), 'IntegrationsTab must render active Google Drive panel');
+
+    // Unified Atomic Update Engine & Persistent Build Ledger
+    assert.ok(updateManagerSrc.includes('export function getInstalledReleaseInfo') && updateManagerSrc.includes('minadental_installed_release_v1'), 'updateManager must persist installed build ledger');
+    assert.ok(updateManagerSrc.includes('export async function applyAppUpdateAtomically'), 'updateManager must provide 4-stage atomic update installer');
+    assert.ok(settingsSrc.includes('settings_unified_update_center'), 'SettingsSection must house Unified Automatic & Manual Atomic Update Center');
+    assert.ok(settingsSrc.includes('toggle_auto_update_switch') && settingsSrc.includes('manual_check_and_install_update_btn') && settingsSrc.includes('manager_publish_new_build_btn'), 'Unified Update Center must provide Auto toggle, Manual check/install, and Manager build publish');
+    assert.ok(!settingsSrc.includes('settings_manager_lock_release_btn'), 'Duplicate/fake upgrade buttons must be removed from SettingsSection');
+    assert.ok(appSrc.includes('top_atomic_update_banner') && appSrc.includes('applyAppUpdateAtomically') && appSrc.includes('activateCloudSqlAndGoogleDrive'), 'App.tsx must wire atomic update installation and autonomous Cloud SQL + Google Drive activation');
+  });
 });
+
 
 

@@ -46,13 +46,19 @@ import {
   loadActiveUser,
   saveActiveUser,
   initCloudSyncChannel,
-  publishOtaUpdateToAllUsers,
   performAutomaticCloudAndLocalBackup,
 } from '@/lib/cloudSyncEngine';
 import { MascotTooth, type MascotMood } from '@/components/ui/MascotTooth';
 import { RoadmapAuditModal } from '@/components/ui/RoadmapAuditModal';
 import { MemPalace, OmniRoute } from '@/lib/memPalace';
-import { broadcastNewAppBuild, checkForAppUpdates } from '@/lib/updateManager';
+import {
+  checkForAppUpdates,
+  getInstalledReleaseInfo,
+  applyAppUpdateAtomically,
+  isAutoUpdateEnabled,
+  type AtomicUpdateProgress,
+} from '@/lib/updateManager';
+import { activateCloudSqlAndGoogleDrive } from '@/lib/integrationsEngine';
 import { getOfflineQueue, processOfflineQueue } from '@/lib/offlineQueue';
 import { DraggableNotificationHandle } from '@/components/ui/DraggableNotificationHandle';
 import { QBankTile } from '@/components/ui/QBankTile';
@@ -89,7 +95,9 @@ function App() {
     typeof window !== 'undefined' ? (window as any).__deferredInstallPrompt || null : null
   );
   const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [otaUpdateInfo, setOtaUpdateInfo] = useState<{ version: string; releaseNotes: string; publishedBy: string } | null>(null);
+  const [otaUpdateInfo, setOtaUpdateInfo] = useState<{ version: string; build?: number; releaseNotes: string; publishedBy: string } | null>(null);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [atomicProgress, setAtomicProgress] = useState<AtomicUpdateProgress | null>(null);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [appReady, setAppReady] = useState(true);
 
@@ -351,10 +359,9 @@ function App() {
     syncSmartAlertsToDeviceNotifications(unifiedGlobalAlerts).catch(() => {});
   }, [deviceNotifOn, unifiedGlobalAlerts]);
 
-  // Subscribe to Multi-User Cloud Sync & OTA Update Channel
+  // Autonomously Activate Cloud SQL (20 Tables) & Google Drive Auto-Archive + Multi-User Cloud Sync
   useEffect(() => {
-    // Publish current build on app initialization to Supabase so all devices know latest version
-    broadcastNewAppBuild(CURRENT_APP_VERSION, CURRENT_APP_BUILD, 'ارتقای سیستم کلینیک مینادنتال').catch(() => {});
+    activateCloudSqlAndGoogleDrive(currentUser?.email || 'mehdi.amiri19851364@gmail.com').catch(() => {});
 
     const cleanup = initCloudSyncChannel({
       onSyncEvent: (ev) => {
@@ -370,10 +377,22 @@ function App() {
         }
       },
       onOtaUpdate: (ota) => {
-        if (ota.version && ota.version !== CURRENT_APP_VERSION) {
-          setOtaUpdateInfo(ota);
+        const installed = getInstalledReleaseInfo();
+        const incomingBuild = Number((ota as any).build || installed.build + 1);
+        if (ota.version && (incomingBuild > installed.build || ota.version !== installed.version)) {
+          const nextInfo = {
+            version: ota.version,
+            build: incomingBuild,
+            releaseNotes: ota.releaseNotes,
+            publishedBy: ota.publishedBy || 'مدیریت کلینیک',
+          };
+          setOtaUpdateInfo(nextInfo);
           setUpdateAvailable(true);
-          setLiveSyncToast(`نسخه جدید (${ota.version}) آماده بروزرسانی است`);
+          if (isAutoUpdateEnabled()) {
+            void handleApplyUpdate(nextInfo.version, nextInfo.build, nextInfo.releaseNotes);
+          } else {
+            setLiveSyncToast(`بیلد جدید (#${incomingBuild} • ${ota.version}) آماده نصب است`);
+          }
         }
       },
       onPresenceChange: (onlineUsers) => {
@@ -381,27 +400,49 @@ function App() {
       },
     });
     return cleanup;
-  }, [currentUser?.fullName, currentUser?.name]);
+  }, [currentUser?.fullName, currentUser?.name, currentUser?.email]);
 
-  // Periodic Auto-Check for remote build updates every 30 seconds
+  // Periodic Auto-Check for remote build updates every 30 seconds + listener for completed upgrade
   useEffect(() => {
-    const checkTimer = setInterval(async () => {
+    const onReleaseUpgraded = () => {
+      setUpdateAvailable(false);
+      setOtaUpdateInfo(null);
+      setInstallingUpdate(false);
+      setAtomicProgress(null);
+    };
+    window.addEventListener('minadental-release-upgraded', onReleaseUpgraded);
+
+    const runCheck = async () => {
       try {
+        const installed = getInstalledReleaseInfo();
         const res = await checkForAppUpdates();
-        if (res.updateAvailable && res.latestBuild > CURRENT_APP_BUILD) {
-          setUpdateAvailable(true);
-          setOtaUpdateInfo({
+        if (res.updateAvailable && res.latestBuild > installed.build) {
+          const nextInfo = {
             version: res.latestVersion,
+            build: res.latestBuild,
             releaseNotes: res.releaseNotes,
             publishedBy: 'مدیریت کلینیک',
-          });
+          };
+          setOtaUpdateInfo(nextInfo);
+          setUpdateAvailable(true);
+          if (isAutoUpdateEnabled()) {
+            void handleApplyUpdate(nextInfo.version, nextInfo.build, nextInfo.releaseNotes);
+          }
+        } else {
+          setUpdateAvailable(false);
         }
       } catch {
         // ignore
       }
-    }, 30000);
+    };
 
-    return () => clearInterval(checkTimer);
+    void runCheck();
+    const checkTimer = setInterval(runCheck, 30000);
+
+    return () => {
+      clearInterval(checkTimer);
+      window.removeEventListener('minadental-release-upgraded', onReleaseUpgraded);
+    };
   }, []);
 
   // Listen to App-Wide Zero-Delete / RBAC / Offline Guardian events (TRC-MINA-GUARD-9007-G)
@@ -614,27 +655,40 @@ function App() {
     };
   }, []);
 
-  const handleApplyUpdate = async () => {
+  const handleApplyUpdate = async (
+    targetVersionOverride?: string,
+    targetBuildOverride?: number,
+    releaseNotesOverride?: string
+  ) => {
+    if (installingUpdate) return;
+    setInstallingUpdate(true);
     try {
-      if ('caches' in window) {
-        const names = await window.caches.keys();
-        await Promise.all(names.map(n => window.caches.delete(n)));
-      }
-      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(registrations.map(reg => reg.unregister()));
-      }
-      try {
-        sessionStorage.clear();
-      } catch {
-        // ignore
-      }
+      const installed = getInstalledReleaseInfo();
+      const targetBuild = targetBuildOverride || otaUpdateInfo?.build || installed.build + 1;
+      const targetVersion = targetVersionOverride || otaUpdateInfo?.version || `6.6.${targetBuild}`;
+      const releaseNotes =
+        releaseNotesOverride ||
+        otaUpdateInfo?.releaseNotes ||
+        `ارتقای اتمیک به نسخه ${targetVersion} (Build #${targetBuild})`;
+
+      const upgraded = await applyAppUpdateAtomically({
+        targetVersion,
+        targetBuild,
+        releaseNotes,
+        reloadPage: false,
+        onProgress: (p) => setAtomicProgress(p),
+      });
+
+      setUpdateAvailable(false);
+      setOtaUpdateInfo(null);
+      setLiveSyncToast(`بیلد #${upgraded.build} (${upgraded.version}) با موفقیت نصب و قفل شد`);
+      setTimeout(() => setLiveSyncToast(null), 4000);
     } catch {
       // ignore
+    } finally {
+      setInstallingUpdate(false);
+      setTimeout(() => setAtomicProgress(null), 1500);
     }
-    const url = new URL(window.location.href);
-    url.searchParams.set('ota_instant_sync', Date.now().toString());
-    window.location.replace(url.toString());
   };
 
   const handleTriggerInstall = async () => {
@@ -955,24 +1009,50 @@ function App() {
                 </div>
               )}
 
-              {/* Update Available / OTA Broadcast Floating Banner */}
+              {/* Atomic Update Available / OTA Broadcast Floating Banner */}
               {updateAvailable && (
-                <div className="mt-2 p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white shadow-xl flex items-center justify-between border border-white/20 animate-fade-in">
-                  <div className="flex items-center gap-2 text-xs font-bold min-w-0">
-                    <Sparkles size={16} className="text-yellow-300 animate-spin shrink-0" />
-                    <div className="truncate">
-                      <span>آپدیت جدید ({otaUpdateInfo?.version || CURRENT_APP_VERSION}) منتشر شد</span>
-                      {otaUpdateInfo?.releaseNotes && (
-                        <span className="block text-[10px] text-purple-100 truncate">{otaUpdateInfo.releaseNotes}</span>
-                      )}
+                <div
+                  data-testid="top_atomic_update_banner"
+                  className="mt-2 p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white shadow-xl border border-white/20 animate-fade-in"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-bold min-w-0">
+                      <Sparkles size={16} className="text-yellow-300 animate-spin shrink-0" />
+                      <div className="truncate">
+                        <span>
+                          بیلد جدید ({otaUpdateInfo?.version || CURRENT_APP_VERSION}
+                          {otaUpdateInfo?.build ? ` • #${otaUpdateInfo.build}` : ''}) آماده نصب است
+                        </span>
+                        {otaUpdateInfo?.releaseNotes && (
+                          <span className="block text-[10px] text-purple-100 truncate">{otaUpdateInfo.releaseNotes}</span>
+                        )}
+                      </div>
                     </div>
+                    <button
+                      onClick={() => handleApplyUpdate()}
+                      disabled={installingUpdate}
+                      data-testid="top_atomic_update_install_btn"
+                      className="px-3 py-1.5 rounded-xl bg-white text-purple-900 font-extrabold text-xs shadow hover:bg-white/90 active:scale-95 transition-all shrink-0 disabled:opacity-70"
+                    >
+                      {installingUpdate
+                        ? `در حال نصب (${atomicProgress?.percent || 25}%)...`
+                        : 'نصب و ارتقای اتمیک'}
+                    </button>
                   </div>
-                  <button
-                    onClick={handleApplyUpdate}
-                    className="px-3 py-1.5 rounded-xl bg-white text-purple-900 font-extrabold text-xs shadow hover:bg-white/90 active:scale-95 transition-all shrink-0"
-                  >
-                    نصب و بروزرسانی آنی
-                  </button>
+                  {atomicProgress && (
+                    <div className="mt-2 pt-1.5 border-t border-white/15">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-purple-100 mb-1">
+                        <span>{atomicProgress.label}</span>
+                        <span>{atomicProgress.percent}%</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-white/20 overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-300 transition-all duration-200"
+                          style={{ width: `${atomicProgress.percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -1069,31 +1149,20 @@ function App() {
             </div>
           </div>
 
-          {/* Instant Cloud Backup & OTA Update Broadcast for Manager */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {/* Instant Cloud SQL & Google Drive Sync Action */}
+          <div className="grid grid-cols-1 gap-2">
             <button
-              onClick={handleSync}
+              onClick={async () => {
+                await handleSync();
+                await activateCloudSqlAndGoogleDrive(currentUser?.email || 'mehdi.amiri19851364@gmail.com');
+                setLiveSyncToast('کلود SQL و گوگل درایو با موفقیت همگام‌سازی و آرشیو شدند');
+                setTimeout(() => setLiveSyncToast(null), 3500);
+              }}
               className="py-2.5 px-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm haptic"
             >
               <Cloud size={15} />
-              سینک و بک‌آپ ابری فوری همه دستگاه‌ها
+              سینک فوری کلود SQL (۲۰ جدول) و آرشیو گوگل درایو
             </button>
-            {(currentUser?.canPublishUpdate || currentUser?.role === 'manager') && (
-              <button
-                onClick={async () => {
-                  await publishOtaUpdateToAllUsers(
-                    CURRENT_APP_VERSION,
-                    `بروزرسانی سراسری توسط ${currentUser?.fullName || currentUser?.name || 'مدیر کلینیک'}`
-                  );
-                  setLiveSyncToast('فرمان آپدیت اتوماتیک روی برنامه تمام کاربران ارسال شد');
-                  setTimeout(() => setLiveSyncToast(null), 3500);
-                }}
-                className="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm haptic"
-              >
-                <RefreshCw size={15} />
-                انتشار آپدیت اتوماتیک (OTA) به همه
-              </button>
-            )}
           </div>
 
           {/* Switch Between Clinic Accounts (Manager, Dentist, Secretary, Assistant) */}

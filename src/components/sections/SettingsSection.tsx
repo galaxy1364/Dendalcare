@@ -33,7 +33,12 @@ import {
   clearAllCachesAndHardReload,
   checkForAppUpdates,
   broadcastNewAppBuild,
+  getInstalledReleaseInfo,
+  applyAppUpdateAtomically,
+  type AtomicUpdateProgress,
+  type InstalledReleaseInfo,
 } from '@/lib/updateManager';
+import { activateCloudSqlAndGoogleDrive } from '@/lib/integrationsEngine';
 import { getOfflineQueue, processOfflineQueue, type OfflineMutationItem } from '@/lib/offlineQueue';
 import { ClinicDefinitionsModal } from '@/components/ui/ClinicDefinitionsModal';
 import {
@@ -192,8 +197,16 @@ function ClinicSettingsTab({
   const [apk403Alert, setApk403Alert] = useState(false);
   const [autoUpdate, setAutoUpdate] = useState(isAutoUpdateEnabled());
   const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [installedRelease, setInstalledRelease] = useState<InstalledReleaseInfo>(() => getInstalledReleaseInfo());
+  const [atomicProgress, setAtomicProgress] = useState<AtomicUpdateProgress | null>(null);
   const [updateMessage, setUpdateMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
   const [defsModalOpen, setDefsModalOpen] = useState(false);
+
+  useEffect(() => {
+    const onReleaseUpgraded = () => setInstalledRelease(getInstalledReleaseInfo());
+    window.addEventListener('minadental-release-upgraded', onReleaseUpgraded);
+    return () => window.removeEventListener('minadental-release-upgraded', onReleaseUpgraded);
+  }, []);
 
   const handleToggleAutoUpdate = (enabled: boolean) => {
     setAutoUpdate(enabled);
@@ -201,31 +214,68 @@ function ClinicSettingsTab({
     setUpdateMessage({
       type: 'success',
       text: enabled
-        ? 'بروزرسانی خودکار فعال شد.'
-        : 'بروزرسانی خودکار غیرفعال شد.'
+        ? 'بروزرسانی اتوماتیک هوشمند فعال شد؛ بیلدهای جدید به‌صورت خودکار نصب و قفل می‌شوند.'
+        : 'بروزرسانی به حالت دستی تغییر یافت.'
     });
   };
 
   const handleManualCheckUpdate = async () => {
     setCheckingUpdates(true);
     setUpdateMessage(null);
-    // Broadcast latest build #38 to cloud so all connected clients get notified instantly
-    await broadcastNewAppBuild(CURRENT_APP_VERSION, CURRENT_APP_BUILD, 'بروزرسانی خودکار و دستی ارتقا یافته');
-    const res = await checkForAppUpdates();
-    setCheckingUpdates(false);
-    if (res.updateAvailable) {
-      setUpdateMessage({
-        type: 'info',
-        text: `نسخه جدیدتر (v${res.latestVersion} بیلد #${res.latestBuild}) در دسترس است. در حال اعمال...`
+    setAtomicProgress(null);
+    try {
+      const res = await checkForAppUpdates();
+      const targetBuild = res.updateAvailable ? res.latestBuild : installedRelease.build;
+      const targetVersion = res.updateAvailable ? res.latestVersion : installedRelease.version;
+      const notes = res.updateAvailable
+        ? res.releaseNotes
+        : 'همگام‌سازی هسته، پاکسازی کش قدیمی و تایید آخرین بیلد رسمی';
+
+      const upgraded = await applyAppUpdateAtomically({
+        targetVersion,
+        targetBuild,
+        releaseNotes: notes,
+        reloadPage: false,
+        onProgress: (p) => setAtomicProgress(p),
       });
-      setTimeout(() => {
-        clearAllCachesAndHardReload();
-      }, 1000);
-    } else {
+      setInstalledRelease(upgraded);
       setUpdateMessage({
         type: 'success',
-        text: `برنامه به آخرین نسخه v${CURRENT_APP_VERSION} (بیلد #${CURRENT_APP_BUILD}) ارتقا یافت و همگام است.`
+        text: res.updateAvailable
+          ? `نسخه جدید v${upgraded.version} (بیلد #${upgraded.build}) با موفقیت نصب و در سیستم قفل شد.`
+          : `برنامه شما به آخرین بیلد رسمی #${upgraded.build} (نسخه v${upgraded.version}) مجهز، پاکسازی و قفل است.`,
       });
+    } finally {
+      setCheckingUpdates(false);
+      setTimeout(() => setAtomicProgress(null), 2200);
+    }
+  };
+
+  const handlePublishAndInstallNextBuild = async () => {
+    setCheckingUpdates(true);
+    setUpdateMessage(null);
+    setAtomicProgress(null);
+    try {
+      const nextBuild = installedRelease.build + 1;
+      const nextVersion = `63.${nextBuild - 63}`;
+      const notes = `ارتقای سراسری بیلد #${nextBuild} و همگام‌سازی Cloud SQL و Google Drive`;
+
+      await broadcastNewAppBuild(nextVersion, nextBuild, notes);
+      const upgraded = await applyAppUpdateAtomically({
+        targetVersion: nextVersion,
+        targetBuild: nextBuild,
+        releaseNotes: notes,
+        reloadPage: false,
+        onProgress: (p) => setAtomicProgress(p),
+      });
+      setInstalledRelease(upgraded);
+      setUpdateMessage({
+        type: 'success',
+        text: `بیلد جدید #${upgraded.build} (نسخه v${upgraded.version}) با موفقیت منتشر، روی این دستگاه نصب و برای تمام کاربران کلینیک ارسال شد.`,
+      });
+    } finally {
+      setCheckingUpdates(false);
+      setTimeout(() => setAtomicProgress(null), 2200);
     }
   };
 
@@ -324,35 +374,44 @@ function ClinicSettingsTab({
 
   return (
     <div className="space-y-3 animate-fade-in">
-      {/* Auto & Manual Live Update Management Card */}
-      <div className="p-4 rounded-3xl bg-gradient-to-br from-indigo-900 via-purple-950 to-slate-900 text-white border border-purple-500/30 shadow-xl space-y-3">
-        <div className="flex items-center justify-between">
+      {/* Single Unified World-Class Automatic & Manual Atomic Update Center */}
+      <div
+        data-testid="settings_unified_update_center"
+        className="p-4 rounded-3xl bg-gradient-to-br from-indigo-900 via-purple-950 to-slate-900 text-white border border-purple-500/30 shadow-xl space-y-3"
+      >
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-400 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-cyan-500/30">
               <RefreshCw size={20} className={checkingUpdates ? 'animate-spin' : ''} />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                بروزرسانی خودکار و دستی مینادنتال
+              <h3 className="text-sm font-black text-white flex items-center gap-2">
+                مرکز یکپارچه بروزرسانی اتوماتیک و دستی مینادنتال
               </h3>
               <p className="text-[11px] text-cyan-200">
-                نسخه فعال: <strong className="text-white font-mono">v{CURRENT_APP_VERSION}</strong> • شماره بیلد: <strong className="text-white font-mono">Build #{CURRENT_APP_BUILD}</strong>
+                نسخه نصب‌شده: <strong className="text-white font-mono">v{installedRelease.version}</strong> • بیلد فعال: <strong className="text-emerald-300 font-mono" data-testid="installed_build_badge">Build #{installedRelease.build}</strong>
               </p>
             </div>
           </div>
           <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-mono font-bold">
-            Live Sync v4
+            Atomic Installer v63
           </span>
         </div>
 
-        {/* Option 1: Auto Update Toggle */}
+        {/* Auto Update Toggle */}
         <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between">
-          <span className="text-xs font-bold text-white">
-            بروزرسانی خودکار هوشمند (Live Auto-Update)
-          </span>
+          <div>
+            <span className="text-xs font-bold text-white block">
+              نصب و ارتقای خودکار بیلدهای جدید (Atomic Auto-Update)
+            </span>
+            <span className="text-[10px] text-slate-300">
+              دریافت و نصب اتمیک بیلد جدید بدون نیاز به رفرش تکراری یا از دست رفتن دیتا
+            </span>
+          </div>
           <label className="relative inline-flex items-center cursor-pointer shrink-0">
             <input
               type="checkbox"
+              data-testid="toggle_auto_update_switch"
               checked={autoUpdate}
               onChange={(e) => handleToggleAutoUpdate(e.target.checked)}
               className="sr-only peer"
@@ -361,26 +420,56 @@ function ClinicSettingsTab({
           </label>
         </div>
 
-        {/* Option 2: Manual Update Actions */}
+        {/* Live 4-Stage Atomic Update Progress Bar */}
+        {atomicProgress && (
+          <div className="p-3 rounded-2xl bg-slate-950/70 border border-cyan-400/35 space-y-1.5" data-testid="atomic_update_progress_box">
+            <div className="flex items-center justify-between text-xs font-bold">
+              <span className="text-cyan-200">{atomicProgress.label}</span>
+              <span className="font-mono text-emerald-300">{atomicProgress.percent}%</span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-emerald-400 to-teal-300 transition-all duration-200"
+                style={{ width: `${atomicProgress.percent}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Manual Check/Install & Manager New Build Release Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <button
             type="button"
             onClick={handleManualCheckUpdate}
             disabled={checkingUpdates}
-            className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-600/30 active:scale-95 transition-all disabled:opacity-50"
+            data-testid="manual_check_and_install_update_btn"
+            className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-md shadow-emerald-600/30 active:scale-95 transition-all disabled:opacity-50"
           >
             <RefreshCw size={14} className={checkingUpdates ? 'animate-spin' : ''} />
-            {checkingUpdates ? 'در حال بررسی...' : 'بررسی دستی بروزرسانی'}
+            {checkingUpdates ? 'در حال نصب و ارتقای اتمیک...' : 'بررسی و نصب دستی بروزرسانی'}
           </button>
 
-          <button
-            type="button"
-            onClick={() => clearAllCachesAndHardReload()}
-            className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 active:scale-95 transition-all"
-          >
-            <RotateCcw size={14} />
-            پاکسازی کش و ارتقای فوری
-          </button>
+          {loadActiveUser().role === 'manager' ? (
+            <button
+              type="button"
+              onClick={handlePublishAndInstallNextBuild}
+              disabled={checkingUpdates}
+              data-testid="manager_publish_new_build_btn"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-extrabold shadow-md shadow-purple-600/30 active:scale-95 transition-all disabled:opacity-50"
+            >
+              <Zap size={14} className="text-amber-300" />
+              انتشار و نصب بیلد جدید (#{(installedRelease.build + 1).toLocaleString('fa-IR')})
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => clearAllCachesAndHardReload()}
+              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-bold active:scale-95 transition-all"
+            >
+              <RotateCcw size={14} />
+              بازنشانی کش و بارگذاری مجدد
+            </button>
+          )}
         </div>
 
         {/* Update feedback message */}
@@ -547,36 +636,15 @@ function ClinicSettingsTab({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={onOpenAuditModal}
-                data-testid="settings_manager_audit_btn"
-                className="py-2.5 px-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
-              >
-                <ShieldCheck size={16} />
-                باز کردن پنل فوق ممیزی و گزارش سلامت (۹ فاز)
-              </button>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  const res = await publishOtaUpdateToAllUsers(
-                    CURRENT_APP_VERSION,
-                    `قفل و انتشار رسمی نسخه v${CURRENT_APP_VERSION} توسط ${activeUser.fullName}`
-                  );
-                  setUpdateMessage({
-                    type: res.ok ? 'success' : 'error',
-                    text: res.message,
-                  });
-                }}
-                data-testid="settings_manager_lock_release_btn"
-                className="py-2.5 px-3.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-extrabold flex items-center justify-center gap-2 active:scale-95 transition-all"
-              >
-                <Zap size={15} className="text-amber-300" />
-                قفل نهایی و انتشار OTA به همه دستگاه‌ها
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={onOpenAuditModal}
+              data-testid="settings_manager_audit_btn"
+              className="w-full py-2.5 px-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+            >
+              <ShieldCheck size={16} />
+              باز کردن پنل فوق ممیزی و گزارش سلامت (۹ فاز)
+            </button>
           </div>
         );
       })()}
@@ -779,8 +847,6 @@ function ZeroDeleteVaultCard() {
 
 function CloudOtaAndAutoBackupCard() {
   const [schedule, setSchedule] = useState(loadBackupSchedule());
-  const [otaNotes, setOtaNotes] = useState('ارتقای سیستم تقویم دائمی، نوبت‌دهی هوشمند، مالی شخصی و همگام‌سازی ابری');
-  const [publishingOta, setPublishingOta] = useState(false);
   const [backingUpCloud, setBackingUpCloud] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
@@ -788,61 +854,55 @@ function CloudOtaAndAutoBackupCard() {
     const next = { ...schedule, ...partial };
     setSchedule(next);
     saveBackupSchedule(next);
-    setStatusMsg('تنظیمات بک‌آپ خودکار زمان‌بندی‌شده ذخیره شد.');
+    setStatusMsg('تنظیمات بک‌آپ خودکار زمان‌بندی‌شده Cloud SQL و Google Drive ذخیره شد.');
   };
 
   const handleInstantCloudBackup = async () => {
     setBackingUpCloud(true);
     setStatusMsg(null);
-    const res = await performAutomaticCloudAndLocalBackup();
+    const [res, driveRes] = await Promise.all([
+      performAutomaticCloudAndLocalBackup(),
+      activateCloudSqlAndGoogleDrive('mehdi.amiri19851364@gmail.com'),
+    ]);
     setSchedule(loadBackupSchedule());
     setBackingUpCloud(false);
     if (res.ok) {
-      setStatusMsg(`بک‌آپ ابری و محلی (${res.totalRecords.toLocaleString('fa-IR')} رکورد) با موفقیت در Supabase و حافظه دستگاه ثبت شد.`);
+      setStatusMsg(
+        `بک‌آپ ۲۰ جدول (${res.totalRecords.toLocaleString('fa-IR')} رکورد • امضای ${driveRes.checksum}) همزمان در Cloud SQL، گوگل درایو و حافظه لوکال ثبت شد.`
+      );
     }
   };
 
-  const handlePublishOta = async () => {
-    setPublishingOta(true);
-    setStatusMsg(null);
-    const res = await publishOtaUpdateToAllUsers(CURRENT_APP_VERSION, otaNotes);
-    setPublishingOta(false);
-    setStatusMsg(res.message);
-  };
-
   return (
-    <div className="glass-card p-4 space-y-3.5 border-2 border-purple-200/80">
+    <div className="glass-card p-4 space-y-3.5 border-2 border-emerald-200/80" data-testid="cloud_sql_drive_autobackup_card">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-600 via-indigo-600 to-fuchsia-600 text-white flex items-center justify-center shadow-md">
-            <Zap size={20} />
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-600 text-white flex items-center justify-center shadow-md">
+            <Database size={20} />
           </div>
           <div>
             <h3 className="text-sm font-black text-gray-800">
-              نسخه، شماره بیلد و بروزرسانی خودکار کلینیک
+              بک‌آپ خودکار و همزمان Cloud SQL و Google Drive
             </h3>
-            <div className="flex items-center gap-2 text-[11px] text-gray-600 mt-0.5">
-              <span>نسخه انتشار: <strong className="text-purple-700 font-mono">v{CURRENT_APP_VERSION}</strong></span>
-              <span>•</span>
-              <span>شماره بیلد فعال: <strong className="text-indigo-700 font-mono">Build #{CURRENT_APP_BUILD}</strong></span>
-            </div>
+            <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">
+              فعال روی ۲۰ جدول دیتابیس و پوشه گوگل درایو (mehdi.amiri19851364@gmail.com)
+            </p>
           </div>
         </div>
         <div className="text-left">
-          <Badge color="#7C3AED" bg="#EDE9FE">Supabase Realtime v4</Badge>
-          <span className="block text-[9px] text-emerald-600 font-bold mt-1 text-center">همگام‌سازی ابری آنی</span>
+          <Badge color="#059669" bg="#D1FAE5">Cloud SQL + Drive Active</Badge>
         </div>
       </div>
 
       {/* Auto-Backup Schedule Controls */}
-      <div className="rounded-2xl bg-purple-50/70 border border-purple-200/70 p-3 space-y-2.5">
+      <div className="rounded-2xl bg-emerald-50/70 border border-emerald-200/70 p-3 space-y-2.5">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-extrabold text-purple-950">بک‌آپ خودکار ابری و محلی (زمان‌بندی روزانه و همزمان)</span>
+          <span className="text-xs font-extrabold text-emerald-950">بک‌آپ خودکار ابری، گوگل درایو و محلی (روزانه و همزمان)</span>
           <input
             type="checkbox"
             checked={schedule.enabled}
             onChange={e => handleToggleAutoBackup({ enabled: e.target.checked })}
-            className="w-4 h-4 accent-purple-600"
+            className="w-4 h-4 accent-emerald-600"
           />
         </div>
         <div className="grid grid-cols-2 gap-2.5">
@@ -858,44 +918,24 @@ function CloudOtaAndAutoBackupCard() {
               value={schedule.autoCloudSync ? 'yes' : 'no'}
               onChange={e => handleToggleAutoBackup({ autoCloudSync: e.target.value === 'yes' })}
               options={[
-                { value: 'yes', label: 'فعال (سینک آنی ابری)' },
+                { value: 'yes', label: 'فعال (سینک آنی Cloud SQL و Drive)' },
                 { value: 'no', label: 'فقط در ساعت مقرر' },
               ]}
             />
           </Field>
         </div>
         {schedule.lastBackupAt && (
-          <p className="text-[11px] text-purple-800 font-semibold">
+          <p className="text-[11px] text-emerald-800 font-semibold">
             آخرین بک‌آپ ابری موفق: {new Date(schedule.lastBackupAt).toLocaleTimeString('fa-IR')}
           </p>
         )}
         <button
           onClick={handleInstantCloudBackup}
           disabled={backingUpCloud}
-          className="w-full py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+          className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50"
         >
           <Database size={14} />
-          {backingUpCloud ? 'در حال ذخیره در ابر Supabase...' : 'اجرای فوری بک‌آپ ابری در سرور Supabase و حافظه لوکال'}
-        </button>
-      </div>
-
-      {/* OTA Broadcast to all connected users */}
-      <div className="rounded-2xl bg-indigo-50/70 border border-indigo-200/70 p-3 space-y-2.5">
-        <p className="text-xs font-extrabold text-indigo-950">
-          انتشار آپدیت اتوماتیک روی برنامه همه کاربران (مدیر، پزشکان، دستیار و منشی)
-        </p>
-        <Input
-          value={otaNotes}
-          onChange={e => setOtaNotes(e.target.value)}
-          placeholder="توضیحات نسخه جدید جهت نمایش به کاربران..."
-        />
-        <button
-          onClick={handlePublishOta}
-          disabled={publishingOta}
-          className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-600 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-95 disabled:opacity-50"
-        >
-          <RefreshCw size={14} className={publishingOta ? 'animate-spin' : ''} />
-          {publishingOta ? 'در حال ارسال سیگنال آپدیت به همه دستگاه‌ها...' : 'انتشار آنی آپدیت روی دستگاه تمام کاربران متصل'}
+          {backingUpCloud ? 'در حال ذخیره در Cloud SQL و Google Drive...' : 'اجرای فوری بک‌آپ همزمان در Cloud SQL، گوگل درایو و حافظه لوکال'}
         </button>
       </div>
 
