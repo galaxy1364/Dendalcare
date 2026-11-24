@@ -15,8 +15,9 @@ import { StaffSection } from '@/components/sections/StaffSection';
 import { Messages } from '@/components/sections/Messages';
 import { SettingsSection } from '@/components/sections/SettingsSection';
 import {
-  Bell, Cloud, Sparkles, X, Keyboard, WifiOff, Download, ShieldAlert, Archive, UploadCloud,
-  BellRing, ArrowLeft, User, ShieldCheck, RefreshCw, Plus, CheckCircle2, LogOut, CalendarRange, PhoneIncoming, PhoneCall,
+  Cloud, Sparkles, X, Keyboard, WifiOff, Download, ShieldAlert, Archive, UploadCloud,
+  BellRing, ArrowLeft, User, ShieldCheck, RefreshCw, Plus, CheckCircle2, LogOut, PhoneIncoming, PhoneCall,
+  FolderKanban, Volume2, Vibrate, Smartphone,
 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
@@ -51,6 +52,22 @@ import { RoadmapAuditModal } from '@/components/ui/RoadmapAuditModal';
 import { MemPalace, OmniRoute } from '@/lib/memPalace';
 import { broadcastNewAppBuild, checkForAppUpdates } from '@/lib/updateManager';
 import { getOfflineQueue, processOfflineQueue } from '@/lib/offlineQueue';
+import { DraggableNotificationHandle } from '@/components/ui/DraggableNotificationHandle';
+import {
+  playTactileFeedback,
+  isHapticsEnabled,
+  setHapticsEnabled,
+  isSoundEnabled,
+  setSoundEnabled,
+} from '@/lib/hapticsAudio';
+import {
+  getDeviceNotificationPermission,
+  isDeviceNotificationsEnabled,
+  requestDeviceNotificationPermission,
+  sendRealDeviceNotification,
+  setDeviceNotificationsEnabled,
+  syncSmartAlertsToDeviceNotifications,
+} from '@/lib/deviceNotifications';
 
 function App() {
   const [active, setActive] = useState<SectionId>('dashboard');
@@ -69,6 +86,11 @@ function App() {
   const [appReady, setAppReady] = useState(true);
 
   const [roadmapModalOpen, setRoadmapModalOpen] = useState(false);
+  const [projectFolderOpen, setProjectFolderOpen] = useState(false);
+  const [hapticsOn, setHapticsOn] = useState<boolean>(() => isHapticsEnabled());
+  const [soundOn, setSoundOn] = useState<boolean>(() => isSoundEnabled());
+  const [deviceNotifOn, setDeviceNotifOn] = useState<boolean>(() => isDeviceNotificationsEnabled());
+  const [deviceNotifPerm, setDeviceNotifPerm] = useState(() => getDeviceNotificationPermission());
   const [callerIdOpen, setCallerIdOpen] = useState(false);
   const [incomingPhone, setIncomingPhone] = useState('0912');
   const [callerNewFirstName, setCallerNewFirstName] = useState('');
@@ -145,6 +167,7 @@ function App() {
   const [flushingQueue, setFlushingQueue] = useState(false);
   const [newUserForm, setNewUserForm] = useState({
     name: '',
+    username: '',
     role: 'secretary' as UserRole,
     email: '',
     phone: '',
@@ -211,6 +234,12 @@ function App() {
     }
     return liveSmartAlerts;
   }, [liveSmartAlerts, drawerTab]);
+
+  // Dispatch urgent/due smart alerts to genuine OS/Device Notifications when enabled
+  useEffect(() => {
+    if (!deviceNotifOn || liveSmartAlerts.length === 0) return;
+    syncSmartAlertsToDeviceNotifications(liveSmartAlerts).catch(() => {});
+  }, [deviceNotifOn, liveSmartAlerts]);
 
   // Subscribe to Multi-User Cloud Sync & OTA Update Channel
   useEffect(() => {
@@ -494,6 +523,7 @@ function App() {
     };
     const created: ClinicUserAccount = {
       id: `user_${Date.now()}`,
+      username: newUserForm.username.trim() || `${newUserForm.role}_${Date.now().toString().slice(-4)}`,
       fullName: newUserForm.name.trim(),
       name: newUserForm.name.trim(),
       role: newUserForm.role,
@@ -516,7 +546,7 @@ function App() {
     saveClinicUsers(updated);
     handleSwitchUser(created);
     setAddingNewUser(false);
-    setNewUserForm({ name: '', role: 'secretary', email: '', phone: '', pin: '1234' });
+    setNewUserForm({ name: '', username: '', role: 'secretary', email: '', phone: '', pin: '1234' });
   };
 
   const renderSection = () => {
@@ -559,73 +589,54 @@ function App() {
 
       <div className="section-glow" style={{ background: section.color }} />
 
-      {/* Top bar — iOS 27 floating glass with logo, User Avatar Switcher, Caller-ID, Calendar shortcut, Cloud Sync, Roadmap Audit, Notification Bell */}
+      {/* Ultra-Clean Minimal QBank Top Bar — Strictly 2 Action Icons (User Account + Project Folder) */}
       <header className={`fixed top-0 left-0 right-0 z-30 px-2 pt-2 safe-top transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}>
         <div className="max-w-xl md:max-w-4xl lg:max-w-5xl mx-auto">
           <div
-            className="glass-dark rounded-[22px] px-3 py-2 flex items-center justify-between"
+            className="glass-dark rounded-[22px] px-3.5 py-2 flex items-center justify-between"
             style={{
-              boxShadow: '0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08)',
+              boxShadow: '0 8px 28px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.10)',
             }}
           >
-            {/* Mascot Tooth Logo (Organic Duolingo Style - No Square Box) + App Name */}
+            {/* Right Side (RTL Start): Mascot Logo + Brand Name + Active User */}
             <div className="flex items-center gap-2 min-w-0">
               <div
                 className="cursor-pointer shrink-0 transition-transform active:scale-95"
-                onClick={() => handleNavigate('dashboard')}
-                title="مینادنتال - سیستم هوشمند مدیریت کلینیک"
+                onClick={() => {
+                  playTactileFeedback('tap');
+                  handleNavigate('dashboard');
+                }}
+                title="مینادنتال - خانه"
               >
-                <MascotTooth mood={mascotMood} size={42} />
+                <MascotTooth mood={mascotMood} size={40} />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <h1 className="text-sm font-black text-white leading-tight truncate">مینادنتال</h1>
                   <span
-                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-md text-white truncate max-w-[110px]"
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-md text-white truncate max-w-[120px]"
                     style={{ background: `${currentUser?.avatarColor || '#8B5CF6'}CC` }}
                   >
                     {currentUser?.fullName || currentUser?.name || 'دکتر مهدی امیری'}
                   </span>
                 </div>
-                <p className="text-[10px] text-purple-200/70 leading-tight truncate">
-                  مدیریت کلینیک • {onlinePeersCount.toLocaleString('fa-IR')} آنلاین
+                <p className="text-[10px] text-purple-200/75 leading-tight truncate">
+                  {onlinePeersCount.toLocaleString('fa-IR')} دستگاه آنلاین • سینک زنده
                 </p>
               </div>
             </div>
 
-            {/* Right icons: User Avatar Icon, Caller-ID, Calendar, AI, Roadmap Audit, Cloud Sync, Notification Bell */}
-            <div className="flex items-center gap-1 shrink-0">
-              {/* Direct PWA Install in Browser with App Logo */}
+            {/* Left Side (RTL End): ONLY 2 Clean Circular QBank Buttons (Account + Project Folder) */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* 1. User Account, Username/Password & Role Switcher */}
               <button
-                className="topbar-btn relative bg-purple-600/30 border border-purple-400/40 text-purple-200 hover:bg-purple-600/50 hover:text-white"
-                onClick={handleTriggerInstall}
-                aria-label="نصب برنامه در مرورگر"
-                title="نصب اپلیکیشن مینادنتال با آیکون و لوگو در صفحه اصلی (PWA)"
-                data-testid="topbar_install_pwa_button"
-              >
-                <Download size={16} className="text-yellow-300 animate-pulse" />
-                <span className="absolute -top-1 -left-1 text-[8px] font-black bg-gradient-to-r from-amber-400 to-rose-500 text-slate-950 px-1 rounded-full">
-                  نصب
-                </span>
-              </button>
-
-              {/* Smart Incoming Call Caller-ID & Auto-Booking Button */}
-              <button
-                className="topbar-btn relative"
-                onClick={() => setCallerIdOpen(true)}
-                aria-label="تشخیص تماس بیمار و نوبت‌دهی خودکار"
-                title="کالر آیدی هوشمند و نوبت‌دهی خودکار هنگام تماس بیمار"
-                data-testid="topbar_caller_id_button"
-              >
-                <PhoneIncoming size={17} className="text-emerald-300" />
-              </button>
-
-              {/* Top-Bar User Avatar Button (لوگو آدمک مدیریت کاربر و سطح دسترسی) */}
-              <button
-                className="topbar-btn relative"
-                onClick={() => setUserModalOpen(true)}
-                aria-label="حساب کاربری و تغییر کاربر"
-                title={`${currentUser?.fullName || currentUser?.name || 'کاربر'} (${ROLE_LABELS[currentUser?.role || 'manager'] || 'کاربر'})`}
+                className="topbar-btn relative bg-white/10 hover:bg-white/15 border border-white/15"
+                onClick={() => {
+                  playTactileFeedback('tap');
+                  setUserModalOpen(true);
+                }}
+                aria-label="حساب کاربری و مدیریت دسترسی"
+                title={`${currentUser?.fullName || 'دکتر مهدی امیری'} (${ROLE_LABELS[currentUser?.role || 'manager']})`}
                 data-testid="topbar_user_avatar_button"
               >
                 <User size={18} className="text-purple-200" />
@@ -635,165 +646,115 @@ function App() {
                 />
               </button>
 
-              {/* Perpetual Persian Calendar Quick Button */}
+              {/* 2. Project Folder (Houses Caller-ID, PWA Install, 8-Phase Super-Audit, Sync & iOS Haptics) */}
               <button
-                className="topbar-btn"
-                onClick={() => handleNavigate('calendar')}
-                aria-label="تقویم فارسی"
-                title="تقویم جامع فارسی"
+                className="topbar-btn relative bg-white/10 hover:bg-white/15 border border-white/15"
+                onClick={() => {
+                  playTactileFeedback('tap');
+                  setProjectFolderOpen(true);
+                }}
+                aria-label="پوشه پروژه مینادنتال"
+                title="پوشه پروژه: کالرآیدی، نصب برنامه، فوق ممیزی، سینک و هپتیک iOS"
+                data-testid="topbar_project_folder_button"
               >
-                <CalendarRange size={17} className="text-fuchsia-300" />
-              </button>
-
-              {/* AI Assistant */}
-              <button
-                className="topbar-btn ai-pulse"
-                onClick={() => handleNavigate('treatments')}
-                aria-label="هوش مصنوعی"
-              >
-                <Sparkles size={18} className="text-purple-400" />
-              </button>
-
-              {/* Verifiable Roadmap & Memory Audit (شناسه قابل پیگیری و قفل پروژه) */}
-              <button
-                className="topbar-btn relative"
-                onClick={() => setRoadmapModalOpen(true)}
-                aria-label="نقشه راه و ممیزی سیستم"
-                title="مشاهده نقشه راه ۰ تا ۱۰۰ و لاگ‌های ممیزی قفل‌شده"
-                data-testid="topbar_roadmap_audit_button"
-              >
-                <ShieldCheck size={18} className="text-emerald-400" />
-                <span className="absolute -top-1 -right-1 text-[8px] font-black bg-emerald-500 text-slate-950 px-1 rounded-full font-mono">
-                  TRC
-                </span>
-              </button>
-
-              {/* Cloud Sync & Instant Backup */}
-              <button
-                className={`topbar-btn ${syncing ? 'cloud-sync-active' : ''}`}
-                onClick={handleSync}
-                aria-label="همگام‌سازی ابری و بک‌آپ آنی"
-                title="همگام‌سازی ابری و بک‌آپ آنی"
-              >
-                <Cloud size={17} className={syncing ? 'text-cyan-400' : syncPulse ? 'text-green-400' : 'text-blue-200/70'} />
-                {!syncing && (
-                  <div
-                    className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full"
-                    style={{
-                      background: syncPulse ? '#22C55E' : 'rgba(34,197,94,0.5)',
-                      boxShadow: syncPulse ? '0 0 6px #22C55E' : 'none',
-                      transition: 'all 0.3s var(--spring)',
-                    }}
-                  />
-                )}
-              </button>
-
-              {/* Pendulum Swinging Colorful Notification Bell */}
-              <button
-                className="topbar-btn"
-                onClick={() => setNotifOpen(!notifOpen)}
-                aria-label="اعلان‌ها و رادار یادآوری"
-                data-testid="topbar_notification_bell"
-              >
-                <Bell
-                  size={18}
-                  className={notifCount > 0 ? 'text-amber-300 bell-swing' : 'text-amber-200/80'}
-                  style={notifCount > 0 ? { filter: 'drop-shadow(0 0 8px rgba(251,191,36,0.65))' } : undefined}
-                />
-                {notifCount > 0 && (
-                  <span className="notif-dot">
-                    {notifCount > 99 ? '99+' : String(notifCount).toPersianDigits()}
-                  </span>
+                <FolderKanban size={18} className="text-amber-300" />
+                {syncPulse && (
+                  <span className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-emerald-400" />
                 )}
               </button>
             </div>
           </div>
 
-          {/* Real-Time Multi-User Cloud Sync Toast */}
-          {liveSyncToast && (
-            <div className="mt-2 px-3 py-2 rounded-2xl bg-slate-900/95 border border-emerald-400/40 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2 shadow-xl animate-fade-in">
-              <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
-              <span>{liveSyncToast}</span>
-            </div>
-          )}
-
-          {/* App-Wide Zero-Delete / RBAC / Offline Guardian Toast (TRC-MINA-GUARD-9007-G) */}
-          {guardianToast && (
-            <div
-              data-testid="guardian_security_toast"
-              className={`mt-2 px-3 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-xl border animate-fade-in ${
-                guardianToast.severity === 'security'
-                  ? 'bg-rose-950/95 border-rose-400/50 text-rose-100'
-                  : guardianToast.severity === 'offline'
-                  ? 'bg-amber-950/95 border-amber-400/50 text-amber-100'
-                  : 'bg-emerald-950/95 border-emerald-400/50 text-emerald-100'
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                {guardianToast.severity === 'security' ? (
-                  <ShieldAlert size={16} className="text-rose-400 shrink-0" />
-                ) : guardianToast.severity === 'offline' ? (
-                  <WifiOff size={16} className="text-amber-400 shrink-0" />
-                ) : (
-                  <Archive size={16} className="text-emerald-400 shrink-0" />
-                )}
-                <div className="min-w-0">
-                  <span className="leading-snug block">{guardianToast.message}</span>
-                  <span className="text-[9px] font-mono opacity-75">{guardianToast.traceId}</span>
+          {/* Floating Status Banners — Automatically FADE OUT / HIDE whenever Reminder Drawer is Open */}
+          {!notifOpen && (
+            <>
+              {/* Real-Time Multi-User Cloud Sync Toast */}
+              {liveSyncToast && (
+                <div className="mt-2 px-3 py-2 rounded-2xl bg-slate-900/95 border border-emerald-400/40 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2 shadow-xl animate-fade-in">
+                  <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
+                  <span>{liveSyncToast}</span>
                 </div>
-              </div>
-              <button
-                onClick={() => setGuardianToast(null)}
-                aria-label="بستن هشدار"
-                className="p-1 rounded-lg bg-white/10 hover:bg-white/20 shrink-0"
-              >
-                <X size={13} />
-              </button>
-            </div>
-          )}
+              )}
 
-          {/* Pending Offline Write-Ahead Queue Pill */}
-          {offlineQueueCount > 0 && (
-            <div
-              data-testid="offline_queue_pending_pill"
-              className="mt-2 px-3 py-2 rounded-2xl bg-amber-500/15 border border-amber-400/45 text-amber-100 text-[11px] font-bold flex items-center justify-between gap-2 shadow-lg animate-fade-in"
-            >
-              <div className="flex items-center gap-2">
-                <UploadCloud size={15} className="text-amber-300 shrink-0" />
-                <span>
-                  {offlineQueueCount.toLocaleString('fa-IR')} تغییر در صف آفلاین آماده ارسال به Cloud SQL است
-                </span>
-              </div>
-              <button
-                onClick={handleFlushOfflineQueue}
-                disabled={flushingQueue}
-                data-testid="flush_offline_queue_button"
-                className="px-2.5 py-1 rounded-xl bg-amber-400 text-slate-950 font-black text-[10px] hover:bg-amber-300 active:scale-95 transition-all shrink-0 disabled:opacity-60"
-              >
-                {flushingQueue ? 'در حال ارسال...' : 'ارسال آنی'}
-              </button>
-            </div>
-          )}
-
-          {/* Update Available / OTA Broadcast Floating Banner */}
-          {updateAvailable && (
-            <div className="mt-2 p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white shadow-xl flex items-center justify-between border border-white/20 animate-fade-in">
-              <div className="flex items-center gap-2 text-xs font-bold min-w-0">
-                <Sparkles size={16} className="text-yellow-300 animate-spin shrink-0" />
-                <div className="truncate">
-                  <span>آپدیت جدید ({otaUpdateInfo?.version || CURRENT_APP_VERSION}) منتشر شد</span>
-                  {otaUpdateInfo?.releaseNotes && (
-                    <span className="block text-[10px] text-purple-100 truncate">{otaUpdateInfo.releaseNotes}</span>
-                  )}
+              {/* App-Wide Zero-Delete / RBAC / Offline Guardian Toast (TRC-MINA-GUARD-9007-G) */}
+              {guardianToast && (
+                <div
+                  data-testid="guardian_security_toast"
+                  className={`mt-2 px-3 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-xl border animate-fade-in ${
+                    guardianToast.severity === 'security'
+                      ? 'bg-rose-950/95 border-rose-400/50 text-rose-100'
+                      : guardianToast.severity === 'offline'
+                      ? 'bg-amber-950/95 border-amber-400/50 text-amber-100'
+                      : 'bg-emerald-950/95 border-emerald-400/50 text-emerald-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {guardianToast.severity === 'security' ? (
+                      <ShieldAlert size={16} className="text-rose-400 shrink-0" />
+                    ) : guardianToast.severity === 'offline' ? (
+                      <WifiOff size={16} className="text-amber-400 shrink-0" />
+                    ) : (
+                      <Archive size={16} className="text-emerald-400 shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <span className="leading-snug block">{guardianToast.message}</span>
+                      <span className="text-[9px] font-mono opacity-75">{guardianToast.traceId}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setGuardianToast(null)}
+                    aria-label="بستن هشدار"
+                    className="p-1 rounded-lg bg-white/10 hover:bg-white/20 shrink-0"
+                  >
+                    <X size={13} />
+                  </button>
                 </div>
-              </div>
-              <button
-                onClick={handleApplyUpdate}
-                className="px-3 py-1.5 rounded-xl bg-white text-purple-900 font-extrabold text-xs shadow hover:bg-white/90 active:scale-95 transition-all shrink-0"
-              >
-                نصب و بروزرسانی آنی
-              </button>
-            </div>
+              )}
+
+              {/* Pending Offline Write-Ahead Queue Pill */}
+              {offlineQueueCount > 0 && (
+                <div
+                  data-testid="offline_queue_pending_pill"
+                  className="mt-2 px-3 py-2 rounded-2xl bg-amber-950/90 border border-amber-400/45 text-amber-100 text-[11px] font-bold flex items-center justify-between gap-2 shadow-lg animate-fade-in"
+                >
+                  <div className="flex items-center gap-2">
+                    <UploadCloud size={15} className="text-amber-300 shrink-0" />
+                    <span>
+                      {offlineQueueCount.toLocaleString('fa-IR')} تغییر در صف آفلاین آماده ارسال به Cloud SQL است
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleFlushOfflineQueue}
+                    disabled={flushingQueue}
+                    data-testid="flush_offline_queue_button"
+                    className="px-2.5 py-1 rounded-xl bg-amber-400 text-slate-950 font-black text-[10px] hover:bg-amber-300 active:scale-95 transition-all shrink-0 disabled:opacity-60"
+                  >
+                    {flushingQueue ? 'در حال ارسال...' : 'ارسال آنی'}
+                  </button>
+                </div>
+              )}
+
+              {/* Update Available / OTA Broadcast Floating Banner */}
+              {updateAvailable && (
+                <div className="mt-2 p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white shadow-xl flex items-center justify-between border border-white/20 animate-fade-in">
+                  <div className="flex items-center gap-2 text-xs font-bold min-w-0">
+                    <Sparkles size={16} className="text-yellow-300 animate-spin shrink-0" />
+                    <div className="truncate">
+                      <span>آپدیت جدید ({otaUpdateInfo?.version || CURRENT_APP_VERSION}) منتشر شد</span>
+                      {otaUpdateInfo?.releaseNotes && (
+                        <span className="block text-[10px] text-purple-100 truncate">{otaUpdateInfo.releaseNotes}</span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleApplyUpdate}
+                    className="px-3 py-1.5 rounded-xl bg-white text-purple-900 font-extrabold text-xs shadow hover:bg-white/90 active:scale-95 transition-all shrink-0"
+                  >
+                    نصب و بروزرسانی آنی
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
           {/* Shortcuts Panel */}
@@ -954,6 +915,27 @@ function App() {
                   </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
+                  <Field label="نام کاربری اختصاصی (Username)">
+                    <Input
+                      value={newUserForm.username}
+                      onChange={e => setNewUserForm({ ...newUserForm, username: e.target.value })}
+                      placeholder="مثلاً dr.mohammadi"
+                      dir="ltr"
+                      className="text-left font-mono"
+                    />
+                  </Field>
+                  <Field label="رمز عبور / پین ورود">
+                    <Input
+                      type="password"
+                      value={newUserForm.pin}
+                      onChange={e => setNewUserForm({ ...newUserForm, pin: e.target.value })}
+                      placeholder="حداقل ۴ رقم"
+                      dir="ltr"
+                      className="text-left font-mono"
+                    />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
                   <Field label="جیمیل (جهت سینک ابری)">
                     <Input
                       value={newUserForm.email}
@@ -970,7 +952,7 @@ function App() {
                   </Field>
                 </div>
                 <Button color="#8B5CF6" className="w-full" onClick={handleAddNewUser}>
-                  ثبت کاربر و فعال‌سازی سینک ابری
+                  ثبت کاربر و همگام‌سازی آنی ابری و لوکال
                 </Button>
               </div>
             )}
@@ -1017,18 +999,148 @@ function App() {
         </div>
       </Sheet>
 
-      {/* World-Class Slide-Over Notification & Smart Reminder Drawer (کشویی از کنار صفحه) */}
+      {/* Project Folder Sheet (پوشه پروژه — ابزارهای جانبی بدون شلوغ کردن داک بالا) */}
+      <Sheet
+        open={projectFolderOpen}
+        onClose={() => setProjectFolderOpen(false)}
+        title="پوشه پروژه مینادنتال"
+        subtitle={`نسخه v${CURRENT_APP_VERSION} (بیلد #${CURRENT_APP_BUILD}) • تمام ابزارهای جانبی در یک جای تمیز`}
+        icon={<FolderKanban size={20} />}
+        color="#7C3AED"
+      >
+        <div className="space-y-3" data-testid="project_folder_sheet_content">
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                playTactileFeedback('tap');
+                setProjectFolderOpen(false);
+                setCallerIdOpen(true);
+              }}
+              data-testid="folder_caller_id_btn"
+              className="p-3.5 rounded-3xl bg-emerald-50 border border-emerald-200/80 text-right space-y-1.5 haptic shadow-sm"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow">
+                <PhoneIncoming size={19} />
+              </div>
+              <p className="text-xs font-black text-emerald-950">کالر آیدی هوشمند</p>
+              <p className="text-[10px] text-emerald-700">تشخیص تماس بیمار و نوبت خودکار</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                playTactileFeedback('tap');
+                setProjectFolderOpen(false);
+                handleTriggerInstall();
+              }}
+              data-testid="folder_install_pwa_btn"
+              className="p-3.5 rounded-3xl bg-purple-50 border border-purple-200/80 text-right space-y-1.5 haptic shadow-sm"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow">
+                <Download size={19} />
+              </div>
+              <p className="text-xs font-black text-purple-950">نصب برنامه (PWA / iOS)</p>
+              <p className="text-[10px] text-purple-700">افزودن با لوگو به صفحه اصلی گوشی</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                playTactileFeedback('tap');
+                setProjectFolderOpen(false);
+                setRoadmapModalOpen(true);
+              }}
+              data-testid="folder_roadmap_audit_btn"
+              className="p-3.5 rounded-3xl bg-indigo-50 border border-indigo-200/80 text-right space-y-1.5 haptic shadow-sm"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow">
+                <ShieldCheck size={19} />
+              </div>
+              <p className="text-xs font-black text-indigo-950">فوق ممیزی ۱۰ از ۱۰</p>
+              <p className="text-[10px] text-indigo-700">نقشه راه ۸ فازه قفل‌شده و لاگ‌ها</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                playTactileFeedback('tap');
+                handleSync();
+              }}
+              data-testid="folder_cloud_sync_btn"
+              className="p-3.5 rounded-3xl bg-sky-50 border border-sky-200/80 text-right space-y-1.5 haptic shadow-sm"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-sky-600 text-white flex items-center justify-center shadow">
+                <Cloud size={19} className={syncing ? 'animate-pulse' : ''} />
+              </div>
+              <p className="text-xs font-black text-sky-950">سینک ابری و لوکال آنی</p>
+              <p className="text-[10px] text-sky-700">بک‌آپ Cloud SQL + گاوصندوق ضدحذف</p>
+            </button>
+          </div>
+
+          {/* iOS 27 Haptics & Soft Acoustic Click Toggles */}
+          <div className="rounded-3xl bg-slate-50 border border-slate-200/80 p-3.5 space-y-2.5">
+            <h4 className="text-xs font-black text-slate-800">بازخورد لمسی و صوتی استاندارد iOS 27</h4>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                data-testid="toggle_ios_haptics_btn"
+                onClick={() => {
+                  const next = !hapticsOn;
+                  setHapticsOn(next);
+                  setHapticsEnabled(next);
+                  if (next) playTactileFeedback('tap');
+                }}
+                className={`p-2.5 rounded-2xl border text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                  hapticsOn ? 'bg-violet-600 text-white border-violet-600 shadow' : 'bg-white text-slate-600 border-slate-200'
+                }`}
+              >
+                <Vibrate size={15} />
+                <span>هپتیک لمسی: {hapticsOn ? 'روشن' : 'خاموش'}</span>
+              </button>
+              <button
+                type="button"
+                data-testid="toggle_ios_sound_btn"
+                onClick={() => {
+                  const next = !soundOn;
+                  setSoundOn(next);
+                  setSoundEnabled(next);
+                  if (next) playTactileFeedback('success');
+                }}
+                className={`p-2.5 rounded-2xl border text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                  soundOn ? 'bg-indigo-600 text-white border-indigo-600 shadow' : 'bg-white text-slate-600 border-slate-200'
+                }`}
+              >
+                <Volume2 size={15} />
+                <span>صدای کلیک نرم: {soundOn ? 'روشن' : 'خاموش'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Sheet>
+
+      {/* Right-Edge Draggable QBank Notification Ear Handle (Locks permanently wherever dropped) */}
+      <DraggableNotificationHandle
+        notifCount={notifCount}
+        open={notifOpen}
+        onOpen={() => setNotifOpen(true)}
+      />
+
+      {/* World-Class iOS Right-Side Slide-Over Notification & Smart Reminder Drawer */}
       {notifOpen && (
         <div
-          className="fixed inset-0 z-50 flex justify-end"
-          onClick={() => setNotifOpen(false)}
+          className="fixed inset-0 z-50 flex justify-start"
+          onClick={() => {
+            playTactileFeedback('soft');
+            setNotifOpen(false);
+          }}
           data-testid="slide_over_notification_drawer"
         >
-          <div className="absolute inset-0 bg-black/55 backdrop-blur-sm animate-fade-in" />
+          <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm animate-fade-in" />
           <aside
-            className="relative w-full max-w-sm h-full glass-dark border-r border-white/15 p-4 flex flex-col drawer-slide-in safe-top safe-bottom"
+            className="relative w-full max-w-sm h-full glass-dark border-l border-white/15 p-4 flex flex-col drawer-slide-in-right safe-top safe-bottom"
             onClick={e => e.stopPropagation()}
-            style={{ boxShadow: '12px 0 45px rgba(0,0,0,0.55)' }}
+            style={{ boxShadow: '-12px 0 45px rgba(0,0,0,0.5)' }}
           >
             {/* Drawer Header */}
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
@@ -1044,11 +1156,87 @@ function App() {
                 </div>
               </div>
               <button
-                onClick={() => setNotifOpen(false)}
+                onClick={() => {
+                  playTactileFeedback('soft');
+                  setNotifOpen(false);
+                }}
+                aria-label="بستن یادآوری‌ها"
                 className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all"
               >
                 <X size={16} />
               </button>
+            </div>
+
+            {/* Real OS Device Notification Bridge (اتصال به نوتیفیکیشن واقعی گوشی) */}
+            <div className="mt-2.5 p-2.5 rounded-2xl bg-white/8 border border-white/12 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Smartphone size={15} className={deviceNotifOn ? 'text-emerald-400 shrink-0' : 'text-amber-300 shrink-0'} />
+                <div className="min-w-0">
+                  <p className="text-[11px] font-extrabold text-white truncate">
+                    {deviceNotifOn ? 'متصل به نوتیفیکیشن واقعی گوشی' : 'اتصال به اعلان واقعی گوشی'}
+                  </p>
+                  <p className="text-[9.5px] text-gray-300 truncate">
+                    {deviceNotifPerm === 'denied'
+                      ? 'مجوز اعلان در مرورگر مسدود است'
+                      : deviceNotifOn
+                      ? 'یادآوری چک، قسط، ایمپلنت و نوبت روی گوشی ارسال می‌شود'
+                      : 'نمایش هشدارهای حیاتی در نوار اعلان گوشی'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {deviceNotifOn ? (
+                  <>
+                    <button
+                      type="button"
+                      data-testid="test_real_device_notif_btn"
+                      onClick={async () => {
+                        playTactileFeedback('success');
+                        await sendRealDeviceNotification({
+                          title: 'مینادنتال • تست اعلان واقعی گوشی',
+                          body: `رادار هوشمند با ${notifCount.toLocaleString('fa-IR')} هشدار فعال به نوتیفیکیشن گوشی متصل است.`,
+                          tag: `minadental-test-${Date.now()}`,
+                        });
+                      }}
+                      className="px-2 py-1 rounded-xl bg-emerald-500 text-slate-950 text-[10px] font-black"
+                    >
+                      تست
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeviceNotificationsEnabled(false);
+                        setDeviceNotifOn(false);
+                      }}
+                      className="px-2 py-1 rounded-xl bg-white/10 text-gray-200 text-[10px] font-bold"
+                    >
+                      خاموش
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid="enable_real_device_notif_btn"
+                    onClick={async () => {
+                      playTactileFeedback('tap');
+                      const perm = await requestDeviceNotificationPermission();
+                      setDeviceNotifPerm(perm);
+                      const enabled = perm === 'granted';
+                      setDeviceNotifOn(enabled);
+                      if (enabled) {
+                        await sendRealDeviceNotification({
+                          title: 'مینادنتال متصل شد',
+                          body: 'یادآوری‌های کلینیک از این پس روی نوتیفیکیشن واقعی گوشی نمایش داده می‌شوند.',
+                          tag: 'minadental-connected',
+                        });
+                      }
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 text-[10px] font-black"
+                  >
+                    فعال‌سازی
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Category Filter Chips inside Slide-Over Drawer */}

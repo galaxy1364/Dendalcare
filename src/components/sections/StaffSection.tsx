@@ -27,6 +27,7 @@ import {
   SHARE_MODE_LABELS,
   type DoctorShareMode,
 } from '@/lib/doctorShareEngine';
+import { ModuleChipPager } from '@/components/ui/ModuleChipPager';
 
 const ROLES = [
   { value: 'manager', label: 'مدیر کلینیک (پزشک ارشد)' },
@@ -65,7 +66,6 @@ export function StaffSection() {
 
   const [tab, setTab] = useState<StaffTab>('list');
   const [search, setSearch] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Staff | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -139,44 +139,23 @@ export function StaffSection() {
 
   return (
     <div className="space-y-2.5 pb-2 animate-fade-in-up">
-      {/* QBank Top Bar: Sliding Horizontal Chip Bar + Animated Magnifying Glass Search */}
-      <div className="glass-card p-2.5">
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setSearchOpen(!searchOpen)}
-            className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 transition-all haptic ${
-              searchOpen || search
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-            }`}
-            title="جستجوی پرسنل و پزشکان"
-            data-testid="staff_search_toggle"
-          >
-            {searchOpen ? <X size={17} /> : <Search size={17} />}
-          </button>
-
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 py-0.5">
-            {[
-              { key: 'list' as const, label: `پرسنل و دسترسی (${staff.length.toLocaleString('fa-IR')})`, icon: <Users size={13} /> },
-              { key: 'doctor_calc' as const, label: 'ماشین‌حساب ۳ مدل سهم پزشک', icon: <Calculator size={13} /> },
-              { key: 'salaries' as const, label: `حقوق و دستمزد (${salaries.length.toLocaleString('fa-IR')})`, icon: <Wallet size={13} /> },
-              { key: 'shares' as const, label: `قوانین سهم‌بندی (${shares.length.toLocaleString('fa-IR')})`, icon: <Percent size={13} /> },
-            ].map(ch => (
-              <button
-                key={ch.key}
-                onClick={() => setTab(ch.key)}
-                className={`px-3 py-1.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all haptic shrink-0 flex items-center gap-1 ${
-                  tab === ch.key
-                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm'
-                    : 'bg-gray-100/90 text-gray-600'
-                }`}
-              >
-                {ch.icon}
-                <span>{ch.label}</span>
-              </button>
-            ))}
-          </div>
-
+      {/* Pageable & Swipeable Module Chip Bar + Animated Search (TRC-MINA-QBANK-9008-H) */}
+      <ModuleChipPager
+        color="#6366F1"
+        pageSize={2}
+        activeKey={tab}
+        onSelect={setTab}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="جستجوی نام پزشک، منشی، دستیار، ایمیل یا شماره تماس..."
+        testIdPrefix="staff"
+        items={[
+          { key: 'list', label: 'پرسنل و دسترسی', badge: staff.length, icon: <Users size={13} /> },
+          { key: 'doctor_calc', label: 'سهم پزشک و فیکسچر', icon: <Calculator size={13} /> },
+          { key: 'salaries', label: 'حقوق و دستمزد', badge: salaries.length, icon: <Wallet size={13} /> },
+          { key: 'shares', label: 'قوانین سهم‌بندی', badge: shares.length, icon: <Percent size={13} /> },
+        ]}
+        actionSlot={
           <button
             onClick={() => { setEditing(null); setFormOpen(true); }}
             className="w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center shadow-md shrink-0 haptic"
@@ -184,31 +163,8 @@ export function StaffSection() {
           >
             <Plus size={19} />
           </button>
-        </div>
-
-        {searchOpen && (
-          <div className="mt-2 pt-2 border-t border-gray-100 animate-fade-in">
-            <div className="relative">
-              <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500" />
-              <Input
-                autoFocus
-                placeholder="جستجوی نام پزشک، منشی، دستیار، ایمیل یا شماره تماس..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pr-9 pl-8 text-xs"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+        }
+      />
 
       {/* TAB 1: Staff & Role-Based Access Control */}
       {tab === 'list' && (
@@ -360,8 +316,10 @@ function DoctorShareCalculatorTab({
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>(doctors[0]?.id || 'manager_mehdi');
   const [modelType, setModelType] = useState<'formula_half_net' | 'fixed_per_procedure' | 'custom_percentage'>('formula_half_net');
   const [fixedPerProcedure, setFixedPerProcedure] = useState<number>(1500000);
-  const [customPercent, setCustomPercent] = useState<number>(55);
+  const [customPercent, setCustomPercent] = useState<number>(50);
   const [managerSpecialPercent, setManagerSpecialPercent] = useState<number>(100);
+  const [implantFixtureCost, setImplantFixtureCost] = useState<number>(0);
+  const [confirmPayrollOpen, setConfirmPayrollOpen] = useState(false);
   const [savingPayroll, setSavingPayroll] = useState(false);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
 
@@ -370,6 +328,7 @@ function DoctorShareCalculatorTab({
     doctors.find(d => d.id === selectedDoctorId)?.role === 'manager' ||
     doctors.find(d => d.id === selectedDoctorId)?.last_name?.includes('امیری');
 
+  // Strictly Work-Based Revenue (completely independent of cheques, guarantee cheques, installments, or debt)
   const grossRevenue = useMemo(
     () => treatments.reduce((sum, t) => sum + Number(t.total_cost || 0), 0),
     [treatments]
@@ -381,27 +340,50 @@ function DoctorShareCalculatorTab({
     return Math.max(fromTreatments, fromOrders);
   }, [treatments, labOrders]);
 
-  const netAfterLab = Math.max(0, grossRevenue - totalLabCost);
   const procedureCount = Math.max(1, treatments.length);
-
-  // Model 1: (Total Work - Total Lab Cost) / 2
-  const model1Share = Math.round(netAfterLab / 2);
-
-  // Model 2: Fixed Wage per Surgery/Treatment
-  const model2Share = Math.round(procedureCount * (Number(fixedPerProcedure) || 0));
-
-  // Model 3: Custom Percentage (with special percentage for Manager Dr. Mehdi Amiri)
   const effectivePercent = isManagerSelected ? managerSpecialPercent : customPercent;
-  const model3Share = Math.round((netAfterLab * effectivePercent) / 100);
 
-  const activeCalculatedShare =
+  // All 3 models evaluated through the canonical Clinic Engine (Implant Fixture is 100% paid by Clinic!)
+  const model1Res = calculateDoctorShare({
+    mode: 'net_half_after_lab',
+    grossWorkAmount: grossRevenue,
+    labCostAmount: totalLabCost,
+    implantFixtureCost,
+    shareValue: 50,
+    isClinicManager: isManagerSelected,
+  });
+  const model2Res = calculateDoctorShare({
+    mode: 'fixed',
+    grossWorkAmount: grossRevenue,
+    labCostAmount: totalLabCost,
+    implantFixtureCost,
+    shareValue: fixedPerProcedure,
+    procedureCount,
+    isClinicManager: isManagerSelected,
+  });
+  const model3Res = calculateDoctorShare({
+    mode: 'percentage',
+    grossWorkAmount: grossRevenue,
+    labCostAmount: totalLabCost,
+    implantFixtureCost,
+    shareValue: effectivePercent,
+    deductLabInPercentageMode: true,
+    isClinicManager: isManagerSelected,
+  });
+
+  const activeResult =
     modelType === 'formula_half_net'
-      ? model1Share
+      ? model1Res
       : modelType === 'fixed_per_procedure'
-      ? model2Share
-      : model3Share;
+      ? model2Res
+      : model3Res;
 
-  const clinicRemainingShare = Math.max(0, netAfterLab - activeCalculatedShare);
+  const netAfterLab = activeResult.netAfterLab;
+  const model1Share = model1Res.doctorShare;
+  const model2Share = model2Res.doctorShare;
+  const model3Share = model3Res.doctorShare;
+  const activeCalculatedShare = activeResult.doctorShare;
+  const clinicRemainingShare = activeResult.clinicShare;
 
   const handleRecordToSalary = async () => {
     setSavingPayroll(true);
@@ -418,17 +400,11 @@ function DoctorShareCalculatorTab({
         pay_month: jNow.jm,
         pay_year: jNow.jy,
         status: 'pending',
-        notes: `سهم پزشک (${
-          modelType === 'formula_half_net'
-            ? 'فرمول کارکرد منهای لابراتوار تقسیم بر ۲'
-            : modelType === 'fixed_per_procedure'
-            ? `دستمزد ثابت هر درمان (${procedureCount} مورد)`
-            : `درصد اختصاصی (${effectivePercent}%)`
-        })`,
+        notes: `${activeResult.formulaDescription} | مستقل از چک ضمانت و اقساط`,
       });
     }
     setSavingPayroll(false);
-    setSavedNotice('سهم محاسبه‌شده با موفقیت در لیست حقوق ماه جاری ثبت شد');
+    setSavedNotice('سهم کارکردی با تایید دو مرحله‌ای در فیش حقوقی ثبت شد');
     setTimeout(() => {
       setSavedNotice(null);
       onGoToSalaries();
@@ -438,20 +414,20 @@ function DoctorShareCalculatorTab({
   return (
     <div className="space-y-2.5 animate-fade-in">
       <div className="glass-card p-3.5 space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
               <Calculator size={16} className="text-indigo-600" />
-              موتور هوشمند محاسبه سهم پزشک (۳ مدل استاندارد)
+              موتور هوشمند سهم پزشک بر اساس کارکرد واقعی
             </h3>
-            <p className="text-[11px] text-gray-500 mt-0.5">
-              محاسبه زنده بر اساس کل کارکرد، کسر هزینه لابراتوار، دستمزد ثابت و درصد ویژه مدیر
+            <p className="text-[10.5px] text-slate-500 mt-0.5">
+              مستقل از چک ضمانت، اقساط، بدهی بیمار و خرجکرد مطب • فیکسچر ایمپلنت ۱۰۰٪ به عهده مطب
             </p>
           </div>
-          <Badge color="#4F46E5" bg="#E0E7FF">زنده</Badge>
+          <Badge color="#059669" bg="#D1FAE5">کارکردی</Badge>
         </div>
 
-        {/* Doctor Selector including Manager Dr. Mehdi Amiri */}
+        {/* Doctor Selector including Owner/Manager/Dentist Dr. Mehdi Amiri */}
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
           <button
             onClick={() => setSelectedDoctorId('manager_mehdi')}
@@ -461,7 +437,7 @@ function DoctorShareCalculatorTab({
                 : 'bg-indigo-50 text-indigo-700'
             }`}
           >
-            👑 دکتر مهدی امیری (مدیر کلینیک)
+            👑 دکتر مهدی امیری (مدیر، پزشک و صاحب مطب — ۱۰۰٪)
           </button>
           {doctors.map(doc => (
             <button
@@ -476,6 +452,19 @@ function DoctorShareCalculatorTab({
               دکتر {doc.first_name} {doc.last_name}
             </button>
           ))}
+        </div>
+
+        {/* Implant Fixture Cost (100% Clinic Expense — Never Deducted From Associate Doctor Share) */}
+        <div className="rounded-2xl bg-cyan-50/80 border border-cyan-200/80 p-2.5">
+          <Field label="هزینه فیکسچر ایمپلنت (۱۰۰٪ به عهده مطب — بدون کسر از سهم پزشک)">
+            <Input
+              type="number"
+              value={implantFixtureCost}
+              onChange={e => setImplantFixtureCost(Math.max(0, Number(e.target.value) || 0))}
+              placeholder="مثلاً 3500000"
+              data-testid="doctor_calc_fixture_cost_input"
+            />
+          </Field>
         </div>
 
         {/* Live Gross / Lab / Net Summary */}
@@ -601,23 +590,37 @@ function DoctorShareCalculatorTab({
           </div>
         </div>
 
-        {/* Final Share Summary & Save Button */}
-        <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-700 p-3.5 text-white flex items-center justify-between">
+        {/* Final Share Summary & Two-Step Save Button */}
+        <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-700 p-3.5 text-white flex items-center justify-between gap-2">
           <div>
-            <p className="text-[10px] text-indigo-100">سهم نهایی قابل پرداخت پزشک:</p>
+            <p className="text-[10px] text-indigo-100">
+              {isManagerSelected ? 'سود خالص دکتر مهدی امیری (صاحب مطب):' : 'سهم کارکردی قابل پرداخت پزشک:'}
+            </p>
             <p className="text-lg font-black">{activeCalculatedShare.toLocaleString('fa-IR')} تومان</p>
             <p className="text-[10px] text-indigo-200 mt-0.5">
-              سهم باقی‌مانده مطب: {clinicRemainingShare.toLocaleString('fa-IR')} تومان
+              سهم مطب پس از فیکسچر: {clinicRemainingShare.toLocaleString('fa-IR')} تومان
             </p>
           </div>
           <button
-            onClick={handleRecordToSalary}
+            onClick={() => setConfirmPayrollOpen(true)}
             disabled={savingPayroll}
-            className="px-3.5 py-2 rounded-xl bg-white text-indigo-900 text-xs font-black shadow-md haptic"
+            data-testid="record_doctor_share_payroll_btn"
+            className="px-3.5 py-2 rounded-xl bg-white text-indigo-900 text-xs font-black shadow-md haptic shrink-0"
           >
-            {savingPayroll ? 'در حال ثبت...' : 'ثبت در فیش حقوقی'}
+            {savingPayroll ? 'در حال ثبت...' : 'ثبت دو مرحله‌ای در فیش'}
           </button>
         </div>
+
+        <ConfirmDialog
+          open={confirmPayrollOpen}
+          onClose={() => setConfirmPayrollOpen(false)}
+          onConfirm={handleRecordToSalary}
+          title="تایید دو مرحله‌ای ثبت سهم پزشک"
+          message={`مبلغ ${activeCalculatedShare.toLocaleString('fa-IR')} تومان بر اساس کارکرد واقعی (${activeResult.formulaDescription}) در لیست حقوق ماه جاری ثبت شود؟`}
+          confirmLabel="ثبت نهایی در فیش حقوقی"
+          color="#4F46E5"
+          twoStep
+        />
 
         {savedNotice && (
           <p className="text-xs font-bold text-emerald-700 bg-emerald-50 p-2.5 rounded-xl text-center">
@@ -898,6 +901,7 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
   const [calcMode, setCalcMode] = useState<DoctorShareMode>('net_half_after_lab');
   const [calcGross, setCalcGross] = useState('12000000');
   const [calcLab, setCalcLab] = useState('2000000');
+  const [calcFixture, setCalcFixture] = useState('0');
   const [calcValue, setCalcValue] = useState('40');
   const [calcCount, setCalcCount] = useState('1');
   const [calcDeductLabInPct, setCalcDeductLabInPct] = useState(true);
@@ -909,12 +913,13 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
         mode: calcMode,
         grossWorkAmount: Number(calcGross) || 0,
         labCostAmount: Number(calcLab) || 0,
+        implantFixtureCost: Number(calcFixture) || 0,
         shareValue: calcMode === 'net_half_after_lab' ? 50 : Number(calcValue) || 0,
         procedureCount: Number(calcCount) || 1,
         deductLabInPercentageMode: calcDeductLabInPct,
         isClinicManager: calcIsManager,
       }),
-    [calcMode, calcGross, calcLab, calcValue, calcCount, calcDeductLabInPct, calcIsManager]
+    [calcMode, calcGross, calcLab, calcFixture, calcValue, calcCount, calcDeductLabInPct, calcIsManager]
   );
 
   const save = async () => {
@@ -1025,6 +1030,15 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
               value={calcLab}
               onChange={(e) => setCalcLab(e.target.value)}
               className="w-full rounded-xl bg-white/10 border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-indigo-400"
+            />
+          </label>
+          <label className="block col-span-2">
+            <span className="text-[10px] text-cyan-200 block mb-1">هزینه فیکسچر ایمپلنت (۱۰۰٪ به عهده مطب — بدون کسر از سهم پزشک)</span>
+            <input
+              type="number"
+              value={calcFixture}
+              onChange={(e) => setCalcFixture(e.target.value)}
+              className="w-full rounded-xl bg-cyan-500/15 border border-cyan-400/30 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-cyan-300"
             />
           </label>
           {!calcIsManager && calcMode === 'fixed' && (

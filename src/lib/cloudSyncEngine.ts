@@ -6,6 +6,7 @@ export type ClinicUserRole = 'manager' | 'dentist' | 'secretary' | 'assistant';
 
 export type ClinicUserAccount = {
   id: string;
+  username?: string;
   fullName: string;
   name?: string;
   role: ClinicUserRole;
@@ -27,10 +28,11 @@ export type ClinicUserAccount = {
 export const DEFAULT_CLINIC_USERS: ClinicUserAccount[] = [
   {
     id: 'usr_manager_mehdi',
+    username: 'dr.mehdi.amiri',
     fullName: 'دکتر مهدی امیری',
     name: 'دکتر مهدی امیری',
     role: 'manager',
-    roleLabel: 'مدیر کلینیک و پزشک ارشد',
+    roleLabel: 'مدیر، پزشک و صاحب مطب (دسترسی ۱۰۰٪)',
     email: 'mehdi.amiri19851364@gmail.com',
     phone: '09120000000',
     pinOrPass: '1234',
@@ -106,12 +108,12 @@ export const DEFAULT_CLINIC_USERS: ClinicUserAccount[] = [
 const USERS_STORAGE_KEY = 'minadental_clinic_users_v4';
 const ACTIVE_USER_STORAGE_KEY = 'minadental_active_user_id_v4';
 const BACKUP_CONFIG_STORAGE_KEY = 'minadental_auto_backup_config_v4';
-export const CURRENT_APP_VERSION = '61.0';
-export const CURRENT_APP_BUILD = 61;
+export const CURRENT_APP_VERSION = '62.0';
+export const CURRENT_APP_BUILD = 62;
 
 export type UserRole = ClinicUserRole;
 export const ROLE_LABELS: Record<UserRole, string> = {
-  manager: 'مدیر کلینیک و پزشک ارشد',
+  manager: 'مدیر، پزشک و صاحب مطب (دسترسی ۱۰۰٪)',
   dentist: 'دندانپزشک معالج',
   secretary: 'منشی و پذیرش',
   assistant: 'دستیار دندانپزشک',
@@ -142,8 +144,13 @@ export type AutoBackupConfig = {
 function normalizeUser(u: any): ClinicUserAccount {
   const fullName = u?.fullName || u?.name || 'کاربر کلینیک';
   const role: ClinicUserRole = u?.role || 'secretary';
+  const fallbackUsername =
+    role === 'manager'
+      ? 'dr.mehdi.amiri'
+      : (u?.email ? String(u.email).split('@')[0] : `${role}_${String(u?.id || 'user').slice(-4)}`);
   return {
     id: u?.id || `usr_${Date.now()}`,
+    username: u?.username || fallbackUsername,
     fullName,
     name: fullName,
     role,
@@ -178,10 +185,26 @@ export function loadClinicUsers(): ClinicUserAccount[] {
 }
 
 export function saveClinicUsers(users: ClinicUserAccount[]): void {
+  const normalized = users.map(normalizeUser);
   try {
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users.map(normalizeUser)));
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(normalized));
   } catch {
     // ignore
+  }
+  // Instant Cloud SQL mirror so newly created staff accounts sync across all devices
+  try {
+    void Promise.resolve(
+      supabase.from('clinic_settings').upsert(
+        {
+          key: 'clinic_users_directory_v4',
+          value: JSON.stringify(normalized),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'key' }
+      )
+    ).catch(() => {});
+  } catch {
+    // non-fatal when offline
   }
 }
 

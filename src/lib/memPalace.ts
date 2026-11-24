@@ -188,11 +188,30 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'موتور ۳مدله سهم پزشک: (کارکرد − لابراتوار) ÷ ۲، مبلغ ثابت هر جراحی، درصدی + حالت مدیر کلینیک',
     ],
   },
+  {
+    id: 'milestone-8',
+    traceId: 'TRC-MINA-QBANK-9008-H',
+    phaseNumber: 8,
+    title: 'رابط اصیل کیوبانک، پوشه پروژه بدون شلوغی، کشوی اعلان راست قابل‌جابجایی، اعلان واقعی گوشی، هپتیک iOS 27 و فیکسچر با مطب',
+    titleEn: 'Authentic QBank Curved-Notch UI, Clutter-Free Project Folder, Draggable Right-Edge Drawer, Real OS Notifications, iOS 27 Haptics & Clinic-Paid Implant Fixture',
+    description: 'بازطراحی کامل کادرهای کیوبانک با برش منحنی مقعر و دکمه فلش مستقل، پاک‌سازی کامل داک بالا به ۲ دکمه استاندارد و انتقال ابزارها به «پوشه پروژه»، نوار نوتیفیکیشن کشویی راست‌صفحه با دستگیره قابل‌جابجایی و تثبیت موقعیت، اتصال به اعلان واقعی گوشی، محوشدن بنرها هنگام بازشدن یادآوری، هپتیک و کلیک نرم iOS 27، چیپ‌های صفحه‌ای، تایید دومرحله‌ای واقعی و محاسبه خالص سهم پزشک بر اساس کارکرد با پوشش ۱۰۰٪ هزینه فیکسچر توسط مطب.',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/03',
+    checksum: 'h802e9f441cb',
+    deliverables: [
+      'کاشی‌های اصیل کیوبانک (QBankTile) با برش منحنی مقعر واقعی، پس‌زمینه پاستلی آرام غیرگیج‌کننده و استفاده یک‌دستی',
+      'داک بالای فوق‌تمیز با فقط ۲ دکمه (حساب کاربری + پوشه پروژه) و انتقال کامل ابزارهای پروژه به پوشه پروژه',
+      'دستگیره نوتیفیکیشن سمت راست قابل‌جابجایی با انگشت و قفل در محل رهاسازی + کشوی راست iOS + اعلان واقعی گوشی + محو خودکار بنرها',
+      'هپتیک و کلیک نرم صوتی iOS 27 + چیپ‌های صفحه‌ای (ModuleChipPager) + تایید دومرحله‌ای واقعی (ConfirmDialog)',
+      'قانون کارکرد خالص سهم پزشک (مستقل از چک ضمانت/اقساط/بدهی) + پرداخت ۱۰۰٪ فیکسچر ایمپلنت توسط مطب + دسترسی ۱۰۰٪ دکتر مهدی امیری',
+    ],
+  },
 ]);
 
 const AUDIT_STORAGE_KEY = 'minadental_permanent_audit_trail';
 const ROUTE_STORAGE_KEY = 'minadental_omniroute_active_route';
-const LAST_SUPER_AUDIT_KEY = 'minadental_last_super_audit_v61';
+const LAST_SUPER_AUDIT_KEY = 'minadental_last_super_audit_v62';
 
 function generateHash(str: string): string {
   let hash = 0;
@@ -334,7 +353,16 @@ export async function runLiveSuperAudit(actor: string = 'دکتر مهدی ام�
     mode: 'net_half_after_lab',
     grossWorkAmount: 10000000,
     labCostAmount: 2000000,
+    implantFixtureCost: 3000000,
     shareValue: 50,
+  });
+  const ownerWithFixture = calculateDoctorShare({
+    mode: 'net_half_after_lab',
+    grossWorkAmount: 10000000,
+    labCostAmount: 2000000,
+    implantFixtureCost: 3000000,
+    shareValue: 50,
+    isClinicManager: true,
   });
   const rbacOk =
     canUserEditFinancials('manager') === true &&
@@ -344,15 +372,18 @@ export async function runLiveSuperAudit(actor: string = 'دکتر مهدی ام�
     guardBlocksSecretaryDelete &&
     guardBlocksSecretaryPriceEdit &&
     guardAllowsManager &&
-    halfAfterLab.doctorShare === 4000000;
+    halfAfterLab.doctorShare === 4000000 &&
+    halfAfterLab.clinicShare === 1000000 &&
+    halfAfterLab.independentOfChequesAndDebt === true &&
+    ownerWithFixture.doctorShare === 5000000;
   checks.push({
     id: 'chk-rbac-lock',
-    traceId: 'TRC-MINA-GUARD-9007-G',
-    phase: 7,
-    title: 'سپر سراسری RBAC، قفل قیمت و موتور ۳مدله سهم پزشکان',
+    traceId: 'TRC-MINA-QBANK-9008-H',
+    phase: 8,
+    title: 'سپر سراسری RBAC، قفل قیمت، سهم کارکرد خالص و فیکسچر با مطب',
     detail: rbacOk
-      ? 'سپر ضدحذف/قفل قیمت روی هر ۱۸ ماژول + فرمول (کارکرد − لاب) ÷ ۲ و حالت مدیر کلینیک تایید شد.'
-      : 'نقض سیاست امنیتی Guardian یا محاسبه سهم پزشک شناسایی شد.',
+      ? 'سپر ضدحذف/قفل قیمت روی هر ۱۸ ماژول + فرمول (کارکرد − لاب) ÷ ۲ مستقل از چک/بدهی + فیکسچر ۱۰۰٪ با مطب + دسترسی ۱۰۰٪ مالک تایید شد.'
+      : 'نقض سیاست امنیتی Guardian یا محاسبه سهم پزشک/فیکسچر شناسایی شد.',
     passed: rbacOk,
     score: rbacOk ? 1 : 0,
   });

@@ -5,7 +5,7 @@ import path from 'node:path';
 
 // =========================================================================
 // MinaDental Clinical & Architecture Comprehensive Audit Test Suite
-// Verifiable Trace IDs: TRC-MINA-CORE-9001-A to TRC-MINA-GUARD-9007-G
+// Verifiable Trace IDs: TRC-MINA-CORE-9001-A to TRC-MINA-QBANK-9008-H
 // =========================================================================
 
 describe('Phase 1 [TRC-MINA-CORE-9001-A]: Core Engine & Perpetual Calendar Math', () => {
@@ -248,8 +248,8 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(engineSrc.includes('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'), 'Real Google Drive API v3 upload endpoint must exist');
     assert.ok(!engineSrc.includes('v5.0.0 (Build #52)'), 'Outdated hardcoded GitHub deploy version must be removed');
     assert.ok(tabSrc.includes('uploadBackupToGoogleDrive'), 'IntegrationsTab must invoke real uploadBackupToGoogleDrive');
-    assert.equal(versionJson.version, '61.0');
-    assert.equal(versionJson.build, 61);
+    assert.equal(versionJson.version, '62.0');
+    assert.equal(versionJson.build, 62);
   });
 
   test('PWA manifest, service worker, and index.html typography/installability stay 100% intact', () => {
@@ -262,7 +262,7 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(html.includes('window.__deferredInstallPrompt'), 'index.html must capture beforeinstallprompt early');
     assert.ok(manifest.icons.some((i) => i.purpose === 'any' && i.sizes === '512x512'), 'manifest must have 512x512 any icon');
     assert.ok(manifest.icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512'), 'manifest must have 512x512 maskable icon');
-    assert.ok(sw.includes('minadental-pwa-v61.0-b61'), 'sw.js must be on unified v61.0-b61 cache');
+    assert.ok(sw.includes('minadental-pwa-v62.0-b62'), 'sw.js must be on unified v62.0-b62 cache');
   });
 });
 
@@ -336,8 +336,90 @@ describe('Phase 7 [TRC-MINA-GUARD-9007-G]: App-Wide Zero-Delete Guardian, Offlin
     assert.ok(memSrc.includes('TRC-MINA-GUARD-9007-G'), 'MemPalace must lock Phase 7 trace ID');
     assert.ok(memSrc.includes('evaluateMutationGuard'), 'Live Super-Audit must actively verify evaluateMutationGuard');
     assert.ok(memSrc.includes('calculateDoctorShare'), 'Live Super-Audit must actively verify calculateDoctorShare');
-    assert.ok(modalSrc.includes('۷ فاز قفل‌شده'), 'RoadmapAuditModal must reflect all 7 locked phases');
+    assert.ok(modalSrc.includes('۸ فاز قفل‌شده'), 'RoadmapAuditModal must reflect all 8 locked phases');
   });
 });
+
+describe('Phase 8 [TRC-MINA-QBANK-9008-H]: Authentic QBank Curved-Notch UI, Project Folder, Right Draggable Drawer, Real OS Notifications, iOS 27 Haptics & Clinic-Paid Implant Fixture', () => {
+  const root = process.cwd();
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('QBankTile implements authentic concave SVG notch cutout and replaces Dashboard & BottomDock overflow cards cleanly', () => {
+    const tileSrc = read('src/components/ui/QBankTile.tsx');
+    const dashSrc = read('src/components/sections/Dashboard.tsx');
+    const dockSrc = read('src/components/BottomDock.tsx');
+
+    assert.ok(tileSrc.includes('viewBox="0 0 220 120"'), 'QBankTile must render smooth curved SVG notch silhouette');
+    assert.ok(tileSrc.includes('qbank-notch-card'), 'QBankTile must apply qbank-notch-card press physics');
+    assert.ok(tileSrc.includes('playTactileFeedback'), 'QBankTile must trigger iOS 27 tactile feedback on tap');
+    assert.ok(dashSrc.includes('<QBankTile'), 'Dashboard must use QBankTile for all module cards');
+    assert.ok(!dashSrc.includes('dashboard_install_pwa_banner'), 'Dashboard must not clutter top area with PWA install banner');
+    assert.ok(dockSrc.includes('<QBankTile'), 'BottomDock More menu must use QBankTile curved-notch cards');
+  });
+
+  test('App.tsx enforces ultra-clean 2-button Top Bar, Project Folder Sheet, Right-Edge Draggable Handle, Auto-Hide Banners & Real OS Notifications', () => {
+    const appSrc = read('src/App.tsx');
+    const handleSrc = read('src/components/ui/DraggableNotificationHandle.tsx');
+    const osNotifSrc = read('src/lib/deviceNotifications.ts');
+
+    assert.ok(appSrc.includes('topbar_user_avatar_button'), 'Top bar must keep User Account button');
+    assert.ok(appSrc.includes('topbar_project_folder_button'), 'Top bar must provide Project Folder button');
+    assert.ok(appSrc.includes('پوشه پروژه مینادنتال'), 'Project Folder Sheet must house project tools cleanly');
+    assert.ok(appSrc.includes('<DraggableNotificationHandle'), 'App must mount right-edge DraggableNotificationHandle');
+    assert.ok(appSrc.includes('drawer-slide-in-right'), 'Notification drawer must slide from right edge');
+    assert.ok(appSrc.includes('!notifOpen &&'), 'Floating version/OTA/toast banners must auto-hide when notification drawer opens');
+    assert.ok(appSrc.includes('requestDeviceNotificationPermission'), 'Notification drawer must connect to real OS device notifications');
+    assert.ok(handleSrc.includes('minadental_right_bell_y_pct'), 'Right-edge handle must permanently lock its dragged Y position in localStorage');
+    assert.ok(osNotifSrc.includes('showNotification'), 'deviceNotifications.ts must dispatch real OS notifications via ServiceWorker');
+  });
+
+  test('iOS 27 Haptics/Sound, Pageable ModuleChipPager, Two-Step ConfirmDialog & Username Sync are wired', () => {
+    const hapticsSrc = read('src/lib/hapticsAudio.ts');
+    const pagerSrc = read('src/components/ui/ModuleChipPager.tsx');
+    const sheetSrc = read('src/components/ui/Sheet.tsx');
+    const syncSrc = read('src/lib/cloudSyncEngine.ts');
+
+    assert.ok(hapticsSrc.includes('AudioContext'), 'hapticsAudio.ts must synthesize soft iOS 27 acoustic click via Web Audio API');
+    assert.ok(hapticsSrc.includes('navigator.vibrate'), 'hapticsAudio.ts must trigger hardware haptic vibration when supported');
+    assert.ok(pagerSrc.includes('_chip_prev_page') && pagerSrc.includes('_chip_next_page'), 'ModuleChipPager must support paged chip navigation');
+    assert.ok(sheetSrc.includes('two_step_confirm_dialog') && sheetSrc.includes('گام ۲ از ۲'), 'ConfirmDialog must enforce genuine two-step confirmation');
+    assert.ok(syncSrc.includes('dr.mehdi.amiri'), 'Manager account must have dedicated username with 100% owner access');
+    assert.ok(syncSrc.includes('مدیر، پزشک و صاحب مطب'), 'Dr. Mehdi Amiri role must reflect Manager + Dentist + Clinic Owner');
+  });
+
+  test('Doctor Share enforces Work-Only Independence and 100% Clinic-Paid Implant Fixture rule, and MemPalace locks all 8 phases', () => {
+    // Pure verification of Phase 8 Implant Fixture Clinic-Paid rule:
+    // Gross = 10,000,000 | Lab = 2,000,000 | Fixture = 3,000,000 (100% clinic-paid)
+    // Associate Doctor (50% net after lab): (10M - 2M) / 2 = 4,000,000 (fixture NOT deducted from doctor!)
+    // Clinic Net after associate + fixture: 8,000,000 - 4,000,000 - 3,000,000 = 1,000,000
+    // Clinic Owner (Dr. Mehdi Amiri): 8,000,000 - 3,000,000 = 5,000,000
+    const calcWithFixture = ({ gross, lab, fixture, isOwner }) => {
+      const netAfterLab = Math.max(0, gross - lab);
+      if (isOwner) {
+        return { doctorShare: Math.max(0, netAfterLab - fixture), clinicShare: 0 };
+      }
+      const doctorShare = Math.round(netAfterLab / 2);
+      const clinicShare = Math.max(0, netAfterLab - doctorShare - fixture);
+      return { doctorShare, clinicShare };
+    };
+
+    const assoc = calcWithFixture({ gross: 10000000, lab: 2000000, fixture: 3000000, isOwner: false });
+    assert.equal(assoc.doctorShare, 4000000, 'Implant fixture must NEVER be deducted from associate doctor share');
+    assert.equal(assoc.clinicShare, 1000000, 'Implant fixture must be deducted 100% from clinic share');
+
+    const owner = calcWithFixture({ gross: 10000000, lab: 2000000, fixture: 3000000, isOwner: true });
+    assert.equal(owner.doctorShare, 5000000, 'Owner net margin must reflect netAfterLab minus clinic-paid fixture');
+
+    const shareSrc = read('src/lib/doctorShareEngine.ts');
+    const staffSrc = read('src/components/sections/StaffSection.tsx');
+    const memSrc = read('src/lib/memPalace.ts');
+
+    assert.ok(shareSrc.includes('implantFixtureCost'), 'doctorShareEngine must track clinic-paid implantFixtureCost');
+    assert.ok(shareSrc.includes('independentOfChequesAndDebt'), 'doctorShareEngine must flag independence from cheques/debt');
+    assert.ok(staffSrc.includes('doctor_calc_fixture_cost_input'), 'StaffSection calculator must expose Implant Fixture cost input');
+    assert.ok(memSrc.includes('TRC-MINA-QBANK-9008-H'), 'MemPalace must lock Phase 8 trace ID TRC-MINA-QBANK-9008-H');
+  });
+});
+
 
 

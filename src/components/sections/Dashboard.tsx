@@ -12,8 +12,9 @@ import type {
   Installment, Check, Safteh,
 } from '@/lib/supabase';
 import type { SectionId } from '@/lib/sections';
-import { Loading } from '@/components/ui/Form';
 import { todayGregorian } from '@/lib/jalali';
+import { QBankTile } from '@/components/ui/QBankTile';
+import { playTactileFeedback } from '@/lib/hapticsAudio';
 
 type Props = {
   onNavigate: (id: SectionId) => void;
@@ -22,7 +23,7 @@ type Props = {
 
 const fmt = (n: number) => n.toLocaleString('fa-IR');
 
-export function Dashboard({ onNavigate, onOpenInstall }: Props) {
+export function Dashboard({ onNavigate }: Props) {
   const { data: patients,     loading: lp  } = useRealtimeTable<Patient>('patients');
   const { data: appointments, loading: la  } = useRealtimeTable<Appointment>('appointments');
   const { data: treatments,   loading: lt  } = useRealtimeTable<Treatment>('treatments');
@@ -96,39 +97,14 @@ export function Dashboard({ onNavigate, onOpenInstall }: Props) {
   };
 
   return (
-    <div className="space-y-2.5 pb-36 animate-fade-in-up">
+    <div className="space-y-3 pb-36 animate-fade-in-up">
 
-      {/* ── PWA Browser Install Banner with Logo ── */}
+      {/* ── QBank-Style Live Clinical & Financial Command Matrix (Replacing Bank Card) ── */}
       <div
-        onClick={() => onOpenInstall ? onOpenInstall() : onNavigate('settings')}
-        className="rounded-2xl p-3 bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-blue-900/90 border border-purple-400/30 text-white flex items-center justify-between gap-3 shadow-lg cursor-pointer transition-all active:scale-98"
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <img
-            src="./logo.png"
-            alt="مینادنتال"
-            className="w-10 h-10 rounded-xl shadow-md object-cover border border-white/20 shrink-0"
-          />
-          <div className="min-w-0">
-            <h4 className="text-xs font-black text-white truncate">نصب برنامه مینادنتال در مرورگر (PWA)</h4>
-            <p className="text-[10px] text-purple-200 truncate">با آیکون و لوگوی رسمی کلینیک روی صفحه اصلی گوشی یا کامپیوتر</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 font-black text-xs shadow-md shrink-0 flex items-center gap-1.5"
-        >
-          <Download size={13} />
-          <span>نصب فوری</span>
-        </button>
-      </div>
-
-      {/* ── Multi-Color Live Clinical & Financial Command Matrix (Replacing Bank Card) ── */}
-      <div
-        className="qbank-tile p-3.5"
+        className="rounded-[26px] p-4"
         style={{
-          background: 'linear-gradient(135deg, #1E1B4B 0%, #311042 48%, #0F172A 100%)',
-          boxShadow: '0 10px 30px rgba(88, 28, 135, 0.35)',
+          background: 'linear-gradient(145deg, #1E1B4B 0%, #2E1065 52%, #0F172A 100%)',
+          boxShadow: '0 12px 30px rgba(30, 27, 75, 0.24)',
         }}
       >
         {/* Top Row: Live Net Treasury & Quick Financial Pulse */}
@@ -251,97 +227,133 @@ export function Dashboard({ onNavigate, onOpenInstall }: Props) {
         </div>
       </div>
 
-      {/* ── 2-column QBank Curved Bento Grid (100% Unique Module Colors) ── */}
-      <div className="bento">
-        {/* 1. Patients - Emerald */}
-        <BentoCard
-          color="#059669" bg="linear-gradient(135deg,#D1FAE5 0%,#6EE7B7 100%)"
-          icon={<Users size={20} className="text-emerald-700" />}
-          label="بیماران" value={s.totalPatients} sub="پرونده فعال و ثبت‌شده"
+      {/* ── 2-Column 100% Authentic QBank Curved-Notch Module Grid (Calm Unique Pastel Tints) ── */}
+      <div className="bento gap-2.5">
+        {/* 1. Patients - Calm Emerald Pastel */}
+        <QBankTile
+          color="#059669"
+          surfaceBg="#FFFFFF"
+          surfaceBgEnd="#ECFDF5"
+          icon={<Users size={20} strokeWidth={2.3} />}
+          label="بیماران"
+          value={s.totalPatients}
+          sub="پرونده فعال و ثبت‌شده"
+          testId="dashboard_tile_patients"
           onClick={() => onNavigate('patients')}
         />
-        {/* 2. Today Appts - Amber */}
-        <BentoCard
-          color="#D97706" bg="linear-gradient(135deg,#FEF3C7 0%,#FCD34D 100%)"
-          icon={<CalendarDays size={20} className="text-amber-700" />}
-          label="نوبت امروز" value={s.todayAppts}
+        {/* 2. Today Appts - Calm Amber Pastel */}
+        <QBankTile
+          color="#D97706"
+          surfaceBg="#FFFFFF"
+          surfaceBgEnd="#FFFBEB"
+          icon={<CalendarDays size={20} strokeWidth={2.3} />}
+          label="نوبت امروز"
+          value={s.todayAppts}
           sub={`${fmt(s.completedToday)} تکمیل‌شده`}
+          testId="dashboard_tile_appointments"
           onClick={() => onNavigate('appointments')}
         />
-        {/* 3. Active Treatments - Violet */}
-        <BentoCard
-          color="#7C3AED" bg="linear-gradient(135deg,#EDE9FE 0%,#C4B5FD 100%)"
-          icon={<Stethoscope size={20} className="text-violet-700" />}
-          label="درمان و چارت پالمر" value={s.activeTreat} sub="در حال انجام"
+        {/* 3. Active Treatments - Calm Violet Pastel */}
+        <QBankTile
+          color="#7C3AED"
+          surfaceBg="#FFFFFF"
+          surfaceBgEnd="#F5F3FF"
+          icon={<Stethoscope size={20} strokeWidth={2.3} />}
+          label="درمان و چارت پالمر"
+          value={s.activeTreat}
+          sub="طرح درمان در جریان"
+          testId="dashboard_tile_treatments"
           onClick={() => onNavigate('treatments')}
         />
-        {/* 4. Lab - Pink */}
-        <BentoCard
-          color="#DB2777" bg="linear-gradient(135deg,#FCE7F3 0%,#F9A8D4 100%)"
-          icon={<FlaskConical size={20} className="text-pink-700" />}
-          label="لابراتوار رفت‌وبرگشت" value={s.pendingLab} sub="در انتظار تحویل"
+        {/* 4. Lab - Calm Rose-Pink Pastel */}
+        <QBankTile
+          color="#DB2777"
+          surfaceBg="#FFFFFF"
+          surfaceBgEnd="#FDF2F8"
+          icon={<FlaskConical size={20} strokeWidth={2.3} />}
+          label="لابراتوار رفت‌وبرگشت"
+          value={s.pendingLab}
+          sub="در انتظار تحویل"
+          testId="dashboard_tile_lab"
           onClick={() => onNavigate('lab')}
         />
-        {/* 5. Implants - Cyan */}
-        <BentoCard
-          color="#0891B2" bg="linear-gradient(135deg,#CFFAFE 0%,#67E8F9 100%)"
-          icon={<Anchor size={20} className="text-cyan-700" />}
-          label="مراحل ایمپلنت" value={s.activeImp} sub="جراحی تا تحویل روکش"
+        {/* 5. Implants - Calm Cyan Pastel */}
+        <QBankTile
+          color="#0891B2"
+          surfaceBg="#FFFFFF"
+          surfaceBgEnd="#ECFEFF"
+          icon={<Anchor size={20} strokeWidth={2.3} />}
+          label="مراحل ایمپلنت"
+          value={s.activeImp}
+          sub="جراحی تا تحویل روکش"
+          testId="dashboard_tile_implants"
           onClick={() => onNavigate('implants')}
         />
-        {/* 6. Inventory Alerts - Orange */}
-        <BentoCard
-          color="#EA580C" bg="linear-gradient(135deg,#FFEDD5 0%,#FDBA74 100%)"
-          icon={<Package size={20} className="text-orange-700" />}
-          label="انبار و آلارم کمبود" value={s.lowStock} sub="کالای زیر حد نصاب"
-          onClick={() => onNavigate('inventory')}
+        {/* 6. Inventory Alerts - Calm Orange Pastel */}
+        <QBankTile
+          color="#EA580C"
+          surfaceBg="#FFFFFF"
+          surfaceBgEnd="#FFF7ED"
+          icon={<Package size={20} strokeWidth={2.3} />}
+          label="انبار و آلارم کمبود"
+          value={s.lowStock}
+          sub="کالای زیر حد نصاب"
           alert={s.lowStock > 0}
+          testId="dashboard_tile_inventory"
+          onClick={() => onNavigate('inventory')}
         />
-        {/* 7. Reminders - Rose Red */}
-        <BentoCard
-          color="#E11D48" bg="linear-gradient(135deg,#FFE4E6 0%,#FDA4AF 100%)"
-          icon={<BellRing size={20} className="text-rose-700" />}
-          label="رادار یادآوری" value={s.pendingRem}
+        {/* 7. Reminders - Calm Coral-Red Pastel */}
+        <QBankTile
+          color="#E11D48"
+          surfaceBg="#FFFFFF"
+          surfaceBgEnd="#FFF1F2"
+          icon={<BellRing size={20} strokeWidth={2.3} />}
+          label="رادار یادآوری"
+          value={s.pendingRem}
           sub={s.overdueRem > 0 ? `${fmt(s.overdueRem)} مورد سررسید گذشته` : 'پیگیری هوشمند'}
-          onClick={() => onNavigate('reminders')}
           alert={s.overdueRem > 0}
+          testId="dashboard_tile_reminders"
+          onClick={() => onNavigate('reminders')}
         />
-        {/* 8. Doctor Monthly Share - Royal Indigo (Distinct from Treatments Violet) */}
-        <BentoCard
-          color="#4F46E5" bg="linear-gradient(135deg,#E0E7FF 0%,#A5B4FC 100%)"
-          icon={<UserCog size={20} className="text-indigo-700" />}
-          label="سهم و کارکرد پزشک" value={s.doctorMonthCost} sub="محاسبه خالص این ماه"
-          onClick={() => onNavigate('finance')}
+        {/* 8. Doctor Monthly Share (Work-Only) - Calm Royal Indigo Pastel */}
+        <QBankTile
+          color="#4F46E5"
+          surfaceBg="#FFFFFF"
+          surfaceBgEnd="#EEF2FF"
+          icon={<UserCog size={20} strokeWidth={2.3} />}
+          label="سهم و کارکرد پزشک"
+          value={s.doctorMonthCost}
+          sub="کارکرد منهای لابراتوار ÷ ۲"
+          testId="dashboard_tile_staff"
+          onClick={() => onNavigate('staff')}
         />
-        {/* 9. Perpetual Persian Calendar - Fuchsia */}
-        <BentoCard
-          color="#C026D3" bg="linear-gradient(135deg,#FAE8FF 0%,#F0ABFC 100%)"
-          icon={<CalendarDays size={20} className="text-fuchsia-700" />}
-          label="تقویم جامع ایرانی" value={s.todayAppts + s.pendingRem} sub="شمسی • قمری • میلادی"
+        {/* 9. Perpetual Persian Calendar - Calm Fuchsia Pastel */}
+        <QBankTile
+          color="#C026D3"
+          surfaceBg="#FFFFFF"
+          surfaceBgEnd="#FDF4FF"
+          icon={<CalendarDays size={20} strokeWidth={2.3} />}
+          label="تقویم جامع ایرانی"
+          value={s.todayAppts + s.pendingRem}
+          sub="شمسی • قمری • میلادی"
+          testId="dashboard_tile_calendar"
           onClick={() => onNavigate('calendar')}
         />
-        {/* 10. AI Clinical Assistant - Deep Sky/Teal Gradient */}
-        <div
-          className="bento-tile"
-          style={{ background:'linear-gradient(135deg,#0284C7 0%,#0F766E 100%)', boxShadow:'0 6px 22px rgba(2,132,199,.32)' }}
-          onClick={() => onNavigate('treatments')}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 rounded-2xl bg-white/90 flex items-center justify-center shadow-sm">
-              <Sparkles size={20} className="text-sky-600" />
-            </div>
-            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-white/20 text-white">
-              Gemini AI
-            </span>
-          </div>
-          <p className="text-sm font-black text-white mt-1">هوش مصنوعی کلینیک</p>
-          <p className="text-[10px] text-sky-100/90 mt-0.5 pl-8 leading-relaxed">
-            تحلیل هوشمند پرونده و طرح درمان
-          </p>
-          <div className="qbank-corner-key" style={{ color: '#0284C7' }}>
-            <ArrowUpLeft size={15} strokeWidth={2.6} />
-          </div>
-        </div>
+        {/* 10. AI Clinical Assistant - Calm Sky Pastel */}
+        <QBankTile
+          color="#0284C7"
+          surfaceBg="#FFFFFF"
+          surfaceBgEnd="#F0F9FF"
+          icon={<Sparkles size={20} strokeWidth={2.3} />}
+          label="هوش مصنوعی کلینیک"
+          badge="هوشمند"
+          sub="تحلیل پرونده و طرح درمان"
+          testId="dashboard_tile_ai"
+          onClick={() => {
+            playTactileFeedback('tap');
+            onNavigate('treatments');
+          }}
+        />
       </div>
 
       {/* ── Today's Appointments ── */}
@@ -422,47 +434,6 @@ export function Dashboard({ onNavigate, onOpenInstall }: Props) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function BentoCard({
-  color, bg, icon, label, value, sub, onClick, alert,
-}: {
-  color: string; bg: string; icon: React.ReactNode;
-  label: string; value: number; sub: string;
-  onClick: () => void; alert?: boolean;
-}) {
-  return (
-    <div
-      className="bento-tile"
-      style={{ background: bg }}
-      onClick={onClick}
-    >
-      <div className="flex items-start justify-between mb-2">
-        <div className="w-10 h-10 rounded-2xl bg-white/85 flex items-center justify-center shadow-sm shrink-0">
-          {icon}
-        </div>
-        <div className="text-left">
-          <p className="text-xl font-black text-slate-900 tracking-tight leading-none">
-            {value.toLocaleString('fa-IR')}
-          </p>
-          {alert && (
-            <span
-              className="inline-block w-2 h-2 rounded-full animate-breathe mt-1"
-              style={{ background: color, boxShadow: `0 0 6px ${color}` }}
-            />
-          )}
-        </div>
-      </div>
-      <div className="pl-8">
-        <p className="text-xs font-black text-slate-800 leading-tight truncate">{label}</p>
-        <p className="text-[10px] font-bold text-slate-600 mt-0.5 truncate">{sub}</p>
-      </div>
-      {/* Spring-loaded QBank Curved Corner Key */}
-      <div className="qbank-corner-key" style={{ color }}>
-        <ArrowUpLeft size={15} strokeWidth={2.6} />
-      </div>
     </div>
   );
 }

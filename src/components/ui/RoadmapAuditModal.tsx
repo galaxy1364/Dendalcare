@@ -80,7 +80,7 @@ export function RoadmapAuditModal({ open, onClose }: Props) {
                 </h3>
                 <p className="text-[11px] text-emerald-300">
                   شناسه رهگیری فعال:{' '}
-                  <strong className="font-mono">{liveReport?.traceId || 'TRC-MINA-GUARD-9007-G'}</strong>
+                  <strong className="font-mono">{liveReport?.traceId || 'TRC-MINA-QBANK-9008-H'}</strong>
                 </p>
               </div>
             </div>
@@ -91,7 +91,7 @@ export function RoadmapAuditModal({ open, onClose }: Props) {
           </div>
 
           <p className="text-[11px] text-gray-300 leading-relaxed">
-            هر ۷ فاز معماری (اسکلت و فونت، بالینی و پالمر، تقویم و رادار، مالی و RBAC، PWA/OTA، گاوصندوق ضدحذف Cloud SQL + گوگل درایو + گیت‌هاب، و سپر سراسری Guardian + صف آفلاین + سهم ۳مدله پزشکان) به صورت زنده بررسی و با امضای دیجیتال قفل می‌شوند.
+            هر ۸ فاز معماری (اسکلت و فونت، بالینی و پالمر، تقویم و رادار، مالی و RBAC، PWA/OTA، گاوصندوق ضدحذف Cloud SQL + گوگل درایو + گیت‌هاب، سپر سراسری Guardian، و رابط اصیل کیوبانک + پوشه پروژه + اعلان واقعی گوشی + هپتیک iOS 27 + فیکسچر با مطب) به صورت زنده بررسی و با امضای دیجیتال قفل می‌شوند.
           </p>
 
           <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-white/10 text-[11px]">
@@ -133,7 +133,7 @@ export function RoadmapAuditModal({ open, onClose }: Props) {
             }`}
           >
             <FileText size={14} />
-            ۷ فاز قفل‌شده
+            ۸ فاز قفل‌شده
           </button>
           <button
             onClick={() => {
