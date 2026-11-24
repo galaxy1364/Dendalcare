@@ -60,7 +60,51 @@ export interface LiveSuperAuditReport {
   checks: LiveAuditCheckItem[];
 }
 
-// 6 Locked Milestones representing the Complete 0 to 100 Phased World-Class Roadmap
+export interface GlobalBenchmarkProtocolRule {
+  step: number;
+  code: 'WEB_SEARCH_GLOBAL' | 'WORLD_CLASS_BENCHMARK' | 'NATIVE_IMPLEMENTATION' | 'LIVE_10_OF_10_GATE';
+  title: string;
+  mandatoryAction: string;
+  locked: true;
+}
+
+/**
+ * Permanent Locked 4-Stage Global Benchmark & 10/10 Gate Protocol.
+ * On every module upgrade or "ادامه" request:
+ * 1) Global Web Search -> 2) Best-in-World Benchmarking -> 3) Full Implementation -> 4) Live Test & 10/10 Gate (reject & re-upgrade if < 10/10).
+ */
+export const PERMANENT_GLOBAL_BENCHMARK_PROTOCOL: readonly GlobalBenchmarkProtocolRule[] = Object.freeze([
+  {
+    step: 1,
+    code: 'WEB_SEARCH_GLOBAL',
+    title: 'جستجوی جهانی زنده در اینترنت پیش از کدنویسی هر بخش',
+    mandatoryAction: 'اجرای جستجوی وب جهانی (CareStack, Curve Dental, Dentally, Denticon, Apple iOS 27 HIG, QBank Fintech) برای استخراج جدیدترین استانداردهای سال.',
+    locked: true,
+  },
+  {
+    step: 2,
+    code: 'WORLD_CLASS_BENCHMARK',
+    title: 'الگوبرداری از بهترین و پیشرفته‌ترین استانداردهای جهانی',
+    mandatoryAction: 'ترکیب شاخص‌های کلیدی جهانی (KPI بالینی و مالی، قانون رنگ ۶۰-۳۰-۱۰، سلسله‌مراتب Bento و کادرهای منحنی کیوبانک بدون شلوغی).',
+    locked: true,
+  },
+  {
+    step: 3,
+    code: 'NATIVE_IMPLEMENTATION',
+    title: 'پیاده‌سازی ۱۰۰٪ واقعی و یکپارچه در برنامه',
+    mandatoryAction: 'کدنویسی صفر تا صد واقعی متصل به دیتابیس Cloud SQL، گاوصندوق ضدحذف، هپتیک iOS 27 و سازگار با آیفون، اندروید، آیپد و ویندوز.',
+    locked: true,
+  },
+  {
+    step: 4,
+    code: 'LIVE_10_OF_10_GATE',
+    title: 'تست زنده اتوماتیک و دروازه قفل ۱۰ از ۱۰ واقعی',
+    mandatoryAction: 'اجرای تست زنده و ممیزی ۱۰ از ۱۰؛ در صورت کسب امتیاز کمتر از ۱۰ از ۱۰، نسخه رد شده و بلافاصله تا رسیدن به ۱۰ از ۱۰ واقعی ارتقا می‌یابد.',
+    locked: true,
+  },
+]);
+
+// Locked Milestones representing the Complete 0 to 100 Phased World-Class Roadmap
 export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.freeze([
   {
     id: 'milestone-1',
@@ -520,6 +564,10 @@ export function loadLastSuperAuditReport(): LiveSuperAuditReport | null {
 export const MemPalace = {
   getRoadmap(): readonly RoadmapMilestone[] {
     return PERMANENT_PROJECT_ROADMAP;
+  },
+
+  getGlobalBenchmarkProtocol(): readonly GlobalBenchmarkProtocolRule[] {
+    return PERMANENT_GLOBAL_BENCHMARK_PROTOCOL;
   },
 
   getAuditLogs(): AuditLogEntry[] {

@@ -501,5 +501,25 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(appSrc.includes('trigger_ios_reminder_popup_btn') && appSrc.includes('reset_acknowledged_reminders_btn'), 'Notification drawer must allow triggering iOS 27 popup and restoring acknowledged reminders');
     assert.ok(remSrc.includes('reminders_section_trigger_ios_popup_btn'), 'Reminders section must provide 1-click iOS 27 popup + phone notification trigger');
   });
+
+  test('MemPalace permanently locks 4-Stage Global Benchmark & 10/10 Gate Protocol and Dashboard implements CareStack/Curve/QBank Executive KPIs & Morning Huddle', () => {
+    const memSrc = read('src/lib/memPalace.ts');
+    const dashSrc = read('src/components/sections/Dashboard.tsx');
+
+    // 1. Permanent Global Benchmark Protocol locked in MemPalace
+    assert.ok(memSrc.includes('PERMANENT_GLOBAL_BENCHMARK_PROTOCOL'), 'MemPalace must lock PERMANENT_GLOBAL_BENCHMARK_PROTOCOL');
+    assert.ok(memSrc.includes('WEB_SEARCH_GLOBAL') && memSrc.includes('WORLD_CLASS_BENCHMARK') && memSrc.includes('NATIVE_IMPLEMENTATION') && memSrc.includes('LIVE_10_OF_10_GATE'), 'Protocol must lock all 4 mandatory steps');
+    assert.ok(memSrc.includes('getGlobalBenchmarkProtocol'), 'MemPalace must expose getGlobalBenchmarkProtocol()');
+
+    // 2. Global Dental Executive KPIs & 3-Day Morning Huddle in Dashboard.tsx
+    assert.ok(dashSrc.includes('dashboard_global_kpi_strip'), 'Dashboard must render Global Executive KPI Strip');
+    assert.ok(dashSrc.includes('kpi_pc_ratio'), 'Dashboard must compute Production vs Collection Ratio (P/C %)');
+    assert.ok(dashSrc.includes('kpi_case_acceptance'), 'Dashboard must compute Case Acceptance Rate (%)');
+    assert.ok(dashSrc.includes('kpi_chair_utilization'), 'Dashboard must compute Chair Utilization Rate (%)');
+    assert.ok(dashSrc.includes('kpi_ar_status'), 'Dashboard must track A/R & Overdue Instruments');
+    assert.ok(dashSrc.includes('dashboard_morning_huddle_bar'), 'Dashboard must render Morning Huddle Continuity Panel');
+    assert.ok(dashSrc.includes("id: 'yesterday'") && dashSrc.includes("id: 'today'") && dashSrc.includes("id: 'tomorrow'") && dashSrc.includes('huddle_tab_${tab.id}'), 'Morning Huddle must support Yesterday, Today & Tomorrow views');
+  });
 });
+
 
