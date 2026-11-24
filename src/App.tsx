@@ -55,6 +55,7 @@ import { MemPalace, OmniRoute } from '@/lib/memPalace';
 import { broadcastNewAppBuild, checkForAppUpdates } from '@/lib/updateManager';
 import { getOfflineQueue, processOfflineQueue } from '@/lib/offlineQueue';
 import { DraggableNotificationHandle } from '@/components/ui/DraggableNotificationHandle';
+import { QBankTile } from '@/components/ui/QBankTile';
 import {
   playTactileFeedback,
   isHapticsEnabled,
@@ -174,10 +175,13 @@ function App() {
     title: string;
     subtitle: string;
     targetRolesLabel: string;
+    patientId?: string;
     patientName: string;
     doctorName: string;
     detailLine: string;
     amountLine?: string;
+    suggestedNextStep: string;
+    doctorSharePreview?: string;
     actorName: string;
     timestamp: string;
   } | null>(null);
@@ -353,19 +357,21 @@ function App() {
 
       if (detail.table === 'appointments' && detail.operation === 'INSERT') {
         const apptDate = rawPayload?.appointment_date ? toJalaliStr(rawPayload.appointment_date) : toJalaliStr(todayGregorian());
-        const apptTime = rawPayload?.appointment_time || '—';
-        const serviceType = rawPayload?.service_type || rawPayload?.title || 'ویزیت و معاینه تخصصی';
+        const apptTime = rawPayload?.appointment_time || '17:30';
+        const serviceType = rawPayload?.service_type || rawPayload?.title || 'ویزیت، معاینه و طرح درمان تخصصی';
         const docName = rawPayload?.doctor_name || 'دکتر مهدی امیری';
         playTactileFeedback('success');
         setSmartWorkflowPopup({
           id: `wf_appt_${Date.now()}`,
           type: 'appointment_booked',
           title: 'نوبت جدید بیمار ثبت شد',
-          subtitle: 'اطلاع‌رسانی آنی جهت آماده‌سازی یونیت و طرح درمان',
+          subtitle: 'اطلاع‌رسانی آنی جهت انتخاب بیمار، آماده‌سازی یونیت و باز کردن چارت پالمر',
           targetRolesLabel: 'ویژه پزشک معالج و مدیر کلینیک',
+          patientId: rawPayload?.patient_id,
           patientName: resolvedPatientName,
           doctorName: docName,
           detailLine: `خدمت: ${serviceType} • زمان: ${apptDate} ساعت ${apptTime}`,
+          suggestedNextStep: 'گام هوشمند بعدی: بررسی سابقه پزشکی بیمار، باز کردن چارت پالمر و ثبت طرح درمان مرحله‌ای',
           actorName: detail.actor || 'پذیرش کلینیک',
           timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
         });
@@ -377,21 +383,28 @@ function App() {
           }).catch(() => {});
         }
       } else if (detail.table === 'treatments' && (detail.operation === 'INSERT' || detail.operation === 'UPDATE')) {
-        const toothNum = rawPayload?.tooth_number ? `دندان شماره ${rawPayload.tooth_number}` : 'چارت عمومی';
+        const toothNum = rawPayload?.tooth_number ? `دندان شماره ${rawPayload.tooth_number}` : 'چارت تخصصی پالمر';
         const treatType = rawPayload?.treatment_type || rawPayload?.description || 'درمان تخصصی دندانپزشکی';
         const docName = rawPayload?.doctor_name || detail.actor || 'دکتر مهدی امیری';
         const costVal = Number(rawPayload?.cost || rawPayload?.final_cost || 0);
+        const estDoctorHalf = costVal > 0 ? Math.round(costVal / 2) : 0;
         playTactileFeedback('success');
         setSmartWorkflowPopup({
           id: `wf_treat_${Date.now()}`,
           type: 'treatment_completed',
           title: 'ثبت / تکمیل درمان توسط پزشک (ضد فراموشی)',
-          subtitle: 'جهت تسویه‌حساب، تقسیط، چک، لابراتوار یا تعیین نوبت جلسه بعد اقدام کنید',
+          subtitle: 'جهت تسویه‌حساب، تقسیط، چک ضمانت، سفارش لابراتوار یا تعیین نوبت جلسه بعد اقدام کنید',
           targetRolesLabel: 'ویژه منشی، دستیار و مدیر کلینیک',
+          patientId: rawPayload?.patient_id,
           patientName: resolvedPatientName,
           doctorName: docName,
           detailLine: `${treatType} • ${toothNum}`,
           amountLine: costVal > 0 ? `${costVal.toLocaleString('fa-IR')} تومان` : undefined,
+          suggestedNextStep: 'چک‌لیست ضد فراموشی: ۱. ثبت دریافتی یا تقسیط و چک ضمانت • ۲. سفارش قالب‌گیری لابراتوار/ایمپلنت • ۳. ثبت نوبت پیگیری',
+          doctorSharePreview:
+            costVal > 0
+              ? `سهم کارکرد پایه (۵۰٪ خالص پس از کسر لابراتوار): حدود ${estDoctorHalf.toLocaleString('fa-IR')} تومان (فیکسچر ایمپلنت ۱۰۰٪ با مطب)`
+              : undefined,
           actorName: detail.actor || docName,
           timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
         });
@@ -1127,73 +1140,141 @@ function App() {
         color="#7C3AED"
       >
         <div className="space-y-3" data-testid="project_folder_sheet_content">
+          {/* Authentic QBank Curved-Notch Cards Inside Project Folder (۱۰۰٪ مطابق هندسه کیوبانک) */}
           <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
+            <QBankTile
+              title="کالر آیدی هوشمند"
+              subtitle="تشخیص تماس بیمار و نوبت خودکار"
+              accentColor="#10B981"
+              cardBg="linear-gradient(145deg, #FFFFFF 0%, #ECFDF5 100%)"
+              iconBg="linear-gradient(135deg, #10B981, #059669)"
+              icon={<PhoneIncoming size={19} className="text-white" />}
+              testId="folder_caller_id_btn"
               onClick={() => {
-                playTactileFeedback('tap');
                 setProjectFolderOpen(false);
                 setCallerIdOpen(true);
               }}
-              data-testid="folder_caller_id_btn"
-              className="p-3.5 rounded-3xl bg-emerald-50 border border-emerald-200/80 text-right space-y-1.5 haptic shadow-sm"
-            >
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow">
-                <PhoneIncoming size={19} />
-              </div>
-              <p className="text-xs font-black text-emerald-950">کالر آیدی هوشمند</p>
-              <p className="text-[10px] text-emerald-700">تشخیص تماس بیمار و نوبت خودکار</p>
-            </button>
+            />
 
-            <button
-              type="button"
+            <QBankTile
+              title="نصب ۴ پلتفرم"
+              subtitle="آیفون، اندروید، آیپد و ویندوز"
+              accentColor="#7C3AED"
+              cardBg="linear-gradient(145deg, #FFFFFF 0%, #F5F3FF 100%)"
+              iconBg="linear-gradient(135deg, #8B5CF6, #6D28D9)"
+              icon={<Download size={19} className="text-white" />}
+              testId="folder_install_pwa_btn"
               onClick={() => {
-                playTactileFeedback('tap');
                 setProjectFolderOpen(false);
                 handleTriggerInstall();
               }}
-              data-testid="folder_install_pwa_btn"
-              className="p-3.5 rounded-3xl bg-purple-50 border border-purple-200/80 text-right space-y-1.5 haptic shadow-sm"
-            >
-              <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow">
-                <Download size={19} />
-              </div>
-              <p className="text-xs font-black text-purple-950">نصب روی گوشی، آیپد و ویندوز</p>
-              <p className="text-[10px] text-purple-700">بسته نصب اندروید، آیفون، آیپد و دسکتاپ</p>
-            </button>
+            />
 
-            <button
-              type="button"
+            <QBankTile
+              title="تنظیمات و نسخه‌ها"
+              subtitle="تعرفه‌ها، بکاپ ابری و مدیریت"
+              accentColor="#4F46E5"
+              cardBg="linear-gradient(145deg, #FFFFFF 0%, #EEF2FF 100%)"
+              iconBg="linear-gradient(135deg, #6366F1, #4338CA)"
+              icon={<Keyboard size={19} className="text-white" />}
+              testId="folder_settings_shortcut_btn"
               onClick={() => {
-                playTactileFeedback('tap');
                 setProjectFolderOpen(false);
                 handleNavigate('settings');
               }}
-              data-testid="folder_settings_shortcut_btn"
-              className="p-3.5 rounded-3xl bg-indigo-50 border border-indigo-200/80 text-right space-y-1.5 haptic shadow-sm"
-            >
-              <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow">
-                <Keyboard size={19} />
-              </div>
-              <p className="text-xs font-black text-indigo-950">تنظیمات و دانلود نسخه‌ها</p>
-              <p className="text-[10px] text-indigo-700">تعرفه‌ها، بکاپ ابری و مدیریت نسخه</p>
-            </button>
+            />
 
-            <button
-              type="button"
+            <QBankTile
+              title="سینک ابری و لوکال"
+              subtitle="پشتیبان ابری + گاوصندوق ضدحذف"
+              accentColor="#0284C7"
+              cardBg="linear-gradient(145deg, #FFFFFF 0%, #F0F9FF 100%)"
+              iconBg="linear-gradient(135deg, #0EA5E9, #0369A1)"
+              icon={<Cloud size={19} className={`text-white ${syncing ? 'animate-pulse' : ''}`} />}
+              testId="folder_cloud_sync_btn"
               onClick={() => {
-                playTactileFeedback('tap');
                 handleSync();
               }}
-              data-testid="folder_cloud_sync_btn"
-              className="p-3.5 rounded-3xl bg-sky-50 border border-sky-200/80 text-right space-y-1.5 haptic shadow-sm"
-            >
-              <div className="w-10 h-10 rounded-2xl bg-sky-600 text-white flex items-center justify-center shadow">
-                <Cloud size={19} className={syncing ? 'animate-pulse' : ''} />
-              </div>
-              <p className="text-xs font-black text-sky-950">سینک ابری و لوکال آنی</p>
-              <p className="text-[10px] text-sky-700">پشتیبان ابری + گاوصندوق ضدحذف</p>
-            </button>
+            />
+          </div>
+
+          {/* Live Smart Cross-Role Workflow Popup Triggers (تست زنده پاپ‌آپ هوشمند نوبت و درمان) */}
+          <div className="rounded-3xl bg-white border border-slate-200/85 p-3.5 space-y-2.5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-black text-slate-800">
+                پاپ‌آپ هوشمند گردش کار بین‌پرسنلی (ضد فراموشی)
+              </h4>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                فعال و زنده
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              با هر ثبت نوبت یا تکمیل درمان به‌طور خودکار باز می‌شود؛ همچنین می‌توانید عملکرد زنده آن را همین‌جا بررسی کنید:
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                data-testid="simulate_appt_popup_btn"
+                onClick={() => {
+                  setProjectFolderOpen(false);
+                  const samplePatient = patients[0];
+                  window.dispatchEvent(
+                    new CustomEvent('minadental-table-mutated', {
+                      detail: {
+                        table: 'appointments',
+                        operation: 'INSERT',
+                        actor: 'منشی و پذیرش',
+                        actorRole: 'secretary',
+                        payload: {
+                          patient_id: samplePatient?.id,
+                          patient_name: samplePatient
+                            ? `${samplePatient.first_name} ${samplePatient.last_name}`
+                            : 'سارا محمدی (پرونده #۱۰۴۲)',
+                          doctor_name: 'دکتر مهدی امیری',
+                          service_type: 'جراحی ایمپلنت و بررسی CBCT',
+                          appointment_date: todayGregorian(),
+                          appointment_time: '18:00',
+                        },
+                      },
+                    })
+                  );
+                }}
+                className="py-2.5 px-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200/80 text-[11px] font-extrabold transition-all haptic active:scale-95"
+              >
+                پاپ‌آپ ثبت نوبت (پزشک/مدیر)
+              </button>
+              <button
+                type="button"
+                data-testid="simulate_treat_popup_btn"
+                onClick={() => {
+                  setProjectFolderOpen(false);
+                  const samplePatient = patients[0];
+                  window.dispatchEvent(
+                    new CustomEvent('minadental-table-mutated', {
+                      detail: {
+                        table: 'treatments',
+                        operation: 'INSERT',
+                        actor: 'دکتر مهدی امیری',
+                        actorRole: 'manager',
+                        payload: {
+                          patient_id: samplePatient?.id,
+                          patient_name: samplePatient
+                            ? `${samplePatient.first_name} ${samplePatient.last_name}`
+                            : 'رضا رضایی (پرونده #۱۰۸۵)',
+                          doctor_name: 'دکتر مهدی امیری',
+                          tooth_number: 'UR6 (۱۶)',
+                          treatment_type: 'کاشت فیکسچر ایمپلنت اشترومن + روکش زیرکونیا',
+                          cost: 18500000,
+                        },
+                      },
+                    })
+                  );
+                }}
+                className="py-2.5 px-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200/80 text-[11px] font-extrabold transition-all haptic active:scale-95"
+              >
+                پاپ‌آپ ثبت درمان (منشی/مدیر)
+              </button>
+            </div>
           </div>
 
           {/* Tactile Haptics & Soft Acoustic Click Toggles */}
@@ -1759,6 +1840,16 @@ function App() {
                     </span>
                   )}
                 </div>
+                {smartWorkflowPopup.suggestedNextStep && (
+                  <div className="rounded-xl bg-indigo-50/75 border border-indigo-200/70 px-2.5 py-1.5 text-[11px] font-bold text-indigo-950 leading-relaxed">
+                    {smartWorkflowPopup.suggestedNextStep}
+                  </div>
+                )}
+                {smartWorkflowPopup.doctorSharePreview && (
+                  <div className="rounded-xl bg-amber-50/80 border border-amber-200/70 px-2.5 py-1.5 text-[10px] font-extrabold text-amber-900 leading-relaxed">
+                    {smartWorkflowPopup.doctorSharePreview}
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1">
                   <span>ثبت توسط: {smartWorkflowPopup.actorName}</span>
                   <span>ساعت {smartWorkflowPopup.timestamp}</span>

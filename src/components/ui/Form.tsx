@@ -1,4 +1,6 @@
 import { type ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { playTactileFeedback } from '@/lib/hapticsAudio';
 
 /* Iranian National Code Validator */
 export function isValidIranianNationalId(id: string): boolean {
@@ -16,15 +18,20 @@ export function isValidIranianNationalId(id: string): boolean {
 type FieldProps = {
   label: string;
   error?: string;
+  hint?: string;
   children: ReactNode;
 };
 
-export function Field({ label, error, children }: FieldProps) {
+export function Field({ label, error, hint, children }: FieldProps) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="ios27-form-field flex flex-col gap-1.5">
       <div className="flex justify-between items-center px-1">
-        <label className="text-xs font-semibold text-gray-500 tracking-tight">{label}</label>
-        {error && <span className="text-[10px] font-bold text-red-500 animate-fade-in">{error}</span>}
+        <label className="text-[11px] font-extrabold text-slate-600 tracking-tight">{label}</label>
+        {error ? (
+          <span className="text-[10px] font-bold text-rose-600 animate-fade-in">{error}</span>
+        ) : hint ? (
+          <span className="text-[10px] font-medium text-slate-400">{hint}</span>
+        ) : null}
       </div>
       {children}
     </div>
@@ -36,8 +43,8 @@ export function Input(props: InputProps) {
   return (
     <input
       {...props}
-      className={`w-full px-4 py-3 rounded-2xl bg-white/50 border border-white/50 text-gray-800 placeholder:text-gray-400 text-sm transition-all focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 ${props.className ?? ''}`}
-      style={{ transition: 'all 0.25s var(--ease-out)' }}
+      className={`ios27-input w-full px-3.5 py-2.5 rounded-2xl bg-white border border-slate-200/90 text-slate-900 placeholder:text-slate-400 text-sm font-medium shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/12 ${props.className ?? ''}`}
+      style={{ transition: 'all 0.2s var(--ease-out)' }}
     />
   );
 }
@@ -64,13 +71,14 @@ export function CurrencyInput({ value, onChange, currencyLabel = 'تومان', .
       <Input
         {...props}
         type="text"
+        inputMode="numeric"
         dir="ltr"
-        className={`text-left font-bold ${props.className ?? ''}`}
+        className={`text-left font-black pl-14 ${props.className ?? ''}`}
         value={formatted}
         onChange={handleChange}
         placeholder={props.placeholder ?? '۰'}
       />
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 pointer-events-none">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-extrabold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-lg pointer-events-none">
         {currencyLabel}
       </span>
     </div>
@@ -82,24 +90,34 @@ export function Textarea(props: TextareaProps) {
   return (
     <textarea
       {...props}
-      className={`w-full px-4 py-3 rounded-2xl bg-white/50 border border-white/50 text-gray-800 placeholder:text-gray-400 text-sm transition-all focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 resize-none ${props.className ?? ''}`}
-      style={{ transition: 'all 0.25s var(--ease-out)' }}
+      className={`ios27-input w-full px-3.5 py-2.5 rounded-2xl bg-white border border-slate-200/90 text-slate-900 placeholder:text-slate-400 text-sm font-medium shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/12 resize-none ${props.className ?? ''}`}
+      style={{ transition: 'all 0.2s var(--ease-out)' }}
     />
   );
 }
 
 type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & { options: { value: string; label: string }[] };
-export function Select({ options, ...props }: SelectProps) {
+export function Select({ options, onChange, ...props }: SelectProps) {
   return (
-    <select
-      {...props}
-      className={`w-full px-4 py-3 rounded-2xl bg-white/50 border border-white/50 text-gray-800 text-sm transition-all focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 appearance-none cursor-pointer ${props.className ?? ''}`}
-      style={{ transition: 'all 0.25s var(--ease-out)' }}
-    >
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>{o.label}</option>
-      ))}
-    </select>
+    <div className="relative">
+      <select
+        {...props}
+        onChange={(e) => {
+          playTactileFeedback('soft');
+          onChange?.(e);
+        }}
+        className={`ios27-select w-full px-3.5 py-2.5 pl-9 rounded-2xl bg-white border border-slate-200/90 text-slate-900 text-sm font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/12 appearance-none cursor-pointer ${props.className ?? ''}`}
+        style={{ transition: 'all 0.2s var(--ease-out)' }}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <ChevronDown
+        size={16}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+      />
+    </div>
   );
 }
 
@@ -115,24 +133,27 @@ type ButtonProps = {
 };
 
 export function Button({ children, onClick, type = 'button', variant = 'primary', color, className = '', disabled, icon }: ButtonProps) {
-  const base = 'flex items-center justify-center gap-2 py-3 px-4 rounded-2xl font-semibold text-sm transition-all haptic active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100';
+  const base = 'ios27-button flex items-center justify-center gap-2 py-3 px-4 rounded-2xl font-extrabold text-sm transition-all haptic active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100';
   const styles: Record<string, string> = {
-    primary: color ? 'text-white' : 'bg-blue-500 text-white hover:bg-blue-600',
-    secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-    danger: 'bg-red-500 text-white hover:bg-red-600',
-    ghost: 'bg-transparent text-gray-600 hover:bg-gray-100',
+    primary: color ? 'text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700',
+    secondary: 'bg-slate-100 text-slate-700 border border-slate-200/80 hover:bg-slate-200/80',
+    danger: 'bg-rose-600 text-white hover:bg-rose-700',
+    ghost: 'bg-transparent text-slate-600 hover:bg-slate-100',
   };
   return (
     <button
       type={type}
-      onClick={onClick}
+      onClick={() => {
+        if (!disabled) playTactileFeedback(variant === 'danger' ? 'warning' : 'tap');
+        onClick?.();
+      }}
       disabled={disabled}
       className={`${base} ${styles[variant]} ${className}`}
       style={
         variant === 'primary' && color
-          ? { background: color, boxShadow: `0 4px 16px ${color}35` }
+          ? { background: color, boxShadow: `0 6px 18px ${color}30` }
           : variant === 'danger'
-          ? { boxShadow: '0 4px 16px rgba(239,68,68,0.3)' }
+          ? { boxShadow: '0 6px 18px rgba(225,29,72,0.28)' }
           : undefined
       }
     >

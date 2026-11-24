@@ -41,33 +41,40 @@ export function Sheet({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex flex-col bg-slate-950/65 backdrop-blur-xl animate-fade-in"
+      className="fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center bg-slate-950/55 backdrop-blur-md animate-fade-in"
       dir="rtl"
       data-testid="fullscreen_modal_sheet"
+      onClick={() => {
+        playTactileFeedback('soft');
+        onClose();
+      }}
     >
-      {/* Full-Screen Container */}
+      {/* Authentic iOS 27 Sheet Container (Card-like rounded top on mobile, centered inset sheet on tablet/desktop) */}
       <div
-        className="relative w-full h-[100dvh] max-w-3xl mx-auto flex flex-col bg-gradient-to-b from-white via-slate-50/98 to-white shadow-2xl overflow-hidden animate-scale-in"
+        data-testid="ios27_registration_sheet"
+        className="ios27-sheet-surface relative w-full h-[96dvh] sm:h-[92dvh] max-w-2xl mx-auto flex flex-col bg-[#F4F5F9] rounded-t-[32px] sm:rounded-[32px] shadow-2xl overflow-hidden animate-scale-in border border-white/80"
         style={{
-          borderTop: `4px solid ${color}`,
-          boxShadow: `0 0 60px ${color}30`,
+          boxShadow: '0 -12px 48px rgba(15, 23, 42, 0.24), 0 20px 60px rgba(15, 23, 42, 0.28)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Ambient Glow */}
+        {/* iOS 27 Top Grabber Pill + Subtle Accent Hairline */}
         <div
-          className="pointer-events-none absolute -top-20 right-1/4 w-72 h-40 rounded-full blur-3xl opacity-15"
-          style={{ background: color }}
-        />
-
-        {/* Sticky Full-Screen Header */}
-        <header
-          className="sticky top-0 z-20 flex items-center justify-between px-4 py-3.5 backdrop-blur-xl border-b border-gray-200/80 safe-top shrink-0"
-          style={{
-            background: `linear-gradient(135deg, ${color}12 0%, rgba(255,255,255,0.96) 100%)`,
+          className="pt-2.5 pb-1 flex flex-col items-center justify-center bg-white/92 backdrop-blur-2xl shrink-0 cursor-pointer"
+          onClick={() => {
+            playTactileFeedback('soft');
+            onClose();
           }}
+          data-testid="ios27_sheet_grabber_pill"
         >
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-1.5 rounded-full bg-slate-300/90 transition-transform active:scale-95" />
+        </div>
+
+        {/* Sticky iOS 27 Frosted Navigation Bar Header */}
+        <header
+          className="ios27-sheet-navbar sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-white/92 backdrop-blur-2xl border-b border-slate-200/85 shrink-0"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
               type="button"
               onClick={() => {
@@ -75,17 +82,17 @@ export function Sheet({
                 onClose();
               }}
               aria-label="بازگشت و بستن"
-              className="w-10 h-10 rounded-2xl flex items-center justify-center bg-white/90 hover:bg-gray-100 text-gray-700 border border-gray-200/80 shadow-sm transition-all haptic active:scale-90 shrink-0"
+              className="w-9 h-9 rounded-full flex items-center justify-center bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200/80 transition-all haptic active:scale-90 shrink-0"
             >
-              <ArrowRight size={19} />
+              <ArrowRight size={18} />
             </button>
 
             {icon && (
               <div
-                className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-md shrink-0"
+                className="w-9 h-9 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0"
                 style={{
                   background: `linear-gradient(135deg, ${color}, ${color}dd)`,
-                  boxShadow: `0 4px 14px ${color}40`,
+                  boxShadow: `0 4px 12px ${color}35`,
                 }}
               >
                 {icon}
@@ -93,9 +100,9 @@ export function Sheet({
             )}
 
             <div className="min-w-0">
-              <h2 className="text-base font-extrabold text-gray-900 truncate">{title}</h2>
-              <p className="text-[11px] text-gray-500 truncate">
-                {subtitle || 'نمایش تمام‌صفحه • کلینیک هوشمند مینادنتال'}
+              <h2 className="text-[15px] font-black text-slate-900 truncate leading-tight">{title}</h2>
+              <p className="text-[11px] font-medium text-slate-500 truncate mt-0.5">
+                {subtitle || 'فرم ثبت هوشمند • استاندارد iOS 27 کلینیک مینادنتال'}
               </p>
             </div>
           </div>
@@ -108,16 +115,16 @@ export function Sheet({
             }}
             aria-label="بستن پنجره"
             data-testid="close_fullscreen_modal_btn"
-            className="px-3 py-2 rounded-2xl flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs border border-rose-200/70 transition-all haptic active:scale-90 shrink-0"
+            className="px-3.5 py-1.5 rounded-full flex items-center gap-1 bg-slate-100 hover:bg-slate-200/90 text-slate-700 font-extrabold text-xs border border-slate-200/80 transition-all haptic active:scale-92 shrink-0"
           >
-            <X size={16} />
+            <X size={15} />
             <span>بستن</span>
           </button>
         </header>
 
-        {/* Scrollable Full-Screen Content Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 safe-bottom">
-          <div className="max-w-2xl mx-auto">{children}</div>
+        {/* Scrollable iOS 27 Inset Grouped Content Area */}
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 pb-24 safe-bottom desktop-scroll">
+          <div className="max-w-2xl mx-auto space-y-3">{children}</div>
         </div>
       </div>
     </div>,
