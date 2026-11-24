@@ -2,26 +2,53 @@
 <html lang="fa" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-    <link rel="icon" type="image/webp" href="./icon-192.webp" />
-    <link rel="icon" type="image/svg+xml" href="./assets/favicon-BZotrQQN.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#2E1065" />
+    <meta name="application-name" content="مینادنتال" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="مینادنتال" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="format-detection" content="telephone=no" />
-    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
-    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="./apple-touch-icon.png" />
     <meta name="description" content="مینادنتال - سیستم هوشمند مدیریت تخصصی کلینیک دندانپزشکی، نوبت‌دهی، بیماران، درمان، لابراتوار، ایمپلنت، مالی و انبار" />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
-    <link rel="manifest" href="./assets/manifest-QqeWKVa9.json" />
+
+    <!-- Standard & iOS Home Screen Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192-CqpOMAYj.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="./assets/icon-512-DcezdRgv.png" />
+    <link rel="icon" type="image/svg+xml" href="./assets/favicon-BZotrQQN.svg" />
+    <link rel="apple-touch-icon" href="./assets/apple-touch-icon-kF0Qnlx1.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon-kF0Qnlx1.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="./assets/apple-touch-icon-kF0Qnlx1.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="./assets/apple-touch-icon-kF0Qnlx1.png" />
+    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="./assets/apple-touch-icon-kF0Qnlx1.png" />
+
+    <!-- Web App Manifest with credentials so authenticated & public HTTPS origins both load it -->
+    <link rel="manifest" href="./manifest.json" crossorigin="use-credentials" />
+
+    <!-- Fast non-blocking Persian Typography (Vazirmatn) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" />
+
     <title>مینادنتال | سیستم هوشمند مدیریت کلینیک دندانپزشکی</title>
-    <script type="module" crossorigin src="./assets/index-DW3XPpX9.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-Dp343GSM.css">
+
+    <!-- Capture Android/Desktop beforeinstallprompt immediately before React bundle mounts -->
+    <script>
+      window.__deferredInstallPrompt = null;
+      window.__pwaInstalled = false;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__deferredInstallPrompt = e;
+        window.dispatchEvent(new Event('minadental:install-ready'));
+      });
+      window.addEventListener('appinstalled', function() {
+        window.__deferredInstallPrompt = null;
+        window.__pwaInstalled = true;
+        window.dispatchEvent(new Event('minadental:installed'));
+      });
+    </script>
+    <script type="module" crossorigin src="./assets/index-C6GX3Nyj.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DGNnVjvh.css">
   </head>
   <body style="margin: 0; background-color: #0A0E27;">
     <div id="root">
@@ -71,23 +98,23 @@
     </div>
 
     <script>
-      // Automatic pre-built bundle loader when served directly from GitHub Pages root branch
-      if (window.location.hostname.indexOf('github.io') !== -1) {
+      // Automatic pre-built bundle loader ONLY when served raw from GitHub Pages root branch (without built assets)
+      if (window.location.hostname.indexOf('github.io') !== -1 && !document.querySelector('script[src*="./assets/index-"]')) {
         var ghCss = document.createElement('link');
         ghCss.rel = 'stylesheet';
-        ghCss.href = './gh-pages-dist/app.css?v=52';
+        ghCss.href = './gh-pages-dist/app.css?v=60';
         document.head.appendChild(ghCss);
         var ghJs = document.createElement('script');
         ghJs.type = 'module';
         ghJs.crossOrigin = 'anonymous';
-        ghJs.src = './gh-pages-dist/app.js?v=52';
+        ghJs.src = './gh-pages-dist/app.js?v=60';
         document.head.appendChild(ghJs);
       }
 
-      // Safe ServiceWorker management
+      // ServiceWorker registration for PWA installability on HTTPS (skip native Android APK LocalAssetServer on 127.0.0.1:8765)
       if ('serviceWorker' in navigator) {
-        var isLocalNative = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-        if (isLocalNative) {
+        var isAndroidLocalWebView = window.location.hostname === '127.0.0.1' && window.location.port === '8765';
+        if (isAndroidLocalWebView) {
           navigator.serviceWorker.getRegistrations().then(function(regs) {
             for (var i = 0; i < regs.length; i++) {
               regs[i].unregister();
@@ -98,10 +125,10 @@
               keys.forEach(function(k) { caches.delete(k); });
             }).catch(function() {});
           }
-        } else if (window.location.protocol === 'https:') {
+        } else if (window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
           window.addEventListener('load', function() {
-            navigator.serviceWorker.register('./sw.js').then(function(reg) {
-              reg.update();
+            navigator.serviceWorker.register('./sw.js', { scope: './' }).then(function(reg) {
+              reg.update().catch(function() {});
             }).catch(function() {});
           });
         }

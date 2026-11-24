@@ -19,6 +19,7 @@ import {
   verifyGitHubToken,
   backupDataToGitHub,
   publishWebAppToGitHubPages,
+  uploadBackupToGoogleDrive,
   sendTestSms,
   generateIcsCalendar,
   type GitHubConfig,
@@ -28,6 +29,9 @@ import {
   type GoogleDriveConfig,
 } from '@/lib/integrationsEngine';
 import { supabase } from '@/lib/supabase';
+import { CURRENT_APP_VERSION, CURRENT_APP_BUILD } from '@/lib/cloudSyncEngine';
+import { collectCompleteClinicSnapshot } from '@/lib/dataVault';
+import { exportClinicBackupToJson } from '@/lib/exportUtils';
 
 export function IntegrationsTab() {
   const [activeSubTab, setActiveSubTab] = useState<'github' | 'sms' | 'calendar' | 'drive' | 'pos'>('github');
@@ -60,8 +64,9 @@ export function IntegrationsTab() {
 
   // Drive State
   const [driveConfig, setDriveConfig] = useState<GoogleDriveConfig>(loadDriveConfig());
+  const [driveTokenInput, setDriveTokenInput] = useState(driveConfig.accessToken || '');
   const [runningDriveBackup, setRunningDriveBackup] = useState(false);
-  const [driveResult, setDriveResult] = useState<string | null>(null);
+  const [driveResult, setDriveResult] = useState<{ type: 'success' | 'error'; text: string; url?: string } | null>(null);
 
   // Save changes helper
   const handleSaveGithub = (updated: GitHubConfig) => {
@@ -103,35 +108,14 @@ export function IntegrationsTab() {
     setGithubMessage(null);
     setBackupResultUrl(null);
     try {
-      // Gather current clinic data
-      const [
-        { data: patients },
-        { data: appointments },
-        { data: treatments },
-        { data: finance },
-      ] = await Promise.all([
-        supabase.from('patients').select('*'),
-        supabase.from('appointments').select('*'),
-        supabase.from('treatments').select('*'),
-        supabase.from('financial_records').select('*'),
-      ]);
-
-      const payload = {
-        app: 'MinaDental Clinic System',
-        version: '4.6.0',
-        exportedAt: new Date().toISOString(),
-        manager: 'Mehdi Amiri (mehdi.amiri19851364@gmail.com)',
-        data: {
-          patients: patients || [],
-          appointments: appointments || [],
-          treatments: treatments || [],
-          finance: finance || [],
-        },
-      };
+      // Gather ALL 20 real Cloud SQL tables via Zero-Delete DataVault
+      const snapshot = await collectCompleteClinicSnapshot(
+        'دکتر مهدی امیری (mehdi.amiri19851364@gmail.com)'
+      );
 
       const res = await backupDataToGitHub(
         tokenInput.trim(),
-        payload,
+        snapshot,
         githubConfig.repoOwner,
         githubConfig.repoName
       );
@@ -141,7 +125,7 @@ export function IntegrationsTab() {
         setBackupResultUrl(res.url || null);
         setGithubMessage({
           type: 'success',
-          text: `پشتیبان دیتابیس با موفقیت روی گیت‌هاب ذخیره شد (شناسه کامیت: ${res.commitSha || 'ok'})`,
+          text: `پشتیبان کامل ۲۰ جدول (${snapshot.totalRecords.toLocaleString('fa-IR')} رکورد • ${snapshot.checksum}) روی گیت‌هاب ثبت شد (کامیت: ${res.commitSha || 'ok'})`,
         });
         handleSaveGithub({
           ...githubConfig,
@@ -235,14 +219,52 @@ export function IntegrationsTab() {
     }, 1200);
   };
 
-  const handleTriggerDriveBackup = () => {
+  const handleTriggerDriveBackup = async () => {
     setRunningDriveBackup(true);
     setDriveResult(null);
-    setTimeout(() => {
+    try {
+      const snapshot = await collectCompleteClinicSnapshot(
+        'دکتر مهدی امیری (mehdi.amiri19851364@gmail.com)'
+      );
+      const token = driveTokenInput.trim();
+      if (token) {
+        const res = await uploadBackupToGoogleDrive(token, driveConfig.folderName, snapshot);
+        if (res.success) {
+          handleSaveDrive({
+            ...driveConfig,
+            connected: true,
+            accessToken: token,
+            lastDriveUploadAt: new Date().toLocaleTimeString('fa-IR'),
+            lastDriveFileId: res.fileId,
+            lastDriveChecksum: snapshot.checksum,
+          });
+          setDriveResult({
+            type: 'success',
+            text: `بک‌آپ کامل ۲۰ جدول (${snapshot.totalRecords.toLocaleString('fa-IR')} رکورد • ${snapshot.checksum}) با موفقیت در پوشه ${driveConfig.folderName} گوگل درایو آپلود شد (${res.fileName}).`,
+            url: res.webViewLink,
+          });
+        } else {
+          setDriveResult({ type: 'error', text: res.error || 'خطا در آپلود مستقیم به گوگل درایو' });
+        }
+      } else {
+        // Transparent non-mock fallback: generate & download complete verified snapshot + save in IndexedDB Vault
+        const dateStr = new Date().toISOString().slice(0, 10);
+        exportClinicBackupToJson(`MinaDental_DriveReady_v${CURRENT_APP_VERSION}_${dateStr}`, snapshot);
+        handleSaveDrive({
+          ...driveConfig,
+          lastDriveUploadAt: new Date().toLocaleTimeString('fa-IR'),
+          lastDriveChecksum: snapshot.checksum,
+        });
+        setDriveResult({
+          type: 'success',
+          text: `اسنپ‌شات کامل ۲۰ جدول (${snapshot.totalRecords.toLocaleString('fa-IR')} رکورد • امضای ${snapshot.checksum}) در Vault ذخیره و آماده آپلود در پوشه ${driveConfig.folderName} دانلود شد. برای آپلود خودکار مستقیم از طریق API، توکن OAuth گوگل درایو را وارد کنید.`,
+        });
+      }
+    } catch (err: any) {
+      setDriveResult({ type: 'error', text: err?.message || 'خطا در آماده‌سازی پشتیبان گوگل درایو' });
+    } finally {
       setRunningDriveBackup(false);
-      setDriveResult('پوشه Google Drive با موفقیت همگام شد (فایل MinaDental_Snapshot_v4.6.0.json بارگذاری گردید).');
-      handleSaveDrive({ ...driveConfig, lastDriveUploadAt: new Date().toLocaleTimeString('fa-IR') });
-    }, 1500);
+    }
   };
 
   const handleSaveSms = (updated: SmsGatewayConfig) => {
@@ -273,7 +295,7 @@ export function IntegrationsTab() {
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 مرکز اتصال به گیت‌هاب و برنامه‌های واجب کلینیک
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-mono">
-                  Active v4.6.0
+                  Active v{CURRENT_APP_VERSION} • #{CURRENT_APP_BUILD}
                 </span>
               </h2>
               <p className="text-xs text-slate-300">
@@ -767,20 +789,58 @@ export function IntegrationsTab() {
             </div>
           </div>
 
+          <div>
+            <label className="text-xs font-bold text-gray-700 block mb-1">
+              توکن دسترسی OAuth 2.0 گوگل درایو (اختیاری جهت آپلود مستقیم API v3):
+            </label>
+            <input
+              type="password"
+              value={driveTokenInput}
+              onChange={(e) => {
+                setDriveTokenInput(e.target.value);
+                handleSaveDrive({ ...driveConfig, accessToken: e.target.value });
+              }}
+              placeholder="ya29.a0AfH6SM... (در صورت خالی بودن، فایل آماده آپلود دانلود و در Vault ذخیره می‌شود)"
+              className="w-full p-2 rounded-xl border border-gray-300 text-xs font-mono text-left bg-white"
+            />
+          </div>
+
           {driveResult && (
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-              <span>{driveResult}</span>
+            <div className={`p-3 rounded-xl text-xs flex flex-col gap-1.5 border ${
+              driveResult.type === 'success'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-rose-50 border-rose-200 text-rose-800'
+            }`}>
+              <div className="flex items-center gap-2">
+                {driveResult.type === 'success'
+                  ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  : <AlertCircle size={16} className="text-rose-600 shrink-0" />}
+                <span>{driveResult.text}</span>
+              </div>
+              {driveResult.url && (
+                <a
+                  href={driveResult.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold underline text-emerald-700 flex items-center gap-1 self-end"
+                >
+                  مشاهده فایل در گوگل درایو <ArrowUpRight size={13} />
+                </a>
+              )}
             </div>
           )}
 
           <button
             onClick={handleTriggerDriveBackup}
             disabled={runningDriveBackup}
-            className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
+            className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-50"
           >
             <Cloud size={15} />
-            {runningDriveBackup ? 'در حال ارسال اطلاعات به Google Drive...' : 'ارسال و همگام‌سازی دستی اکنون با گوگل درایو'}
+            {runningDriveBackup
+              ? 'در حال جمع‌آوری ۲۰ جدول و همگام‌سازی با Google Drive...'
+              : driveTokenInput.trim()
+              ? 'آپلود مستقیم ۲۰ جدول در پوشه Google Drive (API v3)'
+              : 'تهیه اسنپ‌شات ۲۰ جدول در Vault + دانلود آماده گوگل درایو'}
           </button>
         </div>
       )}

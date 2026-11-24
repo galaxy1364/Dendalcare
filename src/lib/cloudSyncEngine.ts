@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { TableName } from './supabase';
+import { collectCompleteClinicSnapshot } from './dataVault';
 
 export type ClinicUserRole = 'manager' | 'dentist' | 'secretary' | 'assistant';
 
@@ -105,8 +106,8 @@ export const DEFAULT_CLINIC_USERS: ClinicUserAccount[] = [
 const USERS_STORAGE_KEY = 'minadental_clinic_users_v4';
 const ACTIVE_USER_STORAGE_KEY = 'minadental_active_user_id_v4';
 const BACKUP_CONFIG_STORAGE_KEY = 'minadental_auto_backup_config_v4';
-export const CURRENT_APP_VERSION = '58.0';
-export const CURRENT_APP_BUILD = 58;
+export const CURRENT_APP_VERSION = '60.0';
+export const CURRENT_APP_BUILD = 60;
 
 export type UserRole = ClinicUserRole;
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -403,85 +404,34 @@ export async function performAutomaticCloudAndLocalBackup(): Promise<{
   ok: boolean;
   timestamp: string;
   totalRecords: number;
+  checksum?: string;
+  traceId?: string;
 }> {
   const nowIso = new Date().toISOString();
   try {
-    const [
-      { data: patients },
-      { data: appointments },
-      { data: treatments },
-      { data: payments },
-      { data: labOrders },
-      { data: implants },
-      { data: inventory },
-      { data: installments },
-      { data: checks },
-      { data: safteh },
-      { data: reminders },
-      { data: staff },
-    ] = await Promise.all([
-      supabase.from('patients').select('*'),
-      supabase.from('appointments').select('*'),
-      supabase.from('treatments').select('*'),
-      supabase.from('payments').select('*'),
-      supabase.from('lab_orders').select('*'),
-      supabase.from('implants').select('*'),
-      supabase.from('inventory').select('*'),
-      supabase.from('installments').select('*'),
-      supabase.from('checks').select('*'),
-      supabase.from('safteh').select('*'),
-      supabase.from('reminders').select('*'),
-      supabase.from('staff').select('*'),
-    ]);
+    const activeUser = getActiveClinicUser();
+    const snapshot = await collectCompleteClinicSnapshot(
+      `${activeUser.fullName} (${activeUser.email || 'mehdi.amiri19851364@gmail.com'})`
+    );
 
-    const snapshot = {
-      backedUpAt: nowIso,
-      backedUpBy: getActiveClinicUser().fullName,
-      version: CURRENT_APP_VERSION,
-      counts: {
-        patients: (patients || []).length,
-        appointments: (appointments || []).length,
-        treatments: (treatments || []).length,
-        payments: (payments || []).length,
-        labOrders: (labOrders || []).length,
-        implants: (implants || []).length,
-        inventory: (inventory || []).length,
-        installments: (installments || []).length,
-        checks: (checks || []).length,
-        safteh: (safteh || []).length,
-        reminders: (reminders || []).length,
-      },
-      data: {
-        patients: patients || [],
-        appointments: appointments || [],
-        treatments: treatments || [],
-        payments: payments || [],
-        labOrders: labOrders || [],
-        implants: implants || [],
-        inventory: inventory || [],
-        installments: installments || [],
-        checks: checks || [],
-        safteh: safteh || [],
-        reminders: reminders || [],
-        staff: staff || [],
-      },
-    };
+    const totalRecords = snapshot.totalRecords;
 
-    const totalRecords = Object.values(snapshot.counts).reduce((a, b) => a + b, 0);
-
-    // Save locally in browser storage
+    // Save locally in browser storage (summary + snapshot fallback)
     try {
       localStorage.setItem('minadental_latest_auto_backup_v4', JSON.stringify(snapshot));
     } catch {
-      // ignore storage quota
+      // ignore localStorage 5MB quota; full tables are already stored in IndexedDB Vault
     }
 
-    // Save cloud snapshot metadata & summary into Supabase clinic_settings
+    // Save cloud snapshot metadata, checksum & Trace ID into Supabase clinic_settings
     try {
       const cloudSummary = JSON.stringify({
-        backedUpAt: nowIso,
-        backedUpBy: snapshot.backedUpBy,
+        backedUpAt: snapshot.exportedAt,
+        backedUpBy: activeUser.fullName,
         version: CURRENT_APP_VERSION,
+        build: CURRENT_APP_BUILD,
+        traceId: snapshot.traceId,
+        checksum: snapshot.checksum,
         counts: snapshot.counts,
         totalRecords,
       });
@@ -508,16 +458,22 @@ export async function performAutomaticCloudAndLocalBackup(): Promise<{
     const cfg = loadAutoBackupConfig();
     saveAutoBackupConfig({
       ...cfg,
-      lastCloudBackupAt: nowIso,
-      lastLocalBackupAt: nowIso,
+      lastCloudBackupAt: snapshot.exportedAt,
+      lastLocalBackupAt: snapshot.exportedAt,
     });
 
     await broadcastClinicSyncEvent({
       type: 'CLOUD_BACKUP_DONE',
-      action: `پشتیبان‌گیری خودکار ابری (${totalRecords.toLocaleString('fa-IR')} رکورد)`,
+      action: `پشتیبان‌گیری ۲۰ جدول در ابر SQL و Vault (${totalRecords.toLocaleString('fa-IR')} رکورد • ${snapshot.checksum})`,
     });
 
-    return { ok: true, timestamp: nowIso, totalRecords };
+    return {
+      ok: true,
+      timestamp: snapshot.exportedAt,
+      totalRecords,
+      checksum: snapshot.checksum,
+      traceId: snapshot.traceId,
+    };
   } catch {
     return { ok: false, timestamp: nowIso, totalRecords: 0 };
   }

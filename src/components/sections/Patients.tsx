@@ -239,8 +239,6 @@ export function Patients() {
     );
   };
 
-  if (loading) return <Loading color="#10B981" />;
-
   return (
     <div className="space-y-2.5 pb-32 animate-fade-in-up">
       {/* ── QBank Sliding Horizontal Chip Bar + Expandable Magnifier Search ── */}

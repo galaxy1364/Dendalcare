@@ -95,8 +95,6 @@ export function Finance() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
 
-  if (lt || lp || li || lc || ls || ltr || lpay) return <Loading color="#22C55E" />;
-
   const chips: { v: FinanceTab; l: string; i: React.ReactNode; badge?: number }[] = [
     {
       v: 'debtors',
@@ -1802,7 +1800,7 @@ function ChecksTab({ checks, patients, refresh }: {
           sayadMatch ? sayadMatch[1] : '-',
           c.bank_name || '-',
           String(c.amount),
-          toJalaliStr(c.issue_date),
+          toJalaliStr(c.issue_date || c.created_at),
           toJalaliStr(c.due_date),
           st,
           c.notes || ''

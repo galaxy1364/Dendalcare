@@ -436,7 +436,6 @@ export function Inventory() {
       <ClinicDefinitionsModal
         open={defsModalOpen}
         onClose={() => setDefsModalOpen(false)}
-        initialTab="companies"
       />
     </div>
   );

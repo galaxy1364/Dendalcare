@@ -149,6 +149,7 @@ export type InventoryItem = {
   supplier: string | null;
   location: string | null;
   expiry_date: string | null;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -225,13 +226,19 @@ export type Installment = {
 export type Check = {
   id: string;
   patient_id: string | null;
-  installment_id: string | null;
+  installment_id?: string | null;
+  treatment_id?: string | null;
   check_number: string | null;
   bank_name: string | null;
+  branch?: string | null;
+  sayad_id?: string | null;
   amount: number;
-  issue_date: string;
+  issue_date?: string;
   due_date: string;
   status: string;
+  type?: string;
+  drawer_name?: string | null;
+  is_guarantee?: boolean;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -240,13 +247,15 @@ export type Check = {
 export type Safteh = {
   id: string;
   patient_id: string | null;
-  installment_id: string | null;
+  installment_id?: string | null;
   safteh_number: string | null;
   amount: number;
-  issue_date: string;
+  issue_date?: string;
   due_date: string;
+  type?: string;
+  drawer_name?: string | null;
   guarantor_name: string | null;
-  guarantor_national_id: string | null;
+  guarantor_national_id?: string | null;
   status: string;
   notes: string | null;
   created_at: string;

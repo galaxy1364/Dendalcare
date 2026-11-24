@@ -210,8 +210,6 @@ export function Appointments() {
     refresh();
   };
 
-  if (loading) return <Loading color="#F59E0B" />;
-
   const isToday = currentDate === today;
   const currentDayName = faDayNames[new Date(currentDate + 'T00:00:00').getDay()];
 

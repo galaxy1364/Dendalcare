@@ -34,6 +34,15 @@ import {
 } from '@/lib/updateManager';
 import { getOfflineQueue, processOfflineQueue, type OfflineMutationItem } from '@/lib/offlineQueue';
 import { ClinicDefinitionsModal } from '@/components/ui/ClinicDefinitionsModal';
+import {
+  collectCompleteClinicSnapshot,
+  restoreCompleteClinicSnapshot,
+  listArchivedRecords,
+  restoreArchivedRecord,
+  getVaultStats,
+  type ArchivedRecordEntry,
+  type VaultStats,
+} from '@/lib/dataVault';
 
 type SettingsTab = 'clinic' | 'diagnostics' | 'integrations' | 'ads';
 
@@ -122,7 +131,7 @@ export function SettingsSection() {
       <InstallAppModal
         open={installModalOpen}
         onClose={() => setInstallModalOpen(false)}
-        deferredPrompt={null}
+        deferredPrompt={typeof window !== 'undefined' ? (window as any).__deferredInstallPrompt || null : null}
         onInstallSuccess={() => {}}
       />
     </div>
@@ -210,48 +219,19 @@ function ClinicSettingsTab({
   const handleExportFullBackup = async () => {
     setExporting(true);
     try {
-      const [
-        { data: patients },
-        { data: appointments },
-        { data: treatments },
-        { data: payments },
-        { data: labOrders },
-        { data: implants },
-        { data: inventory },
-        { data: staff },
-        { data: reminders },
-      ] = await Promise.all([
-        supabase.from('patients').select('*'),
-        supabase.from('appointments').select('*'),
-        supabase.from('treatments').select('*'),
-        supabase.from('payments').select('*'),
-        supabase.from('lab_orders').select('*'),
-        supabase.from('implants').select('*'),
-        supabase.from('inventory_items').select('*'),
-        supabase.from('staff').select('*'),
-        supabase.from('reminders').select('*'),
-      ]);
-
-      const backupData = {
-        exportedAt: new Date().toISOString(),
-        version: '3.0.0',
-        app: 'DentalCare',
-        settings,
-        patients: patients || [],
-        appointments: appointments || [],
-        treatments: treatments || [],
-        payments: payments || [],
-        labOrders: labOrders || [],
-        implants: implants || [],
-        inventory: inventory || [],
-        staff: staff || [],
-        reminders: reminders || [],
-      };
-
+      const activeUser = loadActiveUser();
+      const snapshot = await collectCompleteClinicSnapshot(
+        `${activeUser.fullName} (${activeUser.email || 'mehdi.amiri19851364@gmail.com'})`
+      );
       const dateStr = new Date().toISOString().slice(0, 10);
-      exportClinicBackupToJson(`DentalCare_FullClinic_Backup_${dateStr}`, backupData);
+      exportClinicBackupToJson(`MinaDental_Full20Tables_v${CURRENT_APP_VERSION}_${dateStr}`, snapshot);
+      setRestoreMessage({
+        type: 'success',
+        text: `پشتیبان کامل ۲۰ جدول (${snapshot.totalRecords.toLocaleString('fa-IR')} رکورد • امضای ${snapshot.checksum}) دانلود و در Vault ذخیره شد.`,
+      });
     } catch (err: any) {
       console.error('Backup error:', err);
+      setRestoreMessage({ type: 'error', text: `خطا در تهیه پشتیبان: ${err?.message || 'خطای شبکه'}` });
     } finally {
       setExporting(false);
     }
@@ -279,23 +259,19 @@ function ClinicSettingsTab({
     setRestoring(true);
     setRestoreMessage(null);
     try {
-      if (Array.isArray(restorePreview.patients) && restorePreview.patients.length > 0) {
-        await supabase.from('patients').upsert(restorePreview.patients, { onConflict: 'id' });
+      const res = await restoreCompleteClinicSnapshot(restorePreview);
+      if (res.ok) {
+        setRestoreMessage({
+          type: 'success',
+          text: `بازیابی غیرمخرب با موفقیت انجام شد: ${res.restoredTables.toLocaleString('fa-IR')} جدول (${res.restoredRows.toLocaleString('fa-IR')} رکورد) با Cloud SQL همگام شد.`,
+        });
+        setRestorePreview(null);
+      } else {
+        setRestoreMessage({
+          type: 'error',
+          text: `بازیابی با خطا مواجه شد: ${res.errors.join(' | ') || 'جدول معتبری یافت نشد'}`,
+        });
       }
-      if (Array.isArray(restorePreview.treatments) && restorePreview.treatments.length > 0) {
-        await supabase.from('treatments').upsert(restorePreview.treatments, { onConflict: 'id' });
-      }
-      if (Array.isArray(restorePreview.appointments) && restorePreview.appointments.length > 0) {
-        await supabase.from('appointments').upsert(restorePreview.appointments, { onConflict: 'id' });
-      }
-      if (Array.isArray(restorePreview.payments) && restorePreview.payments.length > 0) {
-        await supabase.from('payments').upsert(restorePreview.payments, { onConflict: 'id' });
-      }
-      if (Array.isArray(restorePreview.inventory) && restorePreview.inventory.length > 0) {
-        await supabase.from('inventory_items').upsert(restorePreview.inventory, { onConflict: 'id' });
-      }
-      setRestoreMessage({ type: 'success', text: 'بازیابی اطلاعات با موفقیت انجام شد و تمامی جداول با سرور ابری همگام شدند.' });
-      setRestorePreview(null);
     } catch (err: any) {
       setRestoreMessage({ type: 'error', text: `خطا در بازیابی: ${err.message || 'خطای شبکه'}` });
     } finally {
@@ -514,10 +490,10 @@ function ClinicSettingsTab({
           <div className="rounded-2xl border border-blue-200 bg-blue-50/80 p-3 space-y-2 mt-2">
             <p className="text-xs font-bold text-blue-900">پیش‌نمایش محتوای فایل پشتیبان:</p>
             <div className="grid grid-cols-2 gap-1.5 text-[11px] text-blue-800">
-              <span>تعداد بیماران: {restorePreview.patients?.length ?? 0}</span>
-              <span>تعداد درمان‌ها: {restorePreview.treatments?.length ?? 0}</span>
-              <span>تعداد نوبت‌ها: {restorePreview.appointments?.length ?? 0}</span>
-              <span>تراکنش‌های مالی: {restorePreview.payments?.length ?? 0}</span>
+              <span>تعداد بیماران: {(restorePreview.tables?.patients ?? restorePreview.patients)?.length ?? 0}</span>
+              <span>تعداد درمان‌ها: {(restorePreview.tables?.treatments ?? restorePreview.treatments)?.length ?? 0}</span>
+              <span>تعداد نوبت‌ها: {(restorePreview.tables?.appointments ?? restorePreview.appointments)?.length ?? 0}</span>
+              <span>تراکنش‌های مالی: {(restorePreview.tables?.payments ?? restorePreview.payments)?.length ?? 0}</span>
             </div>
             <button
               onClick={handleExecuteRestore}
@@ -537,11 +513,147 @@ function ClinicSettingsTab({
         )}
       </div>
 
+      {/* Zero-Delete Multi-Tier Recovery Vault (IndexedDB + Cloud SQL Restore) */}
+      <ZeroDeleteVaultCard />
+
       {/* Multi-User Cloud Sync, Automatic Backup Scheduler & Instant OTA Update Publisher */}
       <CloudOtaAndAutoBackupCard />
 
       {/* Inline Live Diagnostics Summary */}
       <DiagnosticsPanel onOpenInstallModal={onOpenInstallModal} />
+    </div>
+  );
+}
+
+function ZeroDeleteVaultCard() {
+  const [stats, setStats] = useState<VaultStats | null>(null);
+  const [archived, setArchived] = useState<ArchivedRecordEntry[]>([]);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [vaultMsg, setVaultMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const loadVault = useCallback(async () => {
+    const [s, list] = await Promise.all([getVaultStats(), listArchivedRecords()]);
+    setStats(s);
+    setArchived(list);
+  }, []);
+
+  useEffect(() => {
+    loadVault();
+    const handler = () => loadVault();
+    window.addEventListener('minadental-vault-updated', handler);
+    return () => window.removeEventListener('minadental-vault-updated', handler);
+  }, [loadVault]);
+
+  const handleRestore = async (archiveId: string) => {
+    setRestoringId(archiveId);
+    setVaultMsg(null);
+    const res = await restoreArchivedRecord(archiveId);
+    setRestoringId(null);
+    setVaultMsg({ ok: res.ok, text: res.message });
+    await loadVault();
+  };
+
+  return (
+    <div className="glass-card p-4 space-y-3 border-2 border-emerald-200/80" data-testid="zero_delete_vault_card">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white flex items-center justify-center shadow-md shrink-0">
+            <ShieldCheck size={20} />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-gray-800">
+              گاوصندوق ضدحذف و بازیابی آنی (Zero-Delete Vault)
+            </h3>
+            <p className="text-[11px] text-emerald-700 font-semibold">
+              شناسه رهگیری: <span className="font-mono">TRC-MINA-VAULT-9006-F</span> • هیچ رکوردی هرگز حذف دائم نمی‌شود
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={loadVault}
+          className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold flex items-center gap-1"
+        >
+          <RefreshCw size={12} />
+          بروزرسانی
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-2xl bg-emerald-50/80 border border-emerald-200/70 p-2.5">
+          <p className="text-[10px] text-emerald-800 font-bold">جداول آینه‌شده IndexedDB</p>
+          <p className="text-base font-black text-emerald-700 mt-0.5">
+            {(stats?.mirroredTables ?? 0).toLocaleString('fa-IR')} / ۲۰
+          </p>
+        </div>
+        <div className="rounded-2xl bg-sky-50/80 border border-sky-200/70 p-2.5">
+          <p className="text-[10px] text-sky-800 font-bold">کل رکوردهای محافظت‌شده</p>
+          <p className="text-base font-black text-sky-700 mt-0.5">
+            {(stats?.totalMirroredRecords ?? 0).toLocaleString('fa-IR')}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-amber-50/80 border border-amber-200/70 p-2.5">
+          <p className="text-[10px] text-amber-800 font-bold">آرشیو قابل بازیابی</p>
+          <p className="text-base font-black text-amber-700 mt-0.5">
+            {(stats?.unrestoredDeletedCount ?? 0).toLocaleString('fa-IR')}
+          </p>
+        </div>
+      </div>
+
+      {vaultMsg && (
+        <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 ${
+          vaultMsg.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+        }`}>
+          {vaultMsg.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+          <span>{vaultMsg.text}</span>
+        </div>
+      )}
+
+      {archived.length === 0 ? (
+        <div className="rounded-2xl bg-slate-50 border border-slate-200/80 p-3 text-center">
+          <p className="text-xs font-bold text-slate-700">گاوصندوق آماده و فعال است</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            در صورت حذف هر پرونده، نوبت، چک یا درمان، نسخه کامل آن خودکار اینجا بایگانی شده و با یک کلیک به Cloud SQL بازمی‌گردد.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-56 overflow-y-auto">
+          {archived.slice(0, 12).map((item) => (
+            <div key={item.archiveId} className="rounded-2xl bg-white border border-gray-200 p-2.5 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                    {item.table}
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-700 font-bold">
+                    {item.traceId}
+                  </span>
+                  <span className="text-[10px] text-gray-400">
+                    {new Date(item.deletedAt).toLocaleString('fa-IR')}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-700 font-bold truncate mt-1">
+                  {item.record?.first_name
+                    ? `${item.record.first_name} ${item.record.last_name || ''}`
+                    : item.record?.title || item.record?.name || item.record?.work_type || item.recordId}
+                </p>
+              </div>
+              {item.restoredAt ? (
+                <Badge color="#059669" bg="#D1FAE5">بازیابی شد</Badge>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleRestore(item.archiveId)}
+                  disabled={restoringId === item.archiveId}
+                  className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shrink-0 disabled:opacity-50"
+                >
+                  {restoringId === item.archiveId ? 'بازگردانی...' : 'بازیابی آنی'}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -574,10 +686,9 @@ function CloudOtaAndAutoBackupCard() {
   const handlePublishOta = async () => {
     setPublishingOta(true);
     setStatusMsg(null);
-    const user = loadActiveUser();
-    await publishOtaUpdateToAllUsers(otaNotes, user.fullName || user.name || 'مدیر کلینیک');
+    const res = await publishOtaUpdateToAllUsers(CURRENT_APP_VERSION, otaNotes);
     setPublishingOta(false);
-    setStatusMsg('فرمان آپدیت اتوماتیک (OTA) به صورت آنی برای تمامی کاربران متصل (پزشک، مدیر، منشی و دستیار) ارسال شد.');
+    setStatusMsg(res.message);
   };
 
   return (

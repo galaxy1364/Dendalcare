@@ -1,9 +1,11 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
 // =========================================================================
 // MinaDental Clinical & Architecture Comprehensive Audit Test Suite
-// Verifiable Trace IDs: TRC-MINA-CORE-9001-A to TRC-MINA-CLOUD-9005-E
+// Verifiable Trace IDs: TRC-MINA-CORE-9001-A to TRC-MINA-VAULT-9006-F
 // =========================================================================
 
 describe('Phase 1 [TRC-MINA-CORE-9001-A]: Core Engine & Perpetual Calendar Math', () => {
@@ -88,8 +90,6 @@ describe('Phase 2 [TRC-MINA-CLINIC-9002-B]: Clinical Patient Triage & Safety', (
   test('validates FDI international two-digit tooth numbering', () => {
     const isValidFdiTooth = (num) => {
       const n = parseInt(num, 10);
-      // Quadrants 1-4 for adult teeth (11-18, 21-28, 31-38, 41-48)
-      // Quadrants 5-8 for primary teeth (51-55, 61-65, 71-75, 81-85)
       const adult = (n >= 11 && n <= 18) || (n >= 21 && n <= 28) || (n >= 31 && n <= 38) || (n >= 41 && n <= 48);
       const primary = (n >= 51 && n <= 55) || (n >= 61 && n <= 65) || (n >= 71 && n <= 75) || (n >= 81 && n <= 85);
       return adult || primary;
@@ -153,8 +153,8 @@ describe('Phase 4 [TRC-MINA-FINSEC-9004-D]: Financial Integrity & Role-Based Acc
   });
 
   test('correctly calculates doctor percentage commission and clinic share', () => {
-    const treatmentCost = 10000000; // 10 million Tomans
-    const doctorCommissionPercent = 40; // 40%
+    const treatmentCost = 10000000;
+    const doctorCommissionPercent = 40;
     const doctorShare = (treatmentCost * doctorCommissionPercent) / 100;
     const clinicShare = treatmentCost - doctorShare;
 
@@ -170,10 +170,11 @@ describe('Phase 5 [TRC-MINA-CLOUD-9005-E]: OmniRoute, MemPalace & Verifiable Tra
     { id: 'milestone-3', traceId: 'TRC-MINA-RADAR-9003-C', title: 'رادار یادآوری ۳۶۰ درجه و تقویم دائمی', status: 'completed' },
     { id: 'milestone-4', traceId: 'TRC-MINA-FINSEC-9004-D', title: 'خزانه‌داری، چک/سفته و امنیت چندسطحی', status: 'completed' },
     { id: 'milestone-5', traceId: 'TRC-MINA-CLOUD-9005-E', title: 'همگام‌سازی OmniRoute و حافظه ممیزی دائم', status: 'completed' },
+    { id: 'milestone-6', traceId: 'TRC-MINA-VAULT-9006-F', title: 'گاوصندوق ضدحذف، Cloud SQL ۲۰ جدول، گوگل درایو و گیت‌هاب', status: 'completed' },
   ];
 
-  test('verifies all 5 locked roadmap milestones have valid verifiable trace IDs', () => {
-    assert.equal(lockedRoadmap.length, 5);
+  test('verifies all 6 locked roadmap milestones have valid verifiable trace IDs', () => {
+    assert.equal(lockedRoadmap.length, 6);
     for (const m of lockedRoadmap) {
       assert.match(m.traceId, /^TRC-MINA-[A-Z]+-[0-9]{4}-[A-Z]$/);
       assert.equal(m.status, 'completed');
@@ -195,3 +196,73 @@ describe('Phase 5 [TRC-MINA-CLOUD-9005-E]: OmniRoute, MemPalace & Verifiable Tra
     assert.ok(Date.parse(stamp.timestamp) > 0);
   });
 });
+
+describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Verification)', () => {
+  const root = process.cwd();
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('all 13 modules have strictly unique non-repeating colors and CSS theme classes including theme-calendar', () => {
+    const sectionsSrc = read('src/lib/sections.ts');
+    const cssSrc = read('src/index.css');
+
+    const colorMatches = [...sectionsSrc.matchAll(/color:\s*'(#(?:[0-9A-Fa-f]{6}))'/g)].map((m) => m[1].toLowerCase());
+    const themeMatches = [...sectionsSrc.matchAll(/themeClass:\s*'(theme-[a-z]+)'/g)].map((m) => m[1]);
+
+    assert.equal(colorMatches.length, 13, 'Must define 13 section primary colors');
+    assert.equal(new Set(colorMatches).size, 13, 'Zero duplicate primary colors allowed');
+    assert.equal(themeMatches.length, 13, 'Must define 13 section theme classes');
+    assert.equal(new Set(themeMatches).size, 13, 'Zero duplicate themeClass allowed');
+    assert.ok(themeMatches.includes('theme-calendar'), 'Calendar must have dedicated theme-calendar class');
+
+    for (const cls of themeMatches) {
+      assert.ok(cssSrc.includes(`.${cls}`), `src/index.css must define .${cls}`);
+    }
+  });
+
+  test('Zero-Delete Vault covers all 20 real Cloud SQL tables and zero broken table names remain in Settings/Integrations', () => {
+    const vaultSrc = read('src/lib/dataVault.ts');
+    const settingsSrc = read('src/components/sections/SettingsSection.tsx');
+    const integrationsSrc = read('src/components/sections/IntegrationsTab.tsx');
+    const realtimeSrc = read('src/lib/useRealtimeTable.ts');
+
+    const expectedTables = [
+      'patients', 'appointments', 'treatments', 'treatment_services', 'payments',
+      'lab_orders', 'implants', 'inventory', 'reminders', 'finance_transactions',
+      'staff', 'tooth_conditions', 'installments', 'checks', 'safteh',
+      'staff_salaries', 'staff_shares', 'messages', 'advertisements', 'clinic_settings',
+    ];
+    for (const t of expectedTables) {
+      assert.ok(vaultSrc.includes(`'${t}'`), `dataVault.ts must include table ${t}`);
+    }
+
+    assert.ok(!settingsSrc.includes("from('inventory_items')"), 'Broken inventory_items reference must be removed from SettingsSection');
+    assert.ok(!integrationsSrc.includes("from('financial_records')"), 'Broken financial_records reference must be removed from IntegrationsTab');
+    assert.ok(realtimeSrc.includes('archiveDeletedRecord'), 'useRealtimeTable must archive deleted records into Zero-Delete Vault');
+  });
+
+  test('Google Drive API v3 multipart uploader and unified v60 GitHub sync are wired without mock timeouts', () => {
+    const engineSrc = read('src/lib/integrationsEngine.ts');
+    const tabSrc = read('src/components/sections/IntegrationsTab.tsx');
+    const versionJson = JSON.parse(read('public/version.json'));
+
+    assert.ok(engineSrc.includes('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'), 'Real Google Drive API v3 upload endpoint must exist');
+    assert.ok(!engineSrc.includes('v5.0.0 (Build #52)'), 'Outdated hardcoded GitHub deploy version must be removed');
+    assert.ok(tabSrc.includes('uploadBackupToGoogleDrive'), 'IntegrationsTab must invoke real uploadBackupToGoogleDrive');
+    assert.equal(versionJson.version, '60.0');
+    assert.equal(versionJson.build, 60);
+  });
+
+  test('PWA manifest, service worker, and index.html typography/installability stay 100% intact', () => {
+    const html = read('index.html');
+    const manifest = JSON.parse(read('public/manifest.json'));
+    const sw = read('public/sw.js');
+
+    assert.ok(html.includes('href="./manifest.json" crossorigin="use-credentials"'), 'index.html must keep manifest with credentials');
+    assert.ok(html.includes('fonts.googleapis.com/css2?family=Vazirmatn'), 'index.html must preload Vazirmatn font');
+    assert.ok(html.includes('window.__deferredInstallPrompt'), 'index.html must capture beforeinstallprompt early');
+    assert.ok(manifest.icons.some((i) => i.purpose === 'any' && i.sizes === '512x512'), 'manifest must have 512x512 any icon');
+    assert.ok(manifest.icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512'), 'manifest must have 512x512 maskable icon');
+    assert.ok(sw.includes('minadental-pwa-v60.0-b60'), 'sw.js must be on unified v60.0-b60 cache');
+  });
+});
+

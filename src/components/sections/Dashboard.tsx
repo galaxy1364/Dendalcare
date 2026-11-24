@@ -3,7 +3,7 @@ import {
   Users, CalendarDays, Stethoscope, FlaskConical, Anchor,
   Wallet, Package, BellRing, TrendingUp, TrendingDown,
   AlertTriangle, CheckCircle2, ArrowUpLeft, Sparkles, Clock,
-  UserCog, FileCheck, ScrollText, CreditCard,
+  UserCog, FileCheck, ScrollText, CreditCard, Download,
 } from 'lucide-react';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import type {
@@ -15,11 +15,14 @@ import type { SectionId } from '@/lib/sections';
 import { Loading } from '@/components/ui/Form';
 import { todayGregorian } from '@/lib/jalali';
 
-type Props = { onNavigate: (id: SectionId) => void };
+type Props = {
+  onNavigate: (id: SectionId) => void;
+  onOpenInstall?: () => void;
+};
 
 const fmt = (n: number) => n.toLocaleString('fa-IR');
 
-export function Dashboard({ onNavigate }: Props) {
+export function Dashboard({ onNavigate, onOpenInstall }: Props) {
   const { data: patients,     loading: lp  } = useRealtimeTable<Patient>('patients');
   const { data: appointments, loading: la  } = useRealtimeTable<Appointment>('appointments');
   const { data: treatments,   loading: lt  } = useRealtimeTable<Treatment>('treatments');
@@ -94,6 +97,31 @@ export function Dashboard({ onNavigate }: Props) {
 
   return (
     <div className="space-y-2.5 pb-36 animate-fade-in-up">
+
+      {/* ── PWA Browser Install Banner with Logo ── */}
+      <div
+        onClick={() => onOpenInstall ? onOpenInstall() : onNavigate('settings')}
+        className="rounded-2xl p-3 bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-blue-900/90 border border-purple-400/30 text-white flex items-center justify-between gap-3 shadow-lg cursor-pointer transition-all active:scale-98"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <img
+            src="./logo.png"
+            alt="مینادنتال"
+            className="w-10 h-10 rounded-xl shadow-md object-cover border border-white/20 shrink-0"
+          />
+          <div className="min-w-0">
+            <h4 className="text-xs font-black text-white truncate">نصب برنامه مینادنتال در مرورگر (PWA)</h4>
+            <p className="text-[10px] text-purple-200 truncate">با آیکون و لوگوی رسمی کلینیک روی صفحه اصلی گوشی یا کامپیوتر</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 font-black text-xs shadow-md shrink-0 flex items-center gap-1.5"
+        >
+          <Download size={13} />
+          <span>نصب فوری</span>
+        </button>
+      </div>
 
       {/* ── Multi-Color Live Clinical & Financial Command Matrix (Replacing Bank Card) ── */}
       <div

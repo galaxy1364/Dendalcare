@@ -59,11 +59,13 @@ function App() {
   const [drawerTab, setDrawerTab] = useState<'all' | 'finance' | 'clinical' | 'ops'>('all');
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [installModalOpen, setInstallModalOpen] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(() =>
+    typeof window !== 'undefined' ? (window as any).__deferredInstallPrompt || null : null
+  );
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [otaUpdateInfo, setOtaUpdateInfo] = useState<{ version: string; releaseNotes: string; publishedBy: string } | null>(null);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [appReady, setAppReady] = useState(false);
+  const [appReady, setAppReady] = useState(true);
 
   const [roadmapModalOpen, setRoadmapModalOpen] = useState(false);
   const [callerIdOpen, setCallerIdOpen] = useState(false);
@@ -79,9 +81,8 @@ function App() {
     const splashEl = document.getElementById('app-splash');
     if (splashEl) {
       splashEl.style.opacity = '0';
-      setTimeout(() => splashEl.remove(), 400);
+      splashEl.remove();
     }
-    const timer = setTimeout(() => setAppReady(true), 500);
 
     // OmniRoute restore previous active screen
     const savedRoute = OmniRoute.getCurrentRoute() as SectionId;
@@ -98,8 +99,6 @@ function App() {
       actor: 'سیستم مرکزی',
       status: 'pass',
     });
-
-    return () => clearTimeout(timer);
   }, []);
 
   const handleNavigate = (newSection: SectionId) => {
@@ -274,9 +273,25 @@ function App() {
 
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
+      (window as any).__deferredInstallPrompt = e;
       setDeferredPrompt(e);
     };
+    const handleInstallReady = () => {
+      if ((window as any).__deferredInstallPrompt) {
+        setDeferredPrompt((window as any).__deferredInstallPrompt);
+      }
+    };
+    const handleInstalled = () => {
+      setDeferredPrompt(null);
+      setLiveSyncToast('برنامه مینادنتال با موفقیت روی دستگاه شما نصب شد');
+      setTimeout(() => setLiveSyncToast(null), 3500);
+    };
+    if ((window as any).__deferredInstallPrompt) {
+      setDeferredPrompt((window as any).__deferredInstallPrompt);
+    }
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('minadental:install-ready', handleInstallReady);
+    window.addEventListener('minadental:installed', handleInstalled);
 
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then(reg => {
@@ -311,6 +326,8 @@ function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('minadental:install-ready', handleInstallReady);
+      window.removeEventListener('minadental:installed', handleInstalled);
     };
   }, []);
 
@@ -335,6 +352,24 @@ function App() {
     const url = new URL(window.location.href);
     url.searchParams.set('ota_instant_sync', Date.now().toString());
     window.location.replace(url.toString());
+  };
+
+  const handleTriggerInstall = async () => {
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        if (choice?.outcome === 'accepted') {
+          setLiveSyncToast('برنامه مینادنتال با موفقیت روی دستگاه شما نصب شد');
+          setTimeout(() => setLiveSyncToast(null), 3000);
+          setDeferredPrompt(null);
+          return;
+        }
+      } catch {
+        // fallback to install modal
+      }
+    }
+    setInstallModalOpen(true);
   };
 
   useEffect(() => {
@@ -417,7 +452,7 @@ function App() {
 
   const renderSection = () => {
     switch (active) {
-      case 'dashboard': return <Dashboard onNavigate={setActive} />;
+      case 'dashboard': return <Dashboard onNavigate={setActive} onOpenInstall={handleTriggerInstall} />;
       case 'patients': return <Patients />;
       case 'appointments': return <Appointments />;
       case 'calendar': return <CalendarSection onNavigate={setActive} />;
@@ -430,39 +465,25 @@ function App() {
       case 'staff': return <StaffSection />;
       case 'messages': return <Messages />;
       case 'settings': return <SettingsSection />;
-      default: return <Dashboard onNavigate={setActive} />;
+      default: return <Dashboard onNavigate={setActive} onOpenInstall={handleTriggerInstall} />;
     }
   };
 
   return (
     <div className={`min-h-screen relative ${section.themeClass}`}>
-      {/* CSS Loader Layer (bg-slate-950) before full React render to prevent black screen */}
-      {!appReady && (
-        <div className="fixed inset-0 z-[10000] bg-slate-950 flex flex-col items-center justify-center p-6 text-center transition-opacity duration-500">
-          <div className="relative w-24 h-24 mb-4 flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full bg-purple-600/40 blur-xl animate-pulse" />
-            <MascotTooth mood="happy" size={88} />
-          </div>
-          <h2 className="text-xl font-black text-white mb-1">مینادنتال</h2>
-          <p className="text-xs text-purple-200/80 mb-6">سیستم مدیریت تخصصی کلینیک دندانپزشکی • نسخه ۵.۰.۰</p>
-          <div className="w-40 h-1.5 bg-slate-800 rounded-full overflow-hidden relative">
-            <div className="absolute inset-0 w-1/2 bg-gradient-to-r from-purple-500 via-pink-500 to-sky-400 rounded-full animate-pulse" />
-          </div>
-        </div>
-      )}
 
       <div className="gemini-bg">
         <div
           className="gemini-orb gemini-orb-1"
-          style={{ background: `radial-gradient(circle, ${section.color} 0%, transparent 70%)` }}
+          style={{ background: `radial-gradient(circle, ${section.color} 0%, transparent 72%)` }}
         />
         <div
           className="gemini-orb gemini-orb-2"
-          style={{ background: `radial-gradient(circle, #ffffff 0%, ${section.color}88 38%, transparent 72%)` }}
+          style={{ background: `radial-gradient(circle, #ffffff 0%, ${section.orbSecondary}99 40%, transparent 74%)` }}
         />
         <div
           className="gemini-orb gemini-orb-3"
-          style={{ background: `radial-gradient(circle, ${section.color}CC 0%, transparent 70%)` }}
+          style={{ background: `radial-gradient(circle, ${section.lightColor} 0%, ${section.color}CC 46%, transparent 72%)` }}
         />
         <div className="gemini-orb gemini-orb-4" />
       </div>
@@ -505,6 +526,20 @@ function App() {
 
             {/* Right icons: User Avatar Icon, Caller-ID, Calendar, AI, Roadmap Audit, Cloud Sync, Notification Bell */}
             <div className="flex items-center gap-1 shrink-0">
+              {/* Direct PWA Install in Browser with App Logo */}
+              <button
+                className="topbar-btn relative bg-purple-600/30 border border-purple-400/40 text-purple-200 hover:bg-purple-600/50 hover:text-white"
+                onClick={handleTriggerInstall}
+                aria-label="نصب برنامه در مرورگر"
+                title="نصب اپلیکیشن مینادنتال با آیکون و لوگو در صفحه اصلی (PWA)"
+                data-testid="topbar_install_pwa_button"
+              >
+                <Download size={16} className="text-yellow-300 animate-pulse" />
+                <span className="absolute -top-1 -left-1 text-[8px] font-black bg-gradient-to-r from-amber-400 to-rose-500 text-slate-950 px-1 rounded-full">
+                  نصب
+                </span>
+              </button>
+
               {/* Smart Incoming Call Caller-ID & Auto-Booking Button */}
               <button
                 className="topbar-btn relative"
@@ -737,7 +772,10 @@ function App() {
             {(currentUser?.canPublishUpdate || currentUser?.role === 'manager') && (
               <button
                 onClick={async () => {
-                  await publishOtaUpdateToAllUsers('بروزرسانی سراسری توسط مدیر کلینیک', currentUser?.fullName || currentUser?.name || 'مدیر کلینیک');
+                  await publishOtaUpdateToAllUsers(
+                    CURRENT_APP_VERSION,
+                    `بروزرسانی سراسری توسط ${currentUser?.fullName || currentUser?.name || 'مدیر کلینیک'}`
+                  );
                   setLiveSyncToast('فرمان آپدیت اتوماتیک روی برنامه تمام کاربران ارسال شد');
                   setTimeout(() => setLiveSyncToast(null), 3500);
                 }}
@@ -1051,7 +1089,7 @@ function App() {
               title: `نوبت تلفنی: ${pat.first_name} ${pat.last_name}`,
               appointment_date: todayGregorian(),
               appointment_time: callerApptTime || '17:00',
-              duration: 30,
+              duration_min: 30,
               type: 'checkup',
               status: 'confirmed',
               notes: 'ثبت اتوماتیک از طریق کالر آیدی تماس ورودی',
@@ -1081,7 +1119,7 @@ function App() {
               title: `نوبت اول: ${callerNewFirstName.trim()} ${callerNewLastName.trim()}`,
               appointment_date: todayGregorian(),
               appointment_time: callerApptTime || '17:00',
-              duration: 30,
+              duration_min: 30,
               type: 'consultation',
               status: 'confirmed',
               notes: `تماس ورودی شماره ${cleanPhone}`,

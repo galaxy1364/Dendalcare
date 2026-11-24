@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import {
-  supabase, type Message, type Staff, type Patient, type Appointment, type InstallmentPlan,
+  supabase, type Message, type Staff, type Patient, type Appointment, type Installment,
 } from '@/lib/supabase';
 import { Sheet, ConfirmDialog } from '@/components/ui/Sheet';
 import { Field, Input, Textarea, Select, Button, Badge, EmptyState } from '@/components/ui/Form';
@@ -52,7 +52,7 @@ export function Messages() {
   const { data: staff } = useRealtimeTable<Staff>('staff');
   const { data: patients } = useRealtimeTable<Patient>('patients');
   const { data: appointments } = useRealtimeTable<Appointment>('appointments');
-  const { data: installments } = useRealtimeTable<InstallmentPlan>('installment_plans');
+  const { data: installments } = useRealtimeTable<Installment>('installments');
 
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);

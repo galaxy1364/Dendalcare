@@ -315,8 +315,6 @@ export function Reminders() {
     }
   }, [rules.autoPilotEnabled, liveAlerts.length]);
 
-  if (loading) return <Loading color="#EF4444" />;
-
   const chips: { v: ReminderTabMode; l: string; count: number; icon: React.ReactNode }[] = [
     { v: 'live_radar', l: 'رادار هوشمند کل مطب', count: radarCounts.total, icon: <Zap size={13} /> },
     { v: 'finance', l: 'چک، اقساط و بدهی', count: radarCounts.finance, icon: <CreditCard size={13} /> },

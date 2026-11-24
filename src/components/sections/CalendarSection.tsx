@@ -350,8 +350,6 @@ export function CalendarSection({ onNavigate }: { onNavigate?: (id: SectionId) =
     setFinForm({ type: 'income', amount: '', description: '', category: 'patient_payment', payment_method: 'card' });
   };
 
-  if (lp || la) return <Loading color="#D946EF" />;
-
   return (
     <div className="space-y-3 pb-4 animate-fade-in-up">
       {/* Header + View Switcher Chips */}

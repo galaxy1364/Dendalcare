@@ -9,6 +9,8 @@
  * 6. Gemini Dental AI Integration
  */
 
+import { CURRENT_APP_VERSION, CURRENT_APP_BUILD } from '@/lib/cloudSyncEngine';
+
 export interface GitHubConfig {
   connected: boolean;
   token?: string;
@@ -50,9 +52,12 @@ export interface PaymentGatewayConfig {
 export interface GoogleDriveConfig {
   connected: boolean;
   folderName: string;
+  accessToken?: string;
   autoBackupDaily: boolean;
   backupTime: string;
   lastDriveUploadAt?: string;
+  lastDriveFileId?: string;
+  lastDriveChecksum?: string;
 }
 
 const STORAGE_KEY_GITHUB = 'minadental_github_config';
@@ -341,7 +346,7 @@ export async function publishWebAppToGitHubPages(
       method: 'POST',
       headers,
       body: JSON.stringify({
-        message: `deploy(pages): Sync MinaDental v5.0.0 (Build #52) to https://${repoOwner}.github.io/${repoName}/`,
+        message: `deploy(pages): Sync MinaDental v${CURRENT_APP_VERSION} (Build #${CURRENT_APP_BUILD}) to https://${repoOwner}.github.io/${repoName}/`,
         tree: newTree.sha,
         parents: [latestCommitSha],
       }),
@@ -365,6 +370,113 @@ export async function publishWebAppToGitHubPages(
     };
   } catch (err: any) {
     return { success: false, error: err?.message || 'خطا در سینک مستقیم با GitHub Pages' };
+  }
+}
+
+// Google Drive API v3: Real Multipart Upload of Full 20-Table Clinic Snapshot
+export async function uploadBackupToGoogleDrive(
+  accessToken: string,
+  folderName: string,
+  snapshot: Record<string, any>
+): Promise<{ success: boolean; fileId?: string; fileName?: string; webViewLink?: string; error?: string }> {
+  const token = accessToken.trim();
+  if (!token) {
+    return {
+      success: false,
+      error: 'برای ارسال مستقیم به Google Drive، توکن دسترسی OAuth 2.0 گوگل درایو را وارد نمایید (یا فایل پشتیبان را دانلود و در پوشه Drive ذخیره کنید).',
+    };
+  }
+
+  try {
+    const authHeaders = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    // 1. Locate or create target folder in Google Drive
+    const safeFolder = (folderName || 'MinaDental_Backups_and_OPG').replace(/'/g, "\\'");
+    const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
+      `mimeType='application/vnd.google-apps.folder' and name='${safeFolder}' and trashed=false`
+    )}&fields=files(id,name)`;
+
+    let folderId: string | undefined;
+    const searchRes = await fetch(searchUrl, { headers: authHeaders });
+    if (searchRes.status === 401) {
+      return { success: false, error: 'توکن گوگل درایو منقضی شده یا نامعتبر است (HTTP 401 Unauthorized).' };
+    }
+    if (searchRes.ok) {
+      const searchData = await searchRes.json();
+      folderId = searchData?.files?.[0]?.id;
+    }
+
+    if (!folderId) {
+      const createFolderRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: folderName || 'MinaDental_Backups_and_OPG',
+          mimeType: 'application/vnd.google-apps.folder',
+        }),
+      });
+      if (createFolderRes.ok) {
+        const created = await createFolderRes.json();
+        folderId = created.id;
+      }
+    }
+
+    // 2. Upload JSON snapshot via Drive v3 multipart/related upload
+    const dateStamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `MinaDental_v${CURRENT_APP_VERSION}_${dateStamp}.json`;
+    const metadata: Record<string, any> = {
+      name: fileName,
+      mimeType: 'application/json',
+      description: `MinaDental Zero-Delete Full SQL Backup (Trace: ${snapshot.traceId || 'AUTO'}, Checksum: ${snapshot.checksum || 'OK'})`,
+    };
+    if (folderId) {
+      metadata.parents = [folderId];
+    }
+
+    const boundary = '-------MinaDentalDriveBoundary' + Date.now();
+    const multipartBody =
+      `--${boundary}\r\n` +
+      `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+      `${JSON.stringify(metadata)}\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: application/json\r\n\r\n` +
+      `${JSON.stringify(snapshot, null, 2)}\r\n` +
+      `--${boundary}--`;
+
+    const uploadRes = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
+      {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+        },
+        body: multipartBody,
+      }
+    );
+
+    if (!uploadRes.ok) {
+      const errJson = await uploadRes.json().catch(() => ({}));
+      return {
+        success: false,
+        error: errJson?.error?.message || `خطا در آپلود به Google Drive (HTTP ${uploadRes.status})`,
+      };
+    }
+
+    const uploaded = await uploadRes.json();
+    return {
+      success: true,
+      fileId: uploaded.id,
+      fileName: uploaded.name || fileName,
+      webViewLink: uploaded.webViewLink || `https://drive.google.com/file/d/${uploaded.id}/view`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err?.message || 'خطای شبکه هنگام اتصال به Google Drive API',
+    };
   }
 }
 

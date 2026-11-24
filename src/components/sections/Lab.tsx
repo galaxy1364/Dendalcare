@@ -115,8 +115,6 @@ export function Lab() {
     refresh();
   };
 
-  if (loading) return <Loading color="#EC4899" />;
-
   const LAB_STAGES_ORDER = [
     { key: 'sent', label: 'ارسال قالب', color: '#3B82F6' },
     { key: 'in_progress', label: 'ساخت لابراتوار', color: '#F59E0B' },

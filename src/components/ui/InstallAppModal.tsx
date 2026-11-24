@@ -55,6 +55,11 @@ export function InstallAppModal({
     inIframe: false,
   });
 
+  const activePrompt = deferredPrompt || (typeof window !== 'undefined' ? (window as any).__deferredInstallPrompt : null);
+  const [iosNonSafari, setIosNonSafari] = useState(false);
+  const [copiedPageUrl, setCopiedPageUrl] = useState(false);
+  const [registeringSw, setRegisteringSw] = useState(false);
+
   const checkEligibility = useCallback(async () => {
     if (typeof window === 'undefined') return;
     setEligibility(prev => ({ ...prev, checking: true }));
@@ -75,11 +80,13 @@ export function InstallAppModal({
       }
     })();
 
-    // 2. Manifest validation
+    // 2. Manifest validation (with credentials for authenticated origins)
     let manifestValid = false;
     let manifestDetails = 'فایل manifest.json یافت نشد';
     try {
-      const res = await fetch('./manifest.json', { cache: 'no-store' });
+      const linkEl = document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null;
+      const manifestHref = linkEl?.getAttribute('href') || './manifest.json';
+      const res = await fetch(manifestHref, { cache: 'no-store', credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         const hasName = Boolean(data.name || data.short_name);
@@ -87,12 +94,12 @@ export function InstallAppModal({
         const hasDisplay = data.display === 'standalone' || data.display === 'fullscreen' || data.display === 'minimal-ui';
         const hasStartUrl = Boolean(data.start_url);
         const hasThemeColor = Boolean(data.theme_color || data.background_color);
-        
+
         const validCount = [hasName, hasIcons, hasDisplay, hasStartUrl, hasThemeColor].filter(Boolean).length;
         manifestValid = hasName && hasIcons && hasDisplay;
         manifestDetails = manifestValid
-          ? `معتبر (${validCount}/5 کلید • ${data.short_name || data.name} • ${data.display} • ${data.icons.length} آیکون)`
-          : `ناقص (${validCount}/5 کلید • نیاز به name, icons, display)`;
+          ? `معتبر (${validCount}/5 • ${data.short_name || data.name} • ${data.icons.length} آیکون)`
+          : `ناقص (${validCount}/5 • نیاز به name, icons, display)`;
       }
     } catch {
       const linkEl = document.querySelector('link[rel="manifest"]');
@@ -100,12 +107,19 @@ export function InstallAppModal({
       manifestDetails = linkEl ? 'لینک مانیفست در DOM قرار دارد' : 'خطا در خواندن manifest.json';
     }
 
-    // 3. Service Worker status
+    // 3. Service Worker status (auto-register if HTTPS and missing)
     let serviceWorkerActive = false;
     let swDetails = 'پشتیبانی نمی‌شود';
     try {
       if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.getRegistration();
+        let reg = await navigator.serviceWorker.getRegistration();
+        if (!reg && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
+          try {
+            reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+          } catch {
+            // ignore registration failure in restricted frames
+          }
+        }
         if (reg?.active) {
           serviceWorkerActive = true;
           swDetails = navigator.serviceWorker.controller
@@ -113,9 +127,9 @@ export function InstallAppModal({
             : 'فعال و آماده (SW Active)';
         } else if (reg?.installing || reg?.waiting) {
           serviceWorkerActive = true;
-          swDetails = 'در حال نصب یا انتظار (Installing/Waiting)';
+          swDetails = 'در حال فعال‌سازی (Installing/Waiting)';
         } else {
-          swDetails = 'ثبت نشده (نیاز به ثبت یا Hard Reload)';
+          swDetails = 'ثبت نشده (نیاز به باز کردن در تب مستقل)';
         }
       } else if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') {
         serviceWorkerActive = true;
@@ -125,6 +139,7 @@ export function InstallAppModal({
       swDetails = 'اجرا در محیط ایزوله';
     }
 
+    const promptAvailable = Boolean(deferredPrompt || (window as any).__deferredInstallPrompt);
     setEligibility({
       checking: false,
       isSecureContext: isSecure,
@@ -133,19 +148,26 @@ export function InstallAppModal({
       manifestDetails,
       serviceWorkerActive,
       swDetails,
-      installPromptReady: Boolean(deferredPrompt),
+      installPromptReady: promptAvailable,
       inIframe,
     });
   }, [deferredPrompt]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const ua = navigator.userAgent.toLowerCase();
-      const isIos = /iphone|ipad|ipod/.test(ua);
-      const isAndroid = /android/.test(ua);
-      if (isIos) setPlatform('ios');
-      else if (isAndroid) setPlatform('android');
-      else setPlatform('desktop');
+      const ua = navigator.userAgent;
+      const uaLower = ua.toLowerCase();
+      const isIos = /iphone|ipad|ipod/.test(uaLower) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isAndroid = /android/.test(uaLower);
+      if (isIos) {
+        setPlatform('ios');
+        const isInAppOrNonSafari = /CriOS|FxiOS|EdgiOS|OPiOS|Instagram|FBAN|FBAV|Telegram|WhatsApp/i.test(ua);
+        setIosNonSafari(isInAppOrNonSafari);
+      } else if (isAndroid) {
+        setPlatform('android');
+      } else {
+        setPlatform('desktop');
+      }
 
       const standalone =
         window.matchMedia('(display-mode: standalone)').matches ||
@@ -164,13 +186,27 @@ export function InstallAppModal({
   if (!open) return null;
 
   const handlePromptInstall = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
+    if (activePrompt) {
+      activePrompt.prompt();
+      const choice = await activePrompt.userChoice;
       if (choice.outcome === 'accepted') {
+        (window as any).__deferredInstallPrompt = null;
         onInstallSuccess?.();
         onClose();
       }
+    }
+  };
+
+  const handleManualRegisterSw = async () => {
+    if (!('serviceWorker' in navigator)) return;
+    setRegisteringSw(true);
+    try {
+      await navigator.serviceWorker.register('./sw.js', { scope: './' });
+      await checkEligibility();
+    } catch {
+      // ignore
+    } finally {
+      setRegisteringSw(false);
     }
   };
 
@@ -374,7 +410,7 @@ export function InstallAppModal({
         {platform === 'android' && (
           <div className="space-y-3">
             {/* Direct PWA Install Button */}
-            {deferredPrompt ? (
+            {activePrompt ? (
               <button
                 onClick={handlePromptInstall}
                 data-testid="pwa_prompt_install_button"
@@ -384,13 +420,34 @@ export function InstallAppModal({
                 نصب مستقیم روی گوشی (یک کلیک)
               </button>
             ) : (
-              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-2 text-xs">
+              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-2.5 text-xs">
                 <div className="flex items-center gap-2 font-bold text-cyan-300">
                   <Zap size={16} />
-                  نصب مستقیم بدون نیاز به گوگل‌پلی یا بازار:
+                  نصب مستقیم در مرورگر اندروید (Chrome / Samsung Internet):
                 </div>
+                {eligibility.inIframe && (
+                  <button
+                    type="button"
+                    onClick={() => window.open(window.location.href, '_blank', 'noopener,noreferrer')}
+                    className="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+                  >
+                    <Smartphone size={15} />
+                    باز کردن در تب مستقل مرورگر (ضروری برای نصب)
+                  </button>
+                )}
+                {!eligibility.serviceWorkerActive && !eligibility.inIframe && (
+                  <button
+                    type="button"
+                    onClick={handleManualRegisterSw}
+                    disabled={registeringSw}
+                    className="w-full py-2 px-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <RefreshCw size={13} className={registeringSw ? 'animate-spin' : ''} />
+                    {registeringSw ? 'در حال فعال‌سازی موتور نصب...' : 'فعال‌سازی موتور نصب مرورگر (Service Worker)'}
+                  </button>
+                )}
                 <p className="text-[11px] text-white/80 leading-relaxed">
-                  در مرورگر Chrome یا سامسونگ، روی علامت سه نقطه (منو) در بالا یا دکمه افزودن کلیک کرده و گزینه <strong>«افزودن به صفحه اصلی / Install App»</strong> را لمس کنید تا آیکون مینادنتال روی صفحه اصلی گوشی شما ظاهر شود.
+                  در مرورگر <strong>Chrome</strong> یا <strong>Samsung Internet</strong>، روی علامت سه نقطه (⋮) در گوشه بالا ضربه بزنید و گزینه <strong className="text-emerald-300">«نصب برنامه / Install app»</strong> یا <strong className="text-cyan-300">«افزودن به صفحه اصلی / Add to Home screen»</strong> را لمس کنید تا با آیکون رسمی بنفش مینادنتال نصب شود.
                 </p>
               </div>
             )}
@@ -424,54 +481,84 @@ export function InstallAppModal({
                   </div>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setDownloadingApk(true);
-                    setDownloadProgress(10);
-                    setDownloadError403(false);
-                    const res = await downloadApkSafely('DentalCare.apk', (p) => setDownloadProgress(p));
-                    setDownloadingApk(false);
-                    if (!res.success) {
-                      setDownloadError403(true);
-                    }
-                  }}
-                  className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all text-center"
-                >
-                  <Download size={15} />
-                  دانلود مستقیم فایل APK برنامه (DentalCare.apk)
-                </button>
-              )}
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setDownloadingApk(true);
+                        setDownloadProgress(10);
+                        setDownloadError403(false);
+                        const res = await downloadApkSafely('DentalCare.apk', (p) => setDownloadProgress(p));
+                        setDownloadingApk(false);
+                        if (!res.success) {
+                          setDownloadError403(true);
+                        }
+                      }}
+                      className="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all text-center"
+                    >
+                      <Download size={15} />
+                      دانلود مستقیم APK (سرور اصلی)
+                    </button>
+                    <a
+                      href="https://galaxy1364.github.io/Dendalcare/DentalCare.apk"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-cyan-500/30 active:scale-95 transition-all text-center"
+                    >
+                      <Download size={15} />
+                      لینک کمکی گیت‌هاب (بدون فیلتر)
+                    </a>
+                  </div>
+                )}
 
-              {/* 403 Forbidden Guidance */}
-              {downloadError403 && (
-                <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-200 text-[11px] space-y-2">
+                {/* Important installation tips for Android */}
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-400/30 text-amber-200 text-[11px] space-y-2">
                   <div className="flex items-center gap-1.5 font-bold text-amber-300">
                     <AlertCircle size={15} className="shrink-0 text-amber-400" />
-                    <span>علت خطای 403 (Forbidden) گوگل و راه‌حل قطعی:</span>
+                    <span>راهنمای رفع خطای «برنامه نصب نشد» در اندروید:</span>
                   </div>
-                  <p className="leading-relaxed text-white/90">
-                    گوگل استودیو به دلایل امنیتی اجازه دانلود مستقیم فایل‌های حجیم <code className="bg-black/30 px-1 rounded text-cyan-300 font-mono">.apk</code> را از مرورگر خارجی یا تب بدون لاگین نمی‌دهد. برای دریافت فایل:
-                  </p>
-                  <div className="space-y-1 pr-2 border-r-2 border-amber-400/40">
-                    <div><strong>روش ۱ (سریع‌ترین):</strong> در نوار ابزار بالای استودیو گزینه <strong>Export</strong> یا <strong>Download APK</strong> را بزنید.</div>
-                    <div><strong>روش ۲:</strong> در نوار کناری (پوشه فایل‌ها 📁)، روی فایل <strong className="text-white">DentalCare.apk</strong> راست‌کلیک کرده و <strong>Download</strong> را بزنید.</div>
-                    <div><strong>روش ۳ (پیشنهادی):</strong> نیازی به فایل ۵۶ مگابایتی نیست! با زدن <strong>«افزودن به صفحه اصلی»</strong> از بالای همین صفحه، برنامه بدون حجم اضافی نصب شده و تمام آپدیت‌ها را ۱۰۰٪ آنی دریافت می‌کند.</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(window.location.origin + '/DentalCare.apk');
-                      setCopiedLink(true);
-                      setTimeout(() => setCopiedLink(false), 2500);
-                    }}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-black/60 text-white text-[10px] font-bold"
-                  >
-                    {copiedLink ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                    {copiedLink ? 'لینک کپی شد' : 'کپی لینک مستقیم فایل'}
-                  </button>
+                  <ol className="list-decimal list-inside space-y-1 text-white/80 leading-relaxed pr-1 text-[10.5px]">
+                    <li><strong className="text-amber-200">حذف نسخه قبلی:</strong> اگر نسخه‌ای از برنامه قبلاً روی گوشی نصب بوده، ابتدا آن را Uninstall (حذف) کنید.</li>
+                    <li><strong className="text-amber-200">سپر ایمنی گوگل (Play Protect):</strong> اگر هنگام نصب پیام اخطار دیدید، روی <strong className="text-cyan-300">«جزئیات بیشتر» (More details)</strong> بزنید و سپس <strong className="text-emerald-300">«نصب در هر حال» (Install anyway)</strong> را انتخاب کنید.</li>
+                    <li><strong className="text-amber-200">نصب ناشناخته:</strong> به برنامه «مدیریت فایل» یا مرورگر خود در تنظیمات گوشی اجازه <strong className="text-cyan-300">Install Unknown Apps</strong> بدهید.</li>
+                    <li><strong className="text-emerald-300">روش فوری پیشنهادی (PWA):</strong> با زدن دکمه <strong className="text-yellow-300">«نصب فوری در مرورگر»</strong> در بالای همین صفحه، برنامه در ۱ ثانیه بدون نیاز به فایل APK روی صفحه اصلی گوشی با آیکون رسمی نصب می‌شود.</li>
+                  </ol>
                 </div>
-              )}
-            </div>
+
+                {/* 403 Forbidden Guidance */}
+                {downloadError403 && (
+                  <div className="p-3 rounded-xl bg-red-500/20 border border-red-400/40 text-red-200 text-[11px] space-y-2">
+                    <div className="flex items-center gap-1.5 font-bold text-red-300">
+                      <AlertCircle size={15} className="shrink-0 text-red-400" />
+                      <span>خطای دانلود؛ از لینک کمکی گیت‌هاب استفاده کنید:</span>
+                    </div>
+                    <p className="leading-relaxed text-white/90">
+                      به دلیل محدودیت‌های پراکسی گوگل، می‌توانید مستقیماً از لینک کمکی گیت‌هاب فایل را بدون فیلتر دانلود کنید یا لینک مستقیم زیر را در مرورگر کپی کنید:
+                    </p>
+                    <div className="flex gap-2">
+                      <a
+                        href="https://galaxy1364.github.io/Dendalcare/DentalCare.apk"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-center font-bold text-xs"
+                      >
+                        دانلود از سرور گیت‌هاب
+                      </a>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText('https://galaxy1364.github.io/Dendalcare/DentalCare.apk');
+                          setCopiedLink(true);
+                          setTimeout(() => setCopiedLink(false), 2500);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-black/60 text-white text-[10px] font-bold"
+                      >
+                        {copiedLink ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                        {copiedLink ? 'کپی شد' : 'کپی لینک'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
           </div>
         )}
 
@@ -480,13 +567,40 @@ export function InstallAppModal({
           <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3 text-xs">
             <div className="flex items-center gap-2 text-sm font-bold text-slate-200">
               <Apple size={18} className="text-white" />
-              راهنمای راه‌اندازی در آیفون و آیپد (iOS / iPadOS)
+              نصب مستقیم روی آیفون و آیپد (iOS / iPadOS)
             </div>
+
+            {iosNonSafari && (
+              <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-100 text-[11px] space-y-2">
+                <div className="font-bold text-amber-300 flex items-center gap-1.5">
+                  <AlertCircle size={15} className="shrink-0" />
+                  <span>مرورگر فعلی شما Safari نیست!</span>
+                </div>
+                <p className="leading-relaxed">
+                  در آیفون برای نصب کامل و تمام‌صفحه، لینک زیر را کپی کرده و در مرورگر اصلی <strong>Safari</strong> باز کنید (یا در Chrome آیفون از دکمه Share بالا گزینه Add to Home Screen را بزنید):
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.href);
+                    setCopiedPageUrl(true);
+                    setTimeout(() => setCopiedPageUrl(false), 2500);
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5"
+                >
+                  {copiedPageUrl ? <Check size={14} /> : <Copy size={14} />}
+                  {copiedPageUrl ? 'آدرس کپی شد — در Safari پیست کنید' : 'کپی آدرس برای باز کردن در Safari'}
+                </button>
+              </div>
+            )}
+
             <p className="text-[11px] text-white/80 leading-relaxed">
-              با تکنولوژی مدرن PWA اپل، برنامه روی آیفون دقیقاً مشابه نسخه خروجی IPA عمل کرده و در حالت تمام صفحه (بدون نوار سافاری) اجرا می‌گردد:
+              برنامه روی آیفون با لوگوی رسمی بنفش مینادنتال و حالت تمام‌صفحه (بدون نوار سافاری) دقیقاً مشابه اپلیکیشن بومی اجرا می‌شود. از یکی از دو روش زیر استفاده کنید:
             </p>
 
-            <div className="space-y-2.5 pt-1">
+            {/* Method 1: Safari Share -> Add to Home Screen */}
+            <div className="space-y-2 pt-1">
+              <div className="text-[11px] font-bold text-cyan-300">روش اول (سریع‌ترین — داخل Safari):</div>
               <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/5">
                 <span className="w-5 h-5 rounded-full bg-blue-500/30 text-blue-300 font-bold text-xs flex items-center justify-center shrink-0">۱</span>
                 <div className="text-[11px] text-white/90">
@@ -497,16 +611,35 @@ export function InstallAppModal({
               <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/5">
                 <span className="w-5 h-5 rounded-full bg-blue-500/30 text-blue-300 font-bold text-xs flex items-center justify-center shrink-0">۲</span>
                 <div className="text-[11px] text-white/90">
-                  در منوی باز شده گزینه <strong className="text-cyan-300">«Add to Home Screen»</strong> (افزودن به صفحه اصلی <PlusSquare size={12} className="inline mx-1 text-cyan-300" />) را انتخاب کنید.
+                  به پایین اسکرول کرده و گزینه <strong className="text-cyan-300">«Add to Home Screen»</strong> (افزودن به صفحه اصلی <PlusSquare size={12} className="inline mx-1 text-cyan-300" />) را انتخاب کنید.
                 </div>
               </div>
 
               <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/5">
                 <span className="w-5 h-5 rounded-full bg-blue-500/30 text-blue-300 font-bold text-xs flex items-center justify-center shrink-0">۳</span>
                 <div className="text-[11px] text-white/90">
-                  در گوشه بالا دکمه <strong>«Add»</strong> را لمس کنید. آیکون اختصاصی برنامه به لیست اپ‌های آیفون شما افزوده می‌شود.
+                  دکمه <strong>«Add»</strong> را بزنید تا آیکون رسمی مینادنتال روی صفحه اصلی آیفون قرار گیرد.
                 </div>
               </div>
+            </div>
+
+            {/* Method 2: Direct iOS WebClip Profile (.mobileconfig) */}
+            <div className="p-3 rounded-xl bg-gradient-to-br from-purple-900/40 to-indigo-950/60 border border-purple-400/30 space-y-2">
+              <div className="text-[11px] font-bold text-purple-200 flex items-center gap-1.5">
+                <Download size={14} className="text-purple-300" />
+                روش دوم (پروفایل نصب مستقیم آیفون — WebClip Profile):
+              </div>
+              <a
+                href="./DentalCare.mobileconfig"
+                download="MinaDental.mobileconfig"
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+              >
+                <Download size={15} />
+                دانلود پروفایل نصب مستقیم آیفون (.mobileconfig)
+              </a>
+              <p className="text-[10px] text-purple-200/80 leading-relaxed">
+                پس از زدن Allow، به <strong>Settings ➔ General ➔ VPN &amp; Device Management</strong> (یا گزینه Profile Downloaded در بالای تنظیمات) بروید و <strong>Install</strong> را بزنید.
+              </p>
             </div>
           </div>
         )}

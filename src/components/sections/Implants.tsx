@@ -114,8 +114,6 @@ export function Implants() {
     refresh();
   };
 
-  if (loading) return <Loading color="#06B6D4" />;
-
   return (
     <div className="space-y-2.5 pb-2 animate-fade-in-up">
       {/* ── QBank Sliding Horizontal Chip Bar + Expandable Magnifier Search ── */}

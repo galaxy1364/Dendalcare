@@ -116,8 +116,6 @@ export function Treatments() {
     refresh();
   };
 
-  if (loading) return <Loading color="#8B5CF6" />;
-
   return (
     <div className="space-y-2.5 pb-2 animate-fade-in-up">
       {/* ── QBank Sliding Horizontal Chip Bar + Expandable Magnifier Search ── */}
