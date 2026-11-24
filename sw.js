@@ -1,4 +1,4 @@
-const CACHE_NAME = 'minadental-pwa-v63.0-b63';
+const CACHE_NAME = 'minadental-pwa-v64.0-b64';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -25,12 +25,12 @@ function broadcastLog(message, type = 'info') {
 
 // Resilient install: never fail SW installation if a single asset is temporarily unreachable
 self.addEventListener('install', (event) => {
-  broadcastLog('Installing ServiceWorker cache v63...');
+  broadcastLog('Installing ServiceWorker cache v64...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
       Promise.allSettled(
         ASSETS_TO_CACHE.map((url) =>
-          fetch(url, { credentials: 'include' })
+          fetch(url, { credentials: 'include', cache: 'no-store' })
             .then((res) => {
               if (res && res.ok) {
                 return cache.put(url, res);
@@ -82,7 +82,7 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-// Same-origin network-first strategy with clean navigation offline fallback
+// Same-origin network-first strategy with no-store for version/bundle files and clean navigation offline fallback
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
@@ -91,8 +91,19 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.endsWith('.apk') || url.pathname.endsWith('.mobileconfig')) return;
 
+  const isCriticalBundle =
+    url.pathname.endsWith('version.json') ||
+    url.pathname.endsWith('index.html') ||
+    url.pathname.endsWith('app.js') ||
+    url.pathname.endsWith('app.css') ||
+    url.pathname.endsWith('sw.js');
+
+  const fetchPromise = isCriticalBundle
+    ? fetch(event.request, { cache: 'no-store' })
+    : fetch(event.request);
+
   event.respondWith(
-    fetch(event.request)
+    fetchPromise
       .then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const responseToCache = networkResponse.clone();

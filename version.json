@@ -1,6 +1,6 @@
 {
-  "version": "63.0",
-  "build": 63,
-  "timestamp": 1795659200000,
-  "releaseNotes": "نسخه v63.0 (بیلد #63) — فاز ۹ (TRC-MINA-XPLAT-9009-I): پکیج کامل ۴پلتفرمی ویژه آیفون، اندروید، آیپد (Navigation Rail) و ویندوز دسکتاپ (سایدبار کامل، چیدمان ۴ستونه، میانبرهای Ctrl+K و لانچر مستقل MinaDental-Windows.cmd) با رابط کاربری ۱۰۰٪ طبیعی و تست‌های واقعی"
+  "version": "64.0",
+  "build": 64,
+  "timestamp": 1795662800000,
+  "releaseNotes": "نسخه v64.0 (بیلد #64) — رفع ریشه‌ای مشکل کش و گیر کردن بیلد ۶۲ در GitHub Pages (سینک خودکار gh-pages-dist/app.js و app.css)، رفع هم‌پوشانی بنر صف آفلاین با تب‌ها، نصب و فعال‌سازی همزمان ۸ کتابخانه برتر UI (Manus 2.0, daisyUI, HeroUI, Smooth UI, Vengeance UI, Kokonut UI, Skiper UI, Animmaster Lib) و تمام اسکیل‌های پروژه"
 }

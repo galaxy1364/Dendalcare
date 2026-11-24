@@ -179,7 +179,7 @@ export const DEFAULT_UNITS: DentalUnit[] = [
     name: 'یونیت ۲ (زرد 🟨)',
     colorName: 'زرد',
     colorHex: '#EAB308',
-    assignedDoctor: 'دکتر مینا مازندرانی',
+    assignedDoctor: 'دکتر مهدی امیری (یونیت تخصصی)',
     status: 'active',
   },
   {

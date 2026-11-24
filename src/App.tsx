@@ -59,7 +59,7 @@ import {
   type AtomicUpdateProgress,
 } from '@/lib/updateManager';
 import { activateCloudSqlAndGoogleDrive } from '@/lib/integrationsEngine';
-import { getOfflineQueue, processOfflineQueue } from '@/lib/offlineQueue';
+import { getOfflineQueue, processOfflineQueue, clearOfflineQueue } from '@/lib/offlineQueue';
 import { DraggableNotificationHandle } from '@/components/ui/DraggableNotificationHandle';
 import { QBankTile } from '@/components/ui/QBankTile';
 import {
@@ -553,6 +553,9 @@ function App() {
     window.addEventListener('minadental-offline-queue-changed', onQueueChanged);
     window.addEventListener('minadental-table-mutated', onTableMutated);
     window.addEventListener('online', onBackOnline);
+    if (typeof navigator === 'undefined' || navigator.onLine) {
+      void onBackOnline();
+    }
     return () => {
       if (toastTimer) clearTimeout(toastTimer);
       window.removeEventListener('minadental-guardian-toast', onGuardianToast);
@@ -569,8 +572,8 @@ function App() {
     const remaining = getOfflineQueue().length;
     setFlushingQueue(false);
     setOfflineQueueCount(remaining);
-    if (res.processed > 0) {
-      setLiveSyncToast(`${res.processed.toLocaleString('fa-IR')} تغییر صف آفلاین با موفقیت همگام‌سازی شد`);
+    if (res.processed > 0 || remaining === 0) {
+      setLiveSyncToast('صف آفلاین با موفقیت با Cloud SQL و حافظه محلی همگام‌سازی شد');
       setTimeout(() => setLiveSyncToast(null), 4000);
     } else if (remaining > 0) {
       setGuardianToast({
@@ -579,6 +582,13 @@ function App() {
         traceId: 'TRC-MINA-GUARD-9007-G',
       });
     }
+  };
+
+  const handleClearOfflineQueue = () => {
+    clearOfflineQueue();
+    setOfflineQueueCount(0);
+    setLiveSyncToast('صف آفلاین پاک‌سازی و با دیتابیس محلی یکپارچه شد');
+    setTimeout(() => setLiveSyncToast(null), 3500);
   };
 
   useEffect(() => {
@@ -939,124 +949,6 @@ function App() {
               </button>
             </div>
           </div>
-
-          {/* Floating Status Banners — Automatically FADE OUT / HIDE whenever Reminder Drawer is Open */}
-          {!notifOpen && (
-            <>
-              {/* Real-Time Multi-User Cloud Sync Toast */}
-              {liveSyncToast && (
-                <div className="mt-2 px-3 py-2 rounded-2xl bg-slate-900/95 border border-emerald-400/40 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2 shadow-xl animate-fade-in">
-                  <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
-                  <span>{liveSyncToast}</span>
-                </div>
-              )}
-
-              {/* App-Wide Zero-Delete / RBAC / Offline Guardian Toast (TRC-MINA-GUARD-9007-G) */}
-              {guardianToast && (
-                <div
-                  data-testid="guardian_security_toast"
-                  className={`mt-2 px-3 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-xl border animate-fade-in ${
-                    guardianToast.severity === 'security'
-                      ? 'bg-rose-950/95 border-rose-400/50 text-rose-100'
-                      : guardianToast.severity === 'offline'
-                      ? 'bg-amber-950/95 border-amber-400/50 text-amber-100'
-                      : 'bg-emerald-950/95 border-emerald-400/50 text-emerald-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    {guardianToast.severity === 'security' ? (
-                      <ShieldAlert size={16} className="text-rose-400 shrink-0" />
-                    ) : guardianToast.severity === 'offline' ? (
-                      <WifiOff size={16} className="text-amber-400 shrink-0" />
-                    ) : (
-                      <Archive size={16} className="text-emerald-400 shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      <span className="leading-snug block">{guardianToast.message}</span>
-                      <span className="text-[9px] font-mono opacity-75">{guardianToast.traceId}</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setGuardianToast(null)}
-                    aria-label="بستن هشدار"
-                    className="p-1 rounded-lg bg-white/10 hover:bg-white/20 shrink-0"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-              )}
-
-              {/* Pending Offline Write-Ahead Queue Pill */}
-              {offlineQueueCount > 0 && (
-                <div
-                  data-testid="offline_queue_pending_pill"
-                  className="mt-2 px-3 py-2 rounded-2xl bg-amber-950/90 border border-amber-400/45 text-amber-100 text-[11px] font-bold flex items-center justify-between gap-2 shadow-lg animate-fade-in"
-                >
-                  <div className="flex items-center gap-2">
-                    <UploadCloud size={15} className="text-amber-300 shrink-0" />
-                    <span>
-                      {offlineQueueCount.toLocaleString('fa-IR')} تغییر در صف آفلاین آماده ارسال به Cloud SQL است
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleFlushOfflineQueue}
-                    disabled={flushingQueue}
-                    data-testid="flush_offline_queue_button"
-                    className="px-2.5 py-1 rounded-xl bg-amber-400 text-slate-950 font-black text-[10px] hover:bg-amber-300 active:scale-95 transition-all shrink-0 disabled:opacity-60"
-                  >
-                    {flushingQueue ? 'در حال ارسال...' : 'ارسال آنی'}
-                  </button>
-                </div>
-              )}
-
-              {/* Atomic Update Available / OTA Broadcast Floating Banner */}
-              {updateAvailable && (
-                <div
-                  data-testid="top_atomic_update_banner"
-                  className="mt-2 p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white shadow-xl border border-white/20 animate-fade-in"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-xs font-bold min-w-0">
-                      <Sparkles size={16} className="text-yellow-300 animate-spin shrink-0" />
-                      <div className="truncate">
-                        <span>
-                          بیلد جدید ({otaUpdateInfo?.version || CURRENT_APP_VERSION}
-                          {otaUpdateInfo?.build ? ` • #${otaUpdateInfo.build}` : ''}) آماده نصب است
-                        </span>
-                        {otaUpdateInfo?.releaseNotes && (
-                          <span className="block text-[10px] text-purple-100 truncate">{otaUpdateInfo.releaseNotes}</span>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleApplyUpdate()}
-                      disabled={installingUpdate}
-                      data-testid="top_atomic_update_install_btn"
-                      className="px-3 py-1.5 rounded-xl bg-white text-purple-900 font-extrabold text-xs shadow hover:bg-white/90 active:scale-95 transition-all shrink-0 disabled:opacity-70"
-                    >
-                      {installingUpdate
-                        ? `در حال نصب (${atomicProgress?.percent || 25}%)...`
-                        : 'نصب و ارتقای اتمیک'}
-                    </button>
-                  </div>
-                  {atomicProgress && (
-                    <div className="mt-2 pt-1.5 border-t border-white/15">
-                      <div className="flex items-center justify-between text-[10px] font-bold text-purple-100 mb-1">
-                        <span>{atomicProgress.label}</span>
-                        <span>{atomicProgress.percent}%</span>
-                      </div>
-                      <div className="w-full h-1.5 rounded-full bg-white/20 overflow-hidden">
-                        <div
-                          className="h-full bg-emerald-300 transition-all duration-200"
-                          style={{ width: `${atomicProgress.percent}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
 
           {/* Shortcuts Panel */}
           {shortcutsOpen && (
@@ -1793,15 +1685,144 @@ function App() {
       <main
         ref={sectionRef}
         onScroll={handleScroll}
-        className="fixed inset-0 md:right-20 lg:right-64 overflow-y-auto pt-[80px] pb-36 md:pb-12 px-2 md:px-5 desktop-scroll"
+        className="fixed inset-0 md:right-20 lg:right-64 overflow-y-auto pt-[76px] pb-36 md:pb-12 px-2 md:px-5 desktop-scroll"
       >
         <div className="max-w-xl md:max-w-5xl xl:max-w-6xl mx-auto space-y-2.5">
           {!isOnline && (
-            <div className="rounded-2xl bg-amber-600/95 text-white text-xs font-bold py-1.5 px-3 flex items-center justify-center gap-2 shadow-lg animate-pulse mb-2">
+            <div className="rounded-2xl bg-amber-600/95 text-white text-xs font-bold py-1.5 px-3 flex items-center justify-center gap-2 shadow-lg animate-pulse">
               <WifiOff size={15} />
               <span>حالت آفلاین (استفاده از حافظه محلی و کش PWA)</span>
             </div>
           )}
+
+          {/* In-Flow Non-Overlapping Status Banners — Automatically hidden whenever Reminder Drawer is Open */}
+          {!notifOpen && (
+            <>
+              {/* Real-Time Multi-User Cloud Sync Toast */}
+              {liveSyncToast && (
+                <div className="px-3 py-2 rounded-2xl bg-slate-900/95 border border-emerald-400/40 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2 shadow-lg animate-fade-in">
+                  <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
+                  <span>{liveSyncToast}</span>
+                </div>
+              )}
+
+              {/* App-Wide Zero-Delete / RBAC / Offline Guardian Toast (TRC-MINA-GUARD-9007-G) */}
+              {guardianToast && (
+                <div
+                  data-testid="guardian_security_toast"
+                  className={`px-3 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-lg border animate-fade-in ${
+                    guardianToast.severity === 'security'
+                      ? 'bg-rose-950/95 border-rose-400/50 text-rose-100'
+                      : guardianToast.severity === 'offline'
+                      ? 'bg-amber-950/95 border-amber-400/50 text-amber-100'
+                      : 'bg-emerald-950/95 border-emerald-400/50 text-emerald-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {guardianToast.severity === 'security' ? (
+                      <ShieldAlert size={16} className="text-rose-400 shrink-0" />
+                    ) : guardianToast.severity === 'offline' ? (
+                      <WifiOff size={16} className="text-amber-400 shrink-0" />
+                    ) : (
+                      <Archive size={16} className="text-emerald-400 shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <span className="leading-snug block">{guardianToast.message}</span>
+                      <span className="text-[9px] font-mono opacity-75">{guardianToast.traceId}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setGuardianToast(null)}
+                    aria-label="بستن هشدار"
+                    className="p-1 rounded-lg bg-white/10 hover:bg-white/20 shrink-0"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              )}
+
+              {/* Pending Offline Write-Ahead Queue Pill (In-Flow, Zero Overlap with Tabs) */}
+              {offlineQueueCount > 0 && (
+                <div
+                  data-testid="offline_queue_pending_pill"
+                  className="px-3 py-2 rounded-2xl bg-amber-950/95 border border-amber-400/45 text-amber-100 text-[11px] font-bold flex items-center justify-between gap-2 shadow-md animate-fade-in"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <UploadCloud size={15} className="text-amber-300 shrink-0" />
+                    <span className="truncate">
+                      {offlineQueueCount.toLocaleString('fa-IR')} تغییر در صف آفلاین آماده ارسال به Cloud SQL است
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={handleFlushOfflineQueue}
+                      disabled={flushingQueue}
+                      data-testid="flush_offline_queue_button"
+                      className="px-2.5 py-1 rounded-xl bg-amber-400 text-slate-950 font-black text-[10px] hover:bg-amber-300 active:scale-95 transition-all disabled:opacity-60"
+                    >
+                      {flushingQueue ? 'در حال ارسال...' : 'ارسال آنی'}
+                    </button>
+                    <button
+                      onClick={handleClearOfflineQueue}
+                      data-testid="clear_offline_queue_button"
+                      title="پاک‌سازی و تطبیق صف با دیتابیس محلی"
+                      className="px-2 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-amber-100 font-bold text-[10px] active:scale-95 transition-all"
+                    >
+                      پاک‌سازی
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Atomic Update Available / OTA Broadcast Banner */}
+              {updateAvailable && (
+                <div
+                  data-testid="top_atomic_update_banner"
+                  className="p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white shadow-lg border border-white/20 animate-fade-in"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-bold min-w-0">
+                      <Sparkles size={16} className="text-yellow-300 animate-spin shrink-0" />
+                      <div className="truncate">
+                        <span>
+                          بیلد جدید ({otaUpdateInfo?.version || CURRENT_APP_VERSION}
+                          {otaUpdateInfo?.build ? ` • #${otaUpdateInfo.build}` : ''}) آماده نصب است
+                        </span>
+                        {otaUpdateInfo?.releaseNotes && (
+                          <span className="block text-[10px] text-purple-100 truncate">{otaUpdateInfo.releaseNotes}</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleApplyUpdate()}
+                      disabled={installingUpdate}
+                      data-testid="top_atomic_update_install_btn"
+                      className="px-3 py-1.5 rounded-xl bg-white text-purple-900 font-extrabold text-xs shadow hover:bg-white/90 active:scale-95 transition-all shrink-0 disabled:opacity-70"
+                    >
+                      {installingUpdate
+                        ? `در حال نصب (${atomicProgress?.percent || 25}%)...`
+                        : 'نصب و ارتقای اتمیک'}
+                    </button>
+                  </div>
+                  {atomicProgress && (
+                    <div className="mt-2 pt-1.5 border-t border-white/15">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-purple-100 mb-1">
+                        <span>{atomicProgress.label}</span>
+                        <span>{atomicProgress.percent}%</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-white/20 overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-300 transition-all duration-200"
+                          style={{ width: `${atomicProgress.percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
           <ErrorBoundary>
             <div key={active} className="animate-fade-in-up">
               {renderSection()}

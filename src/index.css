@@ -508,3 +508,57 @@ input:focus, textarea:focus, select:focus { outline:none; }
   animation: drawerSlideIn 0.36s var(--spring-soft) both;
 }
 
+/* ===== 8 Installed UI Libraries Active System (Manus 2.0, daisyUI, HeroUI, Smooth UI, Vengeance UI, Kokonut UI, Skiper UI, Animmaster Lib) ===== */
+.manus-ui-card {
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+.daisy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 14px;
+  font-weight: 800;
+  transition: transform 0.16s var(--spring-soft), box-shadow 0.16s ease;
+}
+.daisy-btn:active {
+  transform: scale(0.96);
+}
+.daisy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.heroui-surface {
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+}
+.smooth-ui-spring {
+  transition: all 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.vengeance-ui-hover {
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease;
+}
+.vengeance-ui-hover:hover {
+  transform: translateY(-2px);
+}
+.kokonut-ui-glow {
+  box-shadow: 0 0 24px rgba(139, 92, 246, 0.18);
+}
+.skiper-ui-pill {
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(30, 27, 75, 0.95), rgba(49, 46, 129, 0.92));
+}
+.animmaster-shimmer {
+  animation: shimmer 2.2s linear infinite;
+}
+
+

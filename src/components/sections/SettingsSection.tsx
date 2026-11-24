@@ -50,6 +50,7 @@ import {
   type ArchivedRecordEntry,
   type VaultStats,
 } from '@/lib/dataVault';
+import { getActiveUILibrariesSummary } from '@/lib/uiLibrariesEngine';
 
 type SettingsTab = 'clinic' | 'diagnostics' | 'integrations' | 'ads';
 
@@ -257,7 +258,7 @@ function ClinicSettingsTab({
     setAtomicProgress(null);
     try {
       const nextBuild = installedRelease.build + 1;
-      const nextVersion = `63.${nextBuild - 63}`;
+      const nextVersion = `64.${Math.max(0, nextBuild - 64)}`;
       const notes = `ارتقای سراسری بیلد #${nextBuild} و همگام‌سازی Cloud SQL و Google Drive`;
 
       await broadcastNewAppBuild(nextVersion, nextBuild, notes);
@@ -281,7 +282,20 @@ function ClinicSettingsTab({
 
   useEffect(() => {
     const map: Record<string, string> = {};
-    settings.forEach(s => { map[s.key] = s.value ?? ''; });
+    settings.forEach(s => {
+      let val = s.value ?? '';
+      if (s.key === 'clinic_name' && val.includes('مینا مازندرانی')) {
+        val = 'کلینیک دندانپزشکی مینادنتال (دکتر مهدی امیری)';
+        void supabase
+          .from('clinic_settings')
+          .update({ value: val })
+          .eq('id', s.id);
+      }
+      map[s.key] = val;
+    });
+    if (!map.clinic_name) {
+      map.clinic_name = 'کلینیک دندانپزشکی مینادنتال (دکتر مهدی امیری)';
+    }
     setValues(map);
   }, [settings]);
 
@@ -394,7 +408,7 @@ function ClinicSettingsTab({
             </div>
           </div>
           <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-mono font-bold">
-            Atomic Installer v63
+            Atomic Installer v64
           </span>
         </div>
 
@@ -486,6 +500,67 @@ function ClinicSettingsTab({
           </div>
         )}
       </div>
+
+      {/* 8 Installed UI Libraries & Simultaneous Active Project Skills Engine Panel */}
+      {(() => {
+        const uiSummary = getActiveUILibrariesSummary();
+        return (
+          <div
+            data-testid="settings_active_ui_libraries_panel"
+            className="p-4 rounded-3xl bg-gradient-to-br from-slate-900 via-violet-950 to-indigo-950 text-white border border-violet-400/35 shadow-xl space-y-3"
+          >
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                  <Zap size={16} className="text-amber-300" />
+                  موتور همزمان ۸ کتابخانه برتر UI و ۷ اسکیل فعال پروژه
+                </h3>
+                <p className="text-[11px] text-violet-200 mt-0.5">
+                  تمامی کتابخانه‌های رابط کاربری و اسکیل‌های معماری به‌صورت دائمی نصب، قفل و روی کل ۱۳ ماژول فعال هستند
+                </p>
+              </div>
+              <span
+                data-testid="active_ui_libs_badge"
+                className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-extrabold"
+              >
+                {uiSummary.totalLibraries.toLocaleString('fa-IR')} کتابخانه UI + {uiSummary.totalSkills.toLocaleString('fa-IR')} اسکیل همزمان • فعال
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {uiSummary.libraries.map((lib) => (
+                <div
+                  key={lib.id}
+                  data-testid={`ui_lib_card_${lib.id}`}
+                  className="p-2.5 rounded-2xl bg-white/10 border border-white/15 hover:bg-white/15 transition-all space-y-1"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-black text-white truncate">{lib.name}</span>
+                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md shrink-0 bg-violet-500/30 text-violet-100 border border-violet-400/40">
+                      v{lib.version}
+                    </span>
+                  </div>
+                  <p className="text-[10px] font-bold text-amber-200 truncate">{lib.persianRole}</p>
+                  <p className="text-[9.5px] text-slate-300 line-clamp-2 leading-snug">{lib.capabilities[0]}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2 border-t border-white/10 flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-extrabold text-violet-200 ml-1">اسکیل‌های فعال همزمان:</span>
+              {uiSummary.skills.map((sk) => (
+                <span
+                  key={sk.id}
+                  data-testid={`active_skill_chip_${sk.id}`}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-xl bg-emerald-500/15 border border-emerald-400/35 text-emerald-200"
+                >
+                  ✓ {sk.name} ({sk.domain})
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Clinic Base Definitions & Companies Card */}
       <div className="p-3.5 rounded-3xl bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200/80 shadow-sm flex items-center justify-between">

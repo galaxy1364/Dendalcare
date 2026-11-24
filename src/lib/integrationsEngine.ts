@@ -373,7 +373,15 @@ export async function publishWebAppToGitHubPages(
       { path: '.nojekyll', mode: '100644', type: 'blob', content: '' },
     ];
 
-    const textFilesToSync = ['version.json', 'manifest.json', 'sw.js', 'favicon.svg'];
+    const textFilesToSync = [
+      'version.json',
+      'manifest.json',
+      'sw.js',
+      'favicon.svg',
+      'index.html',
+      'gh-pages-dist/app.js',
+      'gh-pages-dist/app.css',
+    ];
     for (const file of textFilesToSync) {
       try {
         const r = await fetch(`./${file}?t=${Date.now()}`, { cache: 'no-store' });

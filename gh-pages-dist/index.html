@@ -47,8 +47,8 @@
         window.dispatchEvent(new Event('minadental:installed'));
       });
     </script>
-    <script type="module" crossorigin src="./assets/index-DLczXxAs.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DkWIa-IT.css">
+    <script type="module" crossorigin src="./assets/index-a5ROlcRT.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-R3EE1yGu.css">
   </head>
   <body style="margin: 0; background-color: #0A0E27;">
     <div id="root">
@@ -100,15 +100,27 @@
     <script>
       // Automatic pre-built bundle loader ONLY when served raw from GitHub Pages root branch (without built assets)
       if (window.location.hostname.indexOf('github.io') !== -1 && !document.querySelector('script[src*="./assets/index-"]')) {
+        var bust = 'v=64&b=' + Math.floor(Date.now() / 60000);
         var ghCss = document.createElement('link');
         ghCss.rel = 'stylesheet';
-        ghCss.href = './gh-pages-dist/app.css?v=63';
+        ghCss.href = './gh-pages-dist/app.css?' + bust;
         document.head.appendChild(ghCss);
         var ghJs = document.createElement('script');
         ghJs.type = 'module';
         ghJs.crossOrigin = 'anonymous';
-        ghJs.src = './gh-pages-dist/app.js?v=63';
+        ghJs.src = './gh-pages-dist/app.js?' + bust;
         document.head.appendChild(ghJs);
+      }
+
+      // Auto-purge obsolete v62/v63 ServiceWorker caches so users never get stuck on old builds
+      if (window.caches) {
+        caches.keys().then(function(keys) {
+          keys.forEach(function(k) {
+            if (k.indexOf('v64.0-b64') === -1) {
+              caches.delete(k);
+            }
+          });
+        }).catch(function() {});
       }
 
       // ServiceWorker registration for PWA installability on HTTPS (skip native Android APK LocalAssetServer on 127.0.0.1:8765)
@@ -127,7 +139,7 @@
           }
         } else if (window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
           window.addEventListener('load', function() {
-            navigator.serviceWorker.register('./sw.js', { scope: './' }).then(function(reg) {
+            navigator.serviceWorker.register('./sw.js?v=64', { scope: './', updateViaCache: 'none' }).then(function(reg) {
               reg.update().catch(function() {});
             }).catch(function() {});
           });

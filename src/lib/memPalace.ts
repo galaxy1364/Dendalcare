@@ -287,6 +287,24 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'فعال‌سازی خودکار Cloud SQL (۲۰ جدول) و Google Drive Auto-Archive + مرکز واحد آپدیت اتوماتیک و دستی اتمیک ۴ مرحله‌ای با حذف کامل بخش‌های تکراری',
     ],
   },
+  {
+    id: 'milestone-11',
+    traceId: 'TRC-MINA-UILIB-9011-K',
+    phaseNumber: 11,
+    title: 'رفع ریشه‌ای گیر کردن بیلد در GitHub Pages (سینک خودکار gh-pages-dist/app.js)، رفع هم‌پوشانی بنر صف آفلاین و فعال‌سازی همزمان ۸ کتابخانه UI و اسکیل‌های پروژه',
+    titleEn: 'Root-Cause GitHub Pages Bundle Auto-Sync, Zero-Overlap Offline Queue Reconciliation & Simultaneous 8 UI Libraries + Project Skills Engine',
+    description: 'رفع ریشه‌ای مشکل ماندن بیلد ۶۲ روی GitHub Pages با سینک خودکار باندل‌های کامپایل‌شده Vite به gh-pages-dist/app.js و app.css در هر بیلد و انتشار، انتقال بنر صف آفلاین از داخل هدر ثابت به جریان اصلی صفحه برای حذف کامل هم‌پوشانی با تب‌ها، تطبیق هوشمند خطاهای غیرشبکه‌ای در صف آفلاین، و نصب و فعال‌سازی دائمی ۸ کتابخانه برتر UI (Manus 2.0, daisyUI, HeroUI, Smooth UI, Vengeance UI, Kokonut UI, Skiper UI, Animmaster Lib) به همراه ۷ اسکیل همزمان پروژه.',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/03',
+    checksum: 'k640f9a881cd',
+    deliverables: [
+      'سینک خودکار gh-pages-dist/app.js و gh-pages-dist/app.css در پلاگین بیلد Vite و موتور انتشار GitHub Pages به همراه پاک‌سازی خودکار کش‌های قدیمی v62/v63',
+      'انتقال بنرهای وضعیت و صف آفلاین از داخل <header> ثابت به داخل <main> (حذف ۱۰۰٪ هم‌پوشانی با تب‌ها) + تطبیق خودکار صف آفلاین با دیتابیس محلی',
+      'موتور فعال و همزمان ۸ کتابخانه UI (Manus 2.0, daisyUI, HeroUI, Smooth UI, Vengeance UI, Kokonut UI, Skiper UI, Animmaster Lib) و ۷ اسکیل پروژه در کل ۱۳ ماژول',
+      'بروزرسانی یکپارچه نسخه و بیلد به v64.0 (Build #64) در وب، PWA، سرویس‌ورکر، دیتابیس ابری و versionCode = 64 اندروید',
+    ],
+  },
 ]);
 
 export interface ModuleBenchmarkPhase {

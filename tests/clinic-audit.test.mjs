@@ -248,8 +248,8 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(engineSrc.includes('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'), 'Real Google Drive API v3 upload endpoint must exist');
     assert.ok(!engineSrc.includes('v5.0.0 (Build #52)'), 'Outdated hardcoded GitHub deploy version must be removed');
     assert.ok(tabSrc.includes('uploadBackupToGoogleDrive'), 'IntegrationsTab must invoke real uploadBackupToGoogleDrive');
-    assert.equal(versionJson.version, '63.0');
-    assert.equal(versionJson.build, 63);
+    assert.equal(versionJson.version, '64.0');
+    assert.equal(versionJson.build, 64);
   });
 
   test('PWA manifest, service worker, and index.html typography/installability stay 100% intact', () => {
@@ -262,7 +262,7 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(html.includes('window.__deferredInstallPrompt'), 'index.html must capture beforeinstallprompt early');
     assert.ok(manifest.icons.some((i) => i.purpose === 'any' && i.sizes === '512x512'), 'manifest must have 512x512 any icon');
     assert.ok(manifest.icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512'), 'manifest must have 512x512 maskable icon');
-    assert.ok(sw.includes('minadental-pwa-v63.0-b63'), 'sw.js must be on unified v63.0-b63 cache');
+    assert.ok(sw.includes('minadental-pwa-v64.0-b64'), 'sw.js must be on unified v64.0-b64 cache');
   });
 });
 
@@ -544,6 +544,40 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(settingsSrc.includes('toggle_auto_update_switch') && settingsSrc.includes('manual_check_and_install_update_btn') && settingsSrc.includes('manager_publish_new_build_btn'), 'Unified Update Center must provide Auto toggle, Manual check/install, and Manager build publish');
     assert.ok(!settingsSrc.includes('settings_manager_lock_release_btn'), 'Duplicate/fake upgrade buttons must be removed from SettingsSection');
     assert.ok(appSrc.includes('top_atomic_update_banner') && appSrc.includes('applyAppUpdateAtomically') && appSrc.includes('activateCloudSqlAndGoogleDrive'), 'App.tsx must wire atomic update installation and autonomous Cloud SQL + Google Drive activation');
+  });
+
+  test('30. Root-Cause GitHub Pages Bundle Auto-Sync (gh-pages-dist/app.js), Zero-Overlap Offline Queue Reconciliation & 8 Active UI Libraries + 7 Simultaneous Skills Engine', () => {
+    const viteSrc = read('vite.config.ts');
+    const htmlSrc = read('index.html');
+    const integrationsSrc = read('src/lib/integrationsEngine.ts');
+    const queueSrc = read('src/lib/offlineQueue.ts');
+    const appSrc = read('src/App.tsx');
+    const uiLibSrc = read('src/lib/uiLibrariesEngine.ts');
+    const cssSrc = read('src/index.css');
+    const settingsSrc = read('src/components/sections/SettingsSection.tsx');
+    const ghAppJs = read('gh-pages-dist/app.js');
+
+    // 1. Root-cause fix for GitHub Pages stuck on old build
+    assert.ok(viteSrc.includes('closeBundle()') && viteSrc.includes("path.join(ghPagesDir, 'app.js')"), 'vite.config.ts must auto-sync compiled bundle to gh-pages-dist/app.js and app.css on every build');
+    assert.ok(integrationsSrc.includes("'gh-pages-dist/app.js'") && integrationsSrc.includes("'gh-pages-dist/app.css'"), 'publishWebAppToGitHubPages must sync gh-pages-dist/app.js and app.css');
+    assert.ok(htmlSrc.includes('v=64') && htmlSrc.includes("k.indexOf('v64.0-b64') === -1"), 'index.html must bust gh-pages-dist cache with v=64 and purge obsolete v62/v63 caches');
+    assert.ok(ghAppJs.includes('64.0') && ghAppJs.includes('settings_active_ui_libraries_panel'), 'gh-pages-dist/app.js must contain compiled Build #64 (v64.0) code');
+
+    // 2. Offline Queue Zero-Overlap & Non-Network Error Auto-Reconciliation
+    const headerEndIdx = appSrc.indexOf('</header>');
+    const mainStartIdx = appSrc.indexOf('<main');
+    const queuePillIdx = appSrc.indexOf('data-testid="offline_queue_pending_pill"');
+    assert.ok(queuePillIdx > headerEndIdx && queuePillIdx > mainStartIdx, 'offline_queue_pending_pill must render inside <main> (after </header>) so it never overlaps top tabs');
+    assert.ok(appSrc.includes('clear_offline_queue_button'), 'App.tsx must provide 1-click clear_offline_queue_button');
+    assert.ok(queueSrc.includes("onConflict: 'key'") && queueSrc.includes('isTransientNetworkError'), 'offlineQueue.ts must upsert clinic_settings by key and reconcile non-network schema errors locally');
+
+    // 3. All 8 UI Libraries & 7 Simultaneous Project Skills permanently installed and active
+    const requiredLibs = ['Manus 2.0', 'daisyUI', 'HeroUI', 'Smooth UI', 'Vengeance UI', 'Kokonut UI', 'Skiper UI', 'Animmaster Lib'];
+    for (const libName of requiredLibs) {
+      assert.ok(uiLibSrc.includes(libName), `uiLibrariesEngine.ts must register and activate ${libName}`);
+    }
+    assert.ok(cssSrc.includes('.manus-ui-card') && cssSrc.includes('.daisy-btn') && cssSrc.includes('.heroui-surface') && cssSrc.includes('.smooth-ui-spring') && cssSrc.includes('.vengeance-ui-hover') && cssSrc.includes('.kokonut-ui-glow') && cssSrc.includes('.skiper-ui-pill') && cssSrc.includes('.animmaster-shimmer'), 'src/index.css must provide utility classes for all 8 UI libraries');
+    assert.ok(settingsSrc.includes('settings_active_ui_libraries_panel') && settingsSrc.includes('getActiveUILibrariesSummary'), 'SettingsSection.tsx must render active 8 UI Libraries & 7 Simultaneous Project Skills panel');
   });
 });
 
