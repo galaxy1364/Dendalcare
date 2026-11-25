@@ -529,8 +529,16 @@ function syncDeterministicReleasePlugin(): Plugin {
       cleanStaleGhPagesFiles(ghPagesDir);
       copyDirectoryRecursive(distDir, ghPagesDir);
 
+      // 7. Atomically sync Android WebView bundled assets when app/src/main/assets exists (keeps CI & local verify:assets 100% coherent)
+      const androidAssetsParent = path.resolve(__dirname, 'app/src/main/assets');
+      if (fs.existsSync(androidAssetsParent)) {
+        const androidWwwDir = path.join(androidAssetsParent, 'www');
+        fs.rmSync(androidWwwDir, { recursive: true, force: true });
+        copyDirectoryRecursive(distDir, androidWwwDir);
+      }
+
       console.log(
-        `[vite-sync] Atomic V8 release ${buildId} (seq #${releaseSequence}, digest=${contentDigest.slice(0, 12)}..., origin=${authoritativeManifest.origin}) synced to dist/ & gh-pages-dist/ (${distAssetFiles.length} assets, ${manifestAssets.length} hashed manifest entries, immutable releases/${buildId}/ staged)`
+        `[vite-sync] Atomic V9 release ${buildId} (seq #${releaseSequence}, digest=${contentDigest.slice(0, 12)}..., origin=${authoritativeManifest.origin}) synced to dist/, gh-pages-dist/ & android-www (${distAssetFiles.length} assets, ${manifestAssets.length} hashed manifest entries, immutable releases/${buildId}/ staged)`
       );
     },
   };

@@ -214,9 +214,20 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Post-Deploy Live HTTP/MIME/SHA-256 Verification Gate
+      - name: Post-Deploy Live HTTP/MIME/SHA-256 Verification Gate (with CDN propagation retry)
         env:
           DEPLOYED_URL: ${{ steps.deployment.outputs.page_url }}
           EXPECTED_RELEASE_ID: ${{ needs.build-verify-and-package.outputs.release_id }}
         run: |
-          node scripts/ci-release-gate.mjs --verify-remote "$DEPLOYED_URL" --expected-release-id "$EXPECTED_RELEASE_ID"
+          for attempt in 1 2 3 4 5 6; do
+            echo "Post-deploy verification attempt $attempt/6 for $DEPLOYED_URL ($EXPECTED_RELEASE_ID)..."
+            if node scripts/ci-release-gate.mjs --verify-remote "$DEPLOYED_URL" --expected-release-id "$EXPECTED_RELEASE_ID"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 6 ]; then
+              echo "Waiting 5s for GitHub Pages CDN propagation..."
+              sleep 5
+            fi
+          done
+          echo "ERROR: Post-deploy remote verification failed after 6 attempts."
+          exit 1
