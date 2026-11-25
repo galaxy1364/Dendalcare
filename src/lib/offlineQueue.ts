@@ -1,7 +1,12 @@
-import { rawSupabase as supabase } from '@/lib/supabaseCore';
+import {
+  rawSupabase as supabase,
+  SUPABASE_PROJECT_REF,
+  getBackendNamespaceKey,
+} from '@/lib/supabaseCore';
 
 export interface OfflineMutationItem {
   id: string;
+  projectRef?: string;
   table: string;
   type: 'INSERT' | 'UPDATE' | 'DELETE';
   payload: any;
@@ -11,7 +16,12 @@ export interface OfflineMutationItem {
   error?: string;
 }
 
-const STORAGE_KEY = 'minadental_offline_queue_v1';
+export const LEGACY_OFFLINE_QUEUE_STORAGE_KEY = 'minadental_offline_queue_v1';
+export function getOfflineQueueStorageKey(projectRef: string = SUPABASE_PROJECT_REF): string {
+  return getBackendNamespaceKey(LEGACY_OFFLINE_QUEUE_STORAGE_KEY, projectRef);
+}
+export const OFFLINE_QUEUE_STORAGE_KEY = getOfflineQueueStorageKey(SUPABASE_PROJECT_REF);
+const STORAGE_KEY = OFFLINE_QUEUE_STORAGE_KEY;
 
 function emitQueueChanged(count: number) {
   if (typeof window !== 'undefined') {
@@ -62,6 +72,7 @@ export function enqueueOfflineMutation(
   const queue = getOfflineQueue();
   const newItem: OfflineMutationItem = {
     id: `off_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    projectRef: SUPABASE_PROJECT_REF,
     table,
     type,
     payload,
@@ -87,37 +98,55 @@ export function clearOfflineQueue(): void {
   emitQueueChanged(0);
 }
 
-export async function processOfflineQueue(): Promise<{
+export async function processOfflineQueue(client: any = supabase): Promise<{
   processed: number;
   failed: number;
+  blocked: number;
   reconciledLocal: number;
   errors: string[];
 }> {
   const queue = getOfflineQueue();
   if (queue.length === 0) {
-    return { processed: 0, failed: 0, reconciledLocal: 0, errors: [] };
+    return { processed: 0, failed: 0, blocked: 0, reconciledLocal: 0, errors: [] };
   }
 
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { processed: 0, failed: queue.length, reconciledLocal: 0, errors: ['Device is offline'] };
+    return { processed: 0, failed: queue.length, blocked: 0, reconciledLocal: 0, errors: ['Device is offline'] };
   }
 
   let processed = 0;
   let failed = 0;
+  let blocked = 0;
   let reconciledLocal = 0;
   const errors: string[] = [];
   const remainingQueue: OfflineMutationItem[] = [];
 
   for (const item of queue) {
+    // V11 Safety Guard: NEVER replay queued writes from a different Supabase backend project
+    if (item.projectRef && item.projectRef !== SUPABASE_PROJECT_REF) {
+      failed++;
+      blocked++;
+      errors.push(`${item.table}:${item.type} - CROSS_BACKEND_REPLAY_BLOCKED (${item.projectRef})`);
+      remainingQueue.push({
+        ...item,
+        status: 'failed',
+        error: `CROSS_BACKEND_REPLAY_BLOCKED: item belongs to ${item.projectRef}, active project is ${SUPABASE_PROJECT_REF}`,
+      });
+      continue;
+    }
+
     try {
       let res: any;
       if (item.table === 'clinic_settings' && item.payload && typeof item.payload === 'object') {
-        res = await supabase.from('clinic_settings').upsert(item.payload, { onConflict: 'key' });
+        res =
+          item.payload.tenant_id && item.payload.branch_id
+            ? await client.from('clinic_settings').upsert(item.payload, { onConflict: 'tenant_id,branch_id,key' })
+            : await client.from('clinic_settings').upsert(item.payload, { onConflict: 'key' });
       } else if (item.type === 'INSERT') {
-        res = await supabase.from(item.table).insert(item.payload);
+        res = await client.from(item.table).insert(item.payload);
         // If duplicate primary key (already synced), fall back to upsert/update
         if (res?.error && String(res.error.code || '') === '23505' && item.payload?.id) {
-          res = await supabase.from(item.table).update(item.payload).eq('id', item.payload.id);
+          res = await client.from(item.table).update(item.payload).eq('id', item.payload.id);
         }
       } else if (item.type === 'UPDATE') {
         const targetId = item.payload?.id;
@@ -126,14 +155,14 @@ export async function processOfflineQueue(): Promise<{
           continue;
         }
         const { id: _omitId, ...restPayload } = item.payload;
-        res = await supabase.from(item.table).update(restPayload).eq('id', targetId);
+        res = await client.from(item.table).update(restPayload).eq('id', targetId);
       } else if (item.type === 'DELETE') {
         const targetId = item.payload?.id;
         if (!targetId) {
           processed++;
           continue;
         }
-        res = await supabase.from(item.table).delete().eq('id', targetId);
+        res = await client.from(item.table).delete().eq('id', targetId);
       }
 
       if (res?.error) {
@@ -164,7 +193,7 @@ export async function processOfflineQueue(): Promise<{
   }
 
   saveOfflineQueue(remainingQueue);
-  return { processed, failed, reconciledLocal, errors };
+  return { processed, failed, blocked, reconciledLocal, errors };
 }
 
 // Auto-flush queue on load and when returning online

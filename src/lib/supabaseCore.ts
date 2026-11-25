@@ -1,30 +1,56 @@
 import { createClient } from '@supabase/supabase-js';
 
 // V11 development database cutover. Only the low-privilege publishable key is client-side.
-const EXPECTED_SUPABASE_URL = 'https://npzcweiphmyhtzxxnlov.supabase.co';
+export const SUPABASE_PROJECT_REF = 'npzcweiphmyhtzxxnlov';
+export const EXPECTED_SUPABASE_URL = `https://${SUPABASE_PROJECT_REF}.supabase.co`;
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_H8XKNNvn_52H4s1bgMtcjQ_YAvOLtAB';
 
-const configuredUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim().replace(/\/+$/, '');
-const configuredKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim();
-const legacyKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
+export function validateSupabasePublicConfig(env: {
+  VITE_SUPABASE_URL?: string;
+  VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+  VITE_SUPABASE_ANON_KEY?: string;
+}): { url: string; publishableKey: string; projectRef: string } {
+  const configuredUrl = env.VITE_SUPABASE_URL?.trim().replace(/\/+$/, '');
+  const configuredKey = env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
+  const legacyKey = env.VITE_SUPABASE_ANON_KEY?.trim();
 
-if (configuredUrl && configuredUrl !== EXPECTED_SUPABASE_URL) {
-  throw new Error('SUPABASE_PROJECT_MISMATCH: update the environment to the V11 development project.');
-}
-if (legacyKey && legacyKey !== (configuredKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY)) {
-  throw new Error('SUPABASE_LEGACY_KEY_MISMATCH: remove the old VITE_SUPABASE_ANON_KEY.');
-}
-if (configuredKey && !configuredKey.startsWith('sb_publishable_')) {
-  throw new Error('SUPABASE_INVALID_PUBLIC_KEY: a publishable key is required.');
+  if (configuredUrl && configuredUrl !== EXPECTED_SUPABASE_URL) {
+    throw new Error('SUPABASE_PROJECT_MISMATCH: update the environment to the V11 development project.');
+  }
+  if (legacyKey && legacyKey !== (configuredKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY)) {
+    throw new Error('SUPABASE_LEGACY_KEY_MISMATCH: remove the old VITE_SUPABASE_ANON_KEY.');
+  }
+  if (configuredKey && !configuredKey.startsWith('sb_publishable_')) {
+    throw new Error('SUPABASE_INVALID_PUBLIC_KEY: a publishable key is required.');
+  }
+
+  return {
+    url: EXPECTED_SUPABASE_URL,
+    publishableKey: configuredKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY,
+    projectRef: SUPABASE_PROJECT_REF,
+  };
 }
 
-export const supabaseUrl = EXPECTED_SUPABASE_URL;
+export function getBackendNamespaceKey(baseKey: string, projectRef: string = SUPABASE_PROJECT_REF): string {
+  const cleanRef = (projectRef || SUPABASE_PROJECT_REF).trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `${baseKey}__proj_${cleanRef}`;
+}
+
+const resolvedSupabaseConfig = validateSupabasePublicConfig({
+  VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL as string | undefined,
+  VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined,
+  VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined,
+});
+
+export const supabaseUrl = resolvedSupabaseConfig.url;
 // Compatibility export for existing consumers; never contains a secret/service-role key.
-export const supabaseAnonKey = configuredKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+export const supabaseAnonKey = resolvedSupabaseConfig.publishableKey;
+export const SUPABASE_AUTH_STORAGE_KEY = `sb-${SUPABASE_PROJECT_REF}-auth-token`;
 
 export const rawSupabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: false,
+    storageKey: SUPABASE_AUTH_STORAGE_KEY,
   },
   realtime: {
     params: { eventsPerSecond: 10 },

@@ -2,7 +2,7 @@
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
 // NOTE: Structural HTML checks below prevent cache poisoning & raw-TSX contamination;
 // they are NOT a substitute for cryptographic ECDSA manifest signature verification.
-const BUILD_ID = "v4.9.6-43931127ef";
+const BUILD_ID = "v4.9.6-e5b0cfca23";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
@@ -14,14 +14,14 @@ const VALID_BUILD_ID_RE = /^v\d+\.\d+\.\d+-[0-9a-f]{10}$/;
 const CRITICAL_PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-DxswoVzz.js",
+  "./assets/index-vhgvjYN6.js",
   "./assets/index-GiHbXGuz.css"
 ];
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-DxswoVzz.js",
+  "./assets/index-vhgvjYN6.js",
   "./assets/index-GiHbXGuz.css",
   "./manifest.json",
   "./favicon.svg",
@@ -427,20 +427,28 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-async function getVerifiedCachedShell(cache, request) {
-  const candidates = [request, './index.html', './'];
-  for (const key of candidates) {
-    const hit = await cache.match(key);
-    if (!hit || hit.status !== 200) continue;
-    const ct = hit.headers.get('content-type') || '';
-    if (!ct.toLowerCase().includes('text/html')) continue;
-    const body = await hit.clone().text().catch(() => '');
-    if (validateNavigationHtml(body).valid) {
-      return hit;
-    }
-    // Purge poisoned entry if discovered in cache
-    await cache.delete(key).catch(() => {});
+async function isVerifiedHtmlResponse(cache, key, hit) {
+  if (!hit || hit.status !== 200) return false;
+  const ct = hit.headers.get('content-type') || '';
+  if (!ct.toLowerCase().includes('text/html')) return false;
+  const body = await hit.clone().text().catch(() => '');
+  if (validateNavigationHtml(body).valid) {
+    return true;
   }
+  await cache.delete(key).catch(() => {});
+  return false;
+}
+
+async function getVerifiedCachedShell(cache, request) {
+  const reqMatch = await cache.match(request);
+  if (await isVerifiedHtmlResponse(cache, request, reqMatch)) return reqMatch;
+
+  const indexMatch = await cache.match('./index.html');
+  if (await isVerifiedHtmlResponse(cache, './index.html', indexMatch)) return indexMatch;
+
+  const rootMatch = await cache.match('./');
+  if (await isVerifiedHtmlResponse(cache, './', rootMatch)) return rootMatch;
+
   return null;
 }
 

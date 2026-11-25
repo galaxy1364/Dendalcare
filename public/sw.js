@@ -423,20 +423,28 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-async function getVerifiedCachedShell(cache, request) {
-  const candidates = [request, './index.html', './'];
-  for (const key of candidates) {
-    const hit = await cache.match(key);
-    if (!hit || hit.status !== 200) continue;
-    const ct = hit.headers.get('content-type') || '';
-    if (!ct.toLowerCase().includes('text/html')) continue;
-    const body = await hit.clone().text().catch(() => '');
-    if (validateNavigationHtml(body).valid) {
-      return hit;
-    }
-    // Purge poisoned entry if discovered in cache
-    await cache.delete(key).catch(() => {});
+async function isVerifiedHtmlResponse(cache, key, hit) {
+  if (!hit || hit.status !== 200) return false;
+  const ct = hit.headers.get('content-type') || '';
+  if (!ct.toLowerCase().includes('text/html')) return false;
+  const body = await hit.clone().text().catch(() => '');
+  if (validateNavigationHtml(body).valid) {
+    return true;
   }
+  await cache.delete(key).catch(() => {});
+  return false;
+}
+
+async function getVerifiedCachedShell(cache, request) {
+  const reqMatch = await cache.match(request);
+  if (await isVerifiedHtmlResponse(cache, request, reqMatch)) return reqMatch;
+
+  const indexMatch = await cache.match('./index.html');
+  if (await isVerifiedHtmlResponse(cache, './index.html', indexMatch)) return indexMatch;
+
+  const rootMatch = await cache.match('./');
+  if (await isVerifiedHtmlResponse(cache, './', rootMatch)) return rootMatch;
+
   return null;
 }
 

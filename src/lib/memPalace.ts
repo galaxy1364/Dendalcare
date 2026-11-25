@@ -324,6 +324,24 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'کمینه‌سازی داده در پوسته سراسری (حذف national_id، diagnosis و treatment_plan از Realtime Shell Projections) همراه با تست‌های معماری V10-ARCH-01 تا V10-ARCH-04',
     ],
   },
+  {
+    id: 'milestone-13',
+    traceId: 'TRC-MINA-V11-DB-9013-M',
+    phaseNumber: 13,
+    title: 'پایه یکپارچه دیتابیس V11 (Supabase npzcweiphmyhtzxxnlov)، مهاجرت کامل از دیتابیس خالی و ایزوله‌سازی پروژه آفلاین',
+    titleEn: 'V11 Unified Database Foundation, Repeatable Empty-DB PostgreSQL Schema, Strict RLS/Triggers & Project-Namespaced Offline Storage',
+    description: 'انتقال انحصاری به پروژه جدید Supabase (npzcweiphmyhtzxxnlov) و حذف کامل ارجاعات پروژه قدیمی، ساخت اسکیما و مهاجرت تکرارپذیر ۲۰ جدول بالینی/مالی + کنترل‌پلین چندشعبه‌ای از دیتابیس خالی، رفع ناهمخوانی جدول patients در سطح دیتابیس، اعمال قفل قیمت و عضویت سمت سرور، مخزن خصوصی پیوست‌های بالینی و تفکیک نام‌فضای IndexedDB Vault و صف آفلاین بر اساس شناسه پروژه بک‌اند.',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/05',
+    checksum: 'm110v11db9013',
+    deliverables: [
+      'قطع کامل وابستگی به پروژه قدیمی و اتصال انحصاری به npzcweiphmyhtzxxnlov با کلید عمومی sb_publishable_* و اعتبارسنجی config fail-closed',
+      'مهاجرت تکرارپذیر از دیتابیس خالی (20261124000000 و 20261128000000) برای هر ۲۰ جدول کلینیک + tenants/branches/clinic_memberships/clinical_audit_events و رفع ناهمخوانی جدول patients بدون داده جعلی',
+      'لغو دسترسی anon/PUBLIC، تریگرهای سمت سرور app_stamp_verified_scope و app_enforce_financial_price_lock، باکت خصوصی clinical-attachments و RPC بررسی سلامت get_v11_schema_health',
+      'نام‌گذاری IndexedDB Vault، AAD رمزنگاری AES-GCM، صف آفلاین، کش محلی و نشست شعبه بر اساس SUPABASE_PROJECT_REF با مسدودسازی کامل بازپخش بین‌دیتابیسی',
+    ],
+  },
 ]);
 
 export interface ModuleBenchmarkPhase {

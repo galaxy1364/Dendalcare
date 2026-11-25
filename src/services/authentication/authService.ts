@@ -1,4 +1,4 @@
-import { rawSupabase } from '@/lib/supabaseCore';
+import { rawSupabase, getBackendNamespaceKey } from '@/lib/supabaseCore';
 import { purgeClinicalLocalStorageCaches } from '@/services/supabase/scopedCache';
 import { clearAllSessionVaultKeys, clearVaultMirrorsForScope } from '@/lib/dataVault';
 import { disconnectAllRealtimeChannels } from '@/services/realtime/realtimeHub';
@@ -14,7 +14,7 @@ export const CLINIC_BRANCHES: ClinicBranch[] = [
   { id: 'north', name: 'شعبه تخصصی ایمپلنت', city: 'تهران' },
 ];
 
-export const ACTIVE_BRANCH_KEY = 'minadental_active_branch_v1';
+export const ACTIVE_BRANCH_KEY = getBackendNamespaceKey('minadental_active_branch_v1');
 export const ACTIVE_TENANT_ID = 'minadental_clinic';
 
 export type AuthStatus = 'authenticated' | 'unauthenticated' | 'unauthorized';
@@ -142,16 +142,43 @@ export async function getVerifiedSupabaseSession(): Promise<VerifiedSessionState
       return unauthenticatedFallback;
     }
     const user = result.data.session.user;
-    // Security: ONLY trust server-signed app_metadata (NEVER client-writable user_metadata)
-    const roleClaim = (user.app_metadata?.clinic_role as string | undefined) || null;
+    // Security: ONLY trust server-authoritative clinic_memberships and server-signed app_metadata
+    // (NEVER client-writable user_metadata or localStorage roles)
+    let resolvedRole = (user.app_metadata?.clinic_role as string | undefined) || null;
+    let resolvedTenant = (user.app_metadata?.tenant_id as string | undefined) || ACTIVE_TENANT_ID;
+    let resolvedBranch = branchId;
+
+    try {
+      const { data: memberships, error: memErr } = await rawSupabase
+        .from('clinic_memberships')
+        .select('tenant_id,branch_id,role,all_branches')
+        .eq('user_id', user.id)
+        .eq('active', true);
+
+      if (!memErr && Array.isArray(memberships) && memberships.length > 0) {
+        const matched =
+          memberships.find((m: any) => m.branch_id === branchId) ||
+          memberships.find((m: any) => m.role === 'manager' && m.all_branches === true) ||
+          memberships[0];
+        if (matched?.role) {
+          resolvedRole = String(matched.role);
+          if (matched.tenant_id) resolvedTenant = String(matched.tenant_id);
+          if (matched.branch_id && !(matched.role === 'manager' && matched.all_branches)) {
+            resolvedBranch = String(matched.branch_id);
+          }
+        }
+      }
+    } catch {
+      // Keep app_metadata-derived role if clinic_memberships is not yet migrated or unreachable
+    }
 
     return {
       status: 'authenticated',
       supabaseUserId: user.id,
       supabaseEmail: user.email ?? null,
-      serverVerifiedRole: roleClaim,
-      tenantId: ACTIVE_TENANT_ID,
-      branchId,
+      serverVerifiedRole: resolvedRole,
+      tenantId: resolvedTenant,
+      branchId: resolvedBranch,
     };
   } catch {
     return unauthenticatedFallback;

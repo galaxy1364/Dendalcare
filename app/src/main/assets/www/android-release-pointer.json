@@ -2,10 +2,10 @@
   "schemaVersion": 2,
   "channel": "stable",
   "platform": "android",
-  "currentReleaseId": "v4.9.6-43931127ef",
+  "currentReleaseId": "v4.9.6-e5b0cfca23",
   "releaseSequence": 99,
-  "manifestUrl": "./releases/v4.9.6-43931127ef/release-manifest.json",
-  "updatedAt": "2026-11-25T19:00:46.921Z",
+  "manifestUrl": "./releases/v4.9.6-e5b0cfca23/release-manifest.json",
+  "updatedAt": "2026-11-25T20:52:12.742Z",
   "revokedReleaseIds": [],
   "minSupportedSequence": 1,
   "storeUrl": null

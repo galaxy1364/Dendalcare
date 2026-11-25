@@ -5,7 +5,10 @@
  * - Production builds NEVER fall back to demo/seed data.
  */
 
+import { SUPABASE_PROJECT_REF } from '@/lib/supabaseCore';
+
 export interface CacheScope {
+  projectRef?: string;
   tenantId: string;
   branchId: string;
   userId: string;
@@ -36,11 +39,12 @@ export const SENSITIVE_CLINICAL_TABLES = new Set<string>([
 const CACHE_PREFIX = 'md_scoped_v1';
 
 export function getScopedCacheKey(scope: CacheScope): string {
+  const projectRef = (scope.projectRef || SUPABASE_PROJECT_REF).trim();
   const filterKey =
     scope.filter && scope.filter.value
       ? `${scope.filter.column}:${scope.filter.value}`
       : 'all';
-  return `${CACHE_PREFIX}__t_${scope.tenantId || 'default'}__b_${scope.branchId || 'main'}__u_${scope.userId || 'anon'}__tbl_${scope.table}__f_${filterKey}`;
+  return `${CACHE_PREFIX}__p_${projectRef}__t_${scope.tenantId || 'default'}__b_${scope.branchId || 'main'}__u_${scope.userId || 'anon'}__tbl_${scope.table}__f_${filterKey}`;
 }
 
 export function isSensitiveTable(table: string): boolean {
@@ -111,7 +115,7 @@ export function purgeClinicalLocalStorageCaches(opts?: { userId?: string; branch
       if (!k) continue;
       if (k.startsWith('dental_cache_')) {
         keysToRemove.push(k);
-      } else if (k.startsWith(CACHE_PREFIX)) {
+      } else if (k.startsWith(`${CACHE_PREFIX}__p_${SUPABASE_PROJECT_REF}__`)) {
         if (!opts || (opts.userId && k.includes(`__u_${opts.userId}__`)) || (opts.branchId && k.includes(`__b_${opts.branchId}__`))) {
           keysToRemove.push(k);
         }

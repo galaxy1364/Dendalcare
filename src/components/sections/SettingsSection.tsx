@@ -1488,16 +1488,15 @@ function DiagnosticsPanel({ onOpenInstallModal }: { onOpenInstallModal: () => vo
   const [clearingCache, setClearingCache] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-  // Send single ping to health endpoint
+  // Send single ping to health endpoint (uses V11 publishable apikey; never sends non-JWT publishable key as Bearer token)
   const sendSinglePing = useCallback(async (): Promise<{ ok: boolean; latency: number; status: number | null }> => {
-    const healthEndpoint = `${supabaseUrl}/rest/v1/clinic_settings?select=id&limit=1`;
+    const healthEndpoint = `${supabaseUrl}/auth/v1/health`;
     const t0 = performance.now();
     try {
       const response = await fetch(healthEndpoint, {
         method: 'GET',
         headers: {
           apikey: supabaseAnonKey,
-          Authorization: `Bearer ${supabaseAnonKey}`,
           'Cache-Control': 'no-cache',
         },
         cache: 'no-store',

@@ -103,7 +103,8 @@ function isUnauthorizedResponse(err: TableRequestError | null): boolean {
 }
 
 /**
- * FIX 02: Detect missing required schema columns (PostgreSQL 42703 / PostgREST PGRST204).
+ * FIX 02 & V11: Detect missing required schema columns or unmigrated tables
+ * (PostgreSQL 42703 / 42P01, PostgREST PGRST204 / PGRST205).
  * We NEVER strip `tenant_id` / `branch_id` or fall back to unscoped queries.
  */
 export function isSchemaMigrationRequiredError(err: TableRequestError | null): boolean {
@@ -112,8 +113,12 @@ export function isSchemaMigrationRequiredError(err: TableRequestError | null): b
   const msg = String(err.message || '').toLowerCase();
   return (
     code === '42703' ||
+    code === '42P01' ||
     code === 'PGRST204' ||
-    (msg.includes('column') && msg.includes('does not exist'))
+    code === 'PGRST205' ||
+    (msg.includes('column') && msg.includes('does not exist')) ||
+    (msg.includes('relation') && msg.includes('does not exist')) ||
+    msg.includes('could not find the table')
   );
 }
 

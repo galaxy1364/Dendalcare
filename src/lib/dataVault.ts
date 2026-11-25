@@ -18,7 +18,11 @@
  * 6. Fail-closed tenant & branch scope validation on all reads, writes, and archive/snapshot restores.
  */
 
-import { rawSupabase as supabase, type TableName } from '@/lib/supabaseCore';
+import {
+  rawSupabase as supabase,
+  SUPABASE_PROJECT_REF,
+  type TableName,
+} from '@/lib/supabaseCore';
 
 export const ALL_CLINIC_TABLES: TableName[] = [
   'patients',
@@ -80,13 +84,16 @@ export interface ArchivedRecordEntry {
 }
 
 export interface VaultMirrorScope {
+  projectRef?: string;
   tenantId?: string;
   branchId?: string;
   userId?: string;
   sessionToken?: string;
 }
 
-export type StrictVaultScope = Required<Pick<VaultMirrorScope, 'tenantId' | 'branchId' | 'userId'>>;
+export type StrictVaultScope = Required<Pick<VaultMirrorScope, 'tenantId' | 'branchId' | 'userId'>> & {
+  projectRef?: string;
+};
 
 export interface EncryptedVaultBlob {
   version: typeof VAULT_CRYPTO_VERSION;
@@ -127,13 +134,15 @@ export interface VaultLoadResult<T> {
 }
 
 export function getVaultMirrorKey(table: TableName, scope?: VaultMirrorScope): string | null {
+  const explicitProjectRef = scope?.projectRef?.trim();
   const tenantId = scope?.tenantId?.trim();
   const branchId = scope?.branchId?.trim();
   const userId = scope?.userId?.trim();
   if (!tenantId || !branchId || !userId) {
     return null;
   }
-  return `${tenantId}::${branchId}::${userId}::${table}`;
+  const baseKey = `${tenantId}::${branchId}::${userId}::${table}`;
+  return explicitProjectRef ? `${explicitProjectRef}::${baseKey}` : baseKey;
 }
 
 export interface VaultStats {
@@ -159,11 +168,13 @@ export interface FullClinicSnapshot {
   deletedArchive: ArchivedRecordEntry[];
 }
 
-const IDB_NAME = 'MinaDentalZeroDeleteVault_v1';
+// V11 Backend-Project-Namespaced IndexedDB Vault (preserves legacy DB untouched until explicit cleanup)
+const IDB_NAME = `MinaDentalZeroDeleteVault_v1__${SUPABASE_PROJECT_REF}`;
+export const VAULT_IDB_NAME = IDB_NAME;
 const IDB_VERSION = 4;
 const STORE_MIRRORS = 'table_mirrors';
 const STORE_ARCHIVE = 'deleted_archive';
-const LS_ARCHIVE_FALLBACK = 'minadental_zero_delete_archive_v1';
+const LS_ARCHIVE_FALLBACK = `minadental_zero_delete_archive_v1__${SUPABASE_PROJECT_REF}`;
 
 // In-memory non-extractable session-bound AES-GCM 256-bit keys (wiped immediately on user switch / logout / reload)
 const sessionCryptoKeys = new Map<string, CryptoKey>();
@@ -215,7 +226,8 @@ function isWebCryptoAvailable(): boolean {
 }
 
 function buildVaultAadString(scope: StrictVaultScope, table: string): string {
-  return `v${VAULT_CRYPTO_VERSION}|${scope.tenantId.trim()}|${scope.branchId.trim()}|${scope.userId.trim()}|${table}`;
+  const projectRef = (scope.projectRef || SUPABASE_PROJECT_REF).trim();
+  return `v${VAULT_CRYPTO_VERSION}|${projectRef}|${scope.tenantId.trim()}|${scope.branchId.trim()}|${scope.userId.trim()}|${table}`;
 }
 
 async function getOrCreateSessionKey(
@@ -223,11 +235,12 @@ async function getOrCreateSessionKey(
   createIfMissing = true
 ): Promise<CryptoKey | null> {
   if (!isWebCryptoAvailable()) return null;
-  if (!scope.tenantId?.trim() || !scope.branchId?.trim() || !scope.userId?.trim()) return null;
+  const projectRef = (scope.projectRef || SUPABASE_PROJECT_REF).trim();
+  if (!projectRef || !scope.tenantId?.trim() || !scope.branchId?.trim() || !scope.userId?.trim()) return null;
   if (!activeSessionEpoch) {
     activeSessionEpoch = generateRandomHex(16);
   }
-  const keyId = `${activeSessionEpoch}::${scope.tenantId.trim()}::${scope.branchId.trim()}::${scope.userId.trim()}`;
+  const keyId = `${activeSessionEpoch}::${projectRef}::${scope.tenantId.trim()}::${scope.branchId.trim()}::${scope.userId.trim()}`;
   const existing = sessionCryptoKeys.get(keyId);
   if (existing) return existing;
   if (!createIfMissing) return null;

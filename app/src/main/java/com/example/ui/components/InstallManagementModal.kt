@@ -83,7 +83,7 @@ fun InstallManagementModal(
             apiCheckStatus = null
             val result = withContext(Dispatchers.IO) {
                 try {
-                    val url = URL("https://civqyrhmrjcgmmtwkkmi.supabase.co/rest/v1/")
+                    val url = URL("https://npzcweiphmyhtzxxnlov.supabase.co/auth/v1/health")
                     val conn = url.openConnection() as HttpURLConnection
                     conn.connectTimeout = 4000
                     conn.readTimeout = 4000
@@ -244,7 +244,7 @@ fun InstallManagementModal(
 
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "آدرس سرور: https://civqyrhmrjcgmmtwkkmi.supabase.co\nشامل جدول‌های بیماران، نوبت‌ها، طرح درمان، پالم چارت، حسابداری و حقوق پرسنل با Realtime همگام.",
+                        text = "آدرس سرور: https://npzcweiphmyhtzxxnlov.supabase.co\nشامل جدول‌های بیماران، نوبت‌ها، طرح درمان، پالم چارت، حسابداری و حقوق پرسنل با Realtime همگام.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

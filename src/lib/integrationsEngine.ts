@@ -10,7 +10,12 @@
  */
 
 import { CURRENT_APP_VERSION, CURRENT_APP_BUILD } from '@/lib/cloudSyncEngine';
-import { supabase, supabaseUrl } from '@/lib/supabase';
+import {
+  supabase,
+  supabaseUrl,
+  SUPABASE_PROJECT_REF,
+  getBackendNamespaceKey,
+} from '@/lib/supabase';
 import { ALL_CLINIC_TABLES, collectCompleteClinicSnapshot } from '@/lib/dataVault';
 import { processOfflineQueue } from '@/lib/offlineQueue';
 
@@ -79,7 +84,7 @@ export interface GoogleDriveConfig {
   lastTotalRecords?: number;
 }
 
-const STORAGE_KEY_CLOUDSQL = 'minadental_cloudsql_config_v1';
+const STORAGE_KEY_CLOUDSQL = getBackendNamespaceKey('minadental_cloudsql_config_v1');
 const STORAGE_KEY_GITHUB = 'minadental_github_config';
 const STORAGE_KEY_SMS = 'minadental_sms_config';
 const STORAGE_KEY_CALENDAR = 'minadental_calendar_config';
@@ -91,14 +96,23 @@ export function loadCloudSqlConfig(): CloudSqlConfig {
     enabled: true,
     connected: true,
     endpointUrl: supabaseUrl,
-    projectRef: 'civqyrhmrjcgmmtwkkmi',
+    projectRef: SUPABASE_PROJECT_REF,
     realtimeEnabled: true,
     autoMirrorVault: true,
     tablesCount: ALL_CLINIC_TABLES.length,
   };
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CLOUDSQL);
-    if (raw) return { ...defaultCfg, ...JSON.parse(raw), enabled: true, connected: true };
+    if (raw) {
+      return {
+        ...defaultCfg,
+        ...JSON.parse(raw),
+        endpointUrl: supabaseUrl,
+        projectRef: SUPABASE_PROJECT_REF,
+        enabled: true,
+        connected: true,
+      };
+    }
   } catch {
     // ignore
   }

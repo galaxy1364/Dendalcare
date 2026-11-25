@@ -13,6 +13,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TableName } from '@/lib/supabaseCore';
 import { archiveDeletedRecord, loadTableMirrorFromVault } from '@/lib/dataVault';
 import { enqueueOfflineMutation } from '@/lib/offlineQueue';
+import { ACTIVE_TENANT_ID, getActiveBranchId } from '@/services/authentication/authService';
 
 export const CRITICAL_DELETE_PROTECTED_TABLES = new Set<string>([
   'patients',
@@ -371,6 +372,20 @@ function wrapMutationBuilder(
   return proxy;
 }
 
+function stampScopeOnWritePayload(values: any): any {
+  const activeTenant = ACTIVE_TENANT_ID;
+  const activeBranch = getActiveBranchId();
+  const stampRow = (row: any) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+    return {
+      ...row,
+      tenant_id: row.tenant_id ?? activeTenant,
+      branch_id: row.branch_id ?? activeBranch,
+    };
+  };
+  return Array.isArray(values) ? values.map(stampRow) : stampRow(values);
+}
+
 export function createGuardedSupabaseClient(rawClient: SupabaseClient): SupabaseClient {
   return new Proxy(rawClient, {
     get(target, prop, receiver) {
@@ -380,16 +395,20 @@ export function createGuardedSupabaseClient(rawClient: SupabaseClient): Supabase
           return new Proxy(tableBuilder, {
             get(tTarget, tProp, tReceiver) {
               if (tProp === 'insert') {
-                return (values: any, options?: any) =>
-                  wrapMutationBuilder(rawClient, tTarget.insert(values, options), table, 'INSERT', values);
+                return (values: any, options?: any) => {
+                  const scoped = stampScopeOnWritePayload(values);
+                  return wrapMutationBuilder(rawClient, tTarget.insert(scoped, options), table, 'INSERT', scoped);
+                };
               }
               if (tProp === 'update') {
                 return (values: any, options?: any) =>
                   wrapMutationBuilder(rawClient, tTarget.update(values, options), table, 'UPDATE', values);
               }
               if (tProp === 'upsert') {
-                return (values: any, options?: any) =>
-                  wrapMutationBuilder(rawClient, tTarget.upsert(values, options), table, 'UPSERT', values);
+                return (values: any, options?: any) => {
+                  const scoped = stampScopeOnWritePayload(values);
+                  return wrapMutationBuilder(rawClient, tTarget.upsert(scoped, options), table, 'UPSERT', scoped);
+                };
               }
               if (tProp === 'delete') {
                 return (options?: any) =>
