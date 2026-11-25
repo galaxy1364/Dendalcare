@@ -76,6 +76,9 @@ export type Treatment = {
   other_cost: number;
   discount: number;
   notes: string | null;
+  performed_at?: string | null;
+  completed_at?: string | null;
+  cancelled_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -108,6 +111,9 @@ export type Payment = {
   payment_date: string;
   description: string | null;
   status: string;
+  refunded_at?: string | null;
+  voided_at?: string | null;
+  reversed_payment_id?: string | null;
   created_at: string;
   updated_at: string;
 };

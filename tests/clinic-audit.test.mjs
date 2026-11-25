@@ -1065,8 +1065,8 @@ describe('Phase 13 [TRC-MINA-SECOND-AUDIT-9013-M]: Second Audit Remediation (QBa
     const seedSrc = read('src/lib/seedClinicData.ts');
 
     assert.ok(rlsSql.includes('ENABLE ROW LEVEL SECURITY') && rlsSql.includes('tenant_id') && rlsSql.includes('branch_id') && rlsSql.includes('payment_id'), 'SQL migration must enforce tenant_id, branch_id, payment_id, and RLS policies');
-    assert.ok(vaultSrc.includes('IDB_VERSION = 3') && vaultSrc.includes('export function getVaultMirrorKey') && vaultSrc.includes('scopeKey') && vaultSrc.includes('encryptVaultPayload'), 'dataVault.ts must isolate and AES-GCM encrypt IndexedDB mirrors with composite tenant::branch::user::table keys (v3)');
-    assert.ok(rtTableSrc.includes('saveTableMirrorToVault(table,') && rtTableSrc.includes('loadTableMirrorFromVault<T>(table, vaultScope)'), 'useRealtimeTable must pass tenant/branch/user vaultScope on all Vault reads/writes');
+    assert.ok(/IDB_VERSION\s*=\s*[34]/.test(vaultSrc) && vaultSrc.includes('export function getVaultMirrorKey') && vaultSrc.includes('scopeKey') && vaultSrc.includes('encryptVaultPayload'), 'dataVault.ts must isolate and AES-GCM encrypt IndexedDB mirrors with composite tenant::branch::user::table keys (v3/v4)');
+    assert.ok(rtTableSrc.includes('saveTableMirrorToVault(table,') && rtTableSrc.includes('loadTableMirrorFromVaultWithStatus<T>(table, vaultScope)'), 'useRealtimeTable must pass tenant/branch/user vaultScope on all Vault reads/writes');
     assert.ok(providersSrc.includes('resolveEffectiveRole({') && providersSrc.includes('userRole={effectiveRole}') && routerSrc.includes('canAccessRoute(effectiveRole'), 'AppProviders and AppRouter must wire fail-closed effectiveRole');
     assert.ok(accessSrc.includes("if (params.sessionStatus === 'authenticated') {") && accessSrc.includes("if (!serverRole) return 'secretary';"), 'resolveEffectiveRole must fail closed to secretary when authenticated without server role claim');
     assert.ok(metricsSrc.includes('if (!row.branch_id) {\n    return false;\n  }'), 'matchesTenantAndBranch must strictly reject null/missing branch_id rows');

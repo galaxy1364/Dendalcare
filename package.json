@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "tsc --noEmit -p tsconfig.app.json",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "test": "node --test tests/clinic-audit.test.mjs && node tests/run-production-tests.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

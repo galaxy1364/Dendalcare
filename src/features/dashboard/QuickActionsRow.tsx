@@ -120,7 +120,7 @@ export function QuickActionsRow({ userRole, onNavigate }: QuickActionsRowProps) 
             >
               {renderQuickActionIcon(item.id, item.accent)}
             </span>
-            <span className="text-[10.5px] font-bold text-[#14283B] dark:text-[#F1F5F9] leading-tight truncate max-w-full">
+            <span className="text-[12px] font-bold text-[#14283B] dark:text-[#F1F5F9] leading-tight truncate max-w-full">
               {item.label}
             </span>
           </button>

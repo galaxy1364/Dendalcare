@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarPlus, CheckCircle2, FilePlus2, Stethoscope } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, CheckCircle2, FilePlus2, Stethoscope } from 'lucide-react';
 import { supabase, type Patient } from '@/lib/supabase';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { getMutationOutcome } from '@/lib/supabaseGuardian';
@@ -12,11 +12,65 @@ import { Button, Field, Input, Select, Textarea } from '@/components/ui/Form';
 import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
 
 /**
- * FIX 05 — Dedicated Full-Screen Operational Form Routes:
+ * Shared inline confirmation bar preventing accidental loss of unsaved clinical drafts.
+ */
+function UnsavedDraftConfirmBar({
+  onKeepDraftAndLeave,
+  onDiscardAndLeave,
+  onContinueEditing,
+}: {
+  onKeepDraftAndLeave: () => void;
+  onDiscardAndLeave: () => void;
+  onContinueEditing: () => void;
+}) {
+  return (
+    <div
+      role="alertdialog"
+      aria-label="تایید خروج از فرم با تغییرات ذخیره‌نشده"
+      data-testid="form_leave_confirm"
+      className="rounded-[16px] p-3 bg-[#FFFBEB] dark:bg-[#291E0B] border border-[#FDE0A6] dark:border-[#78350F] space-y-2"
+    >
+      <div className="flex items-center gap-2 text-xs font-black text-[#92510C] dark:text-[#FCD34D]">
+        <AlertTriangle size={15} className="shrink-0" />
+        <span>اطلاعات واردشده هنوز در سرور ثبت نشده‌اند. مایل به خروج هستید؟</span>
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          type="button"
+          data-testid="form_leave_keep_draft"
+          onClick={onKeepDraftAndLeave}
+          className="min-h-[44px] px-3 rounded-[10px] bg-white dark:bg-[#11202E] border border-[#FDE0A6] text-[#92510C] dark:text-[#FCD34D] text-xs font-bold"
+        >
+          ذخیره پیش‌نویس و بازگشت
+        </button>
+        <button
+          type="button"
+          data-testid="form_leave_discard"
+          onClick={onDiscardAndLeave}
+          className="min-h-[44px] px-3 rounded-[10px] bg-[#FFF1F2] dark:bg-[#3A1622] border border-[#FECDD3] text-[#AD293C] dark:text-[#FDA4AF] text-xs font-bold"
+        >
+          پاک کردن و خروج
+        </button>
+        <button
+          type="button"
+          data-testid="form_leave_continue"
+          onClick={onContinueEditing}
+          className="min-h-[44px] px-3 rounded-[10px] bg-[#087C76] text-white text-xs font-bold"
+        >
+          ادامه ویرایش
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * V4 Dedicated Full-Screen Operational Form Routes:
  * - PatientFormPage ('patient_form')
  * - AppointmentFormPage ('appointment_form')
  * - TreatmentFormPage ('treatment_form')
- * All mutations stamp active tenant/branch context and fire HapticEngine.success() ONLY on server confirmation.
+ * All mutations stamp active tenant/branch context, stamp `performed_at`/`completed_at` on completed treatments,
+ * confirm before leaving dirty forms, and fire HapticEngine.success() ONLY on server confirmation.
  */
 
 export function PatientFormPage() {
@@ -31,10 +85,24 @@ export function PatientFormPage() {
   const [notes, setNotes] = useState(draft?.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
+  const isDirty = Boolean(
+    firstName.trim() || lastName.trim() || phone.trim() || nationalId.trim() || fileNo.trim() || notes.trim()
+  );
 
   useEffect(() => {
     saveRouteDraft('patient_form', { firstName, lastName, phone, nationalId, fileNo, notes });
   }, [firstName, lastName, phone, nationalId, fileNo, notes]);
+
+  const handleRequestCancel = () => {
+    if (isDirty) {
+      HapticEngine.warning();
+      setShowLeaveConfirm(true);
+      return;
+    }
+    goBack();
+  };
 
   const handleSave = async () => {
     if (!firstName.trim() || !lastName.trim()) {
@@ -82,7 +150,7 @@ export function PatientFormPage() {
           </div>
           <div>
             <h2 className="text-sm font-black text-[#14283B] dark:text-[#F1F5F9]">ثبت پرونده بیمار جدید</h2>
-            <p className="text-[11px] font-medium text-[#526779] dark:text-[#9FB1C1]">صفحه عملیاتی مستقل با همگام‌سازی فوری شعبه</p>
+            <p className="text-xs font-medium text-[#526779] dark:text-[#9FB1C1]">صفحه عملیاتی مستقل با همگام‌سازی فوری شعبه</p>
           </div>
         </div>
 
@@ -114,15 +182,26 @@ export function PatientFormPage() {
           </p>
         )}
 
+        {showLeaveConfirm && (
+          <UnsavedDraftConfirmBar
+            onKeepDraftAndLeave={() => goBack()}
+            onDiscardAndLeave={() => {
+              clearRouteDraft('patient_form');
+              goBack();
+            }}
+            onContinueEditing={() => setShowLeaveConfirm(false)}
+          />
+        )}
+
         <div className="flex items-center gap-2 pt-1">
-          <Button color="#176B52" disabled={saving} onClick={handleSave} className="flex-1">
+          <Button color="#176B52" disabled={saving} onClick={handleSave} className="flex-1 min-h-[48px]">
             <CheckCircle2 size={15} />
             {saving ? 'در حال ثبت...' : 'ثبت پرونده بیمار'}
           </Button>
           <button
             type="button"
-            onClick={goBack}
-            className="min-h-[44px] px-4 rounded-[12px] bg-[#EEF3F7] dark:bg-[#162738] text-[#14283B] dark:text-[#F1F5F9] text-xs font-bold"
+            onClick={handleRequestCancel}
+            className="min-h-[48px] px-4 rounded-[12px] bg-[#EEF3F7] dark:bg-[#162738] text-[#14283B] dark:text-[#F1F5F9] text-xs font-bold"
           >
             انصراف
           </button>
@@ -147,10 +226,22 @@ export function AppointmentFormPage() {
   const [notes, setNotes] = useState(draft?.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
+  const isDirty = Boolean(patientId || notes.trim() || title.trim() !== 'ویزیت و معاینه تخصصی');
 
   useEffect(() => {
     saveRouteDraft('appointment_form', { patientId, title, date, time, duration, type, notes });
   }, [patientId, title, date, time, duration, type, notes]);
+
+  const handleRequestCancel = () => {
+    if (isDirty) {
+      HapticEngine.warning();
+      setShowLeaveConfirm(true);
+      return;
+    }
+    goBack();
+  };
 
   const handleSave = async () => {
     if (!title.trim() || !date) {
@@ -199,7 +290,7 @@ export function AppointmentFormPage() {
           </div>
           <div>
             <h2 className="text-sm font-black text-[#14283B] dark:text-[#F1F5F9]">ثبت نوبت جدید</h2>
-            <p className="text-[11px] font-medium text-[#526779] dark:text-[#9FB1C1]">زمان‌بندی مستقل با تقویم شمسی و ثبت آنی</p>
+            <p className="text-xs font-medium text-[#526779] dark:text-[#9FB1C1]">زمان‌بندی مستقل با تقویم شمسی و ثبت آنی</p>
           </div>
         </div>
 
@@ -257,15 +348,26 @@ export function AppointmentFormPage() {
           </p>
         )}
 
+        {showLeaveConfirm && (
+          <UnsavedDraftConfirmBar
+            onKeepDraftAndLeave={() => goBack()}
+            onDiscardAndLeave={() => {
+              clearRouteDraft('appointment_form');
+              goBack();
+            }}
+            onContinueEditing={() => setShowLeaveConfirm(false)}
+          />
+        )}
+
         <div className="flex items-center gap-2 pt-1">
-          <Button color="#92510C" disabled={saving} onClick={handleSave} className="flex-1">
+          <Button color="#92510C" disabled={saving} onClick={handleSave} className="flex-1 min-h-[48px]">
             <CheckCircle2 size={15} />
             {saving ? 'در حال ثبت...' : 'ثبت نوبت بیمار'}
           </Button>
           <button
             type="button"
-            onClick={goBack}
-            className="min-h-[44px] px-4 rounded-[12px] bg-[#EEF3F7] dark:bg-[#162738] text-[#14283B] dark:text-[#F1F5F9] text-xs font-bold"
+            onClick={handleRequestCancel}
+            className="min-h-[48px] px-4 rounded-[12px] bg-[#EEF3F7] dark:bg-[#162738] text-[#14283B] dark:text-[#F1F5F9] text-xs font-bold"
           >
             انصراف
           </button>
@@ -290,6 +392,11 @@ export function TreatmentFormPage() {
   const [status, setStatus] = useState(draft?.status ?? 'planned');
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
+  const isDirty = Boolean(
+    patientId || diagnosis.trim() || treatmentPlan.trim() || toothNumbers.trim() || totalCost.trim()
+  );
 
   useEffect(() => {
     saveRouteDraft('treatment_form', {
@@ -303,6 +410,15 @@ export function TreatmentFormPage() {
     });
   }, [patientId, diagnosis, treatmentPlan, toothNumbers, totalCost, discount, status]);
 
+  const handleRequestCancel = () => {
+    if (isDirty) {
+      HapticEngine.warning();
+      setShowLeaveConfirm(true);
+      return;
+    }
+    goBack();
+  };
+
   const handleSave = async () => {
     if (!treatmentPlan.trim()) {
       setErrorMsg('شرح طرح درمان الزامی است.');
@@ -311,6 +427,8 @@ export function TreatmentFormPage() {
     }
     setSaving(true);
     setErrorMsg(null);
+    const nowIso = new Date().toISOString();
+    const isCompleted = status === 'completed';
     const res = await supabase.from('treatments').insert({
       tenant_id: currentUser.tenantId || ACTIVE_TENANT_ID,
       branch_id: getActiveBranchId(),
@@ -318,14 +436,16 @@ export function TreatmentFormPage() {
       diagnosis: diagnosis.trim() || null,
       treatment_plan: treatmentPlan.trim(),
       tooth_numbers: toothNumbers.trim() || null,
-      total_cost: Math.max(0, Number(totalCost) || 0),
-      discount: Math.max(0, Number(discount) || 0),
+      total_cost: Math.max(0, Math.round(Number(totalCost) || 0)),
+      discount: Math.max(0, Math.round(Number(discount) || 0)),
       paid_amount: 0,
       doctor_cost: 0,
       lab_cost: 0,
       material_cost: 0,
       other_cost: 0,
       status,
+      performed_at: isCompleted ? nowIso : null,
+      completed_at: isCompleted ? nowIso : null,
     });
     setSaving(false);
     const outcome = getMutationOutcome(res);
@@ -354,7 +474,7 @@ export function TreatmentFormPage() {
           </div>
           <div>
             <h2 className="text-sm font-black text-[#14283B] dark:text-[#F1F5F9]">ثبت طرح درمان جدید</h2>
-            <p className="text-[11px] font-medium text-[#526779] dark:text-[#9FB1C1]">فرم مستقل بالینی با محاسبه تخفیف و همگام‌سازی فوری</p>
+            <p className="text-xs font-medium text-[#526779] dark:text-[#9FB1C1]">فرم مستقل بالینی با محاسبه تخفیف و همگام‌سازی فوری</p>
           </div>
         </div>
 
@@ -409,15 +529,26 @@ export function TreatmentFormPage() {
           </p>
         )}
 
+        {showLeaveConfirm && (
+          <UnsavedDraftConfirmBar
+            onKeepDraftAndLeave={() => goBack()}
+            onDiscardAndLeave={() => {
+              clearRouteDraft('treatment_form');
+              goBack();
+            }}
+            onContinueEditing={() => setShowLeaveConfirm(false)}
+          />
+        )}
+
         <div className="flex items-center gap-2 pt-1">
-          <Button color="#5B3CC4" disabled={saving} onClick={handleSave} className="flex-1">
+          <Button color="#5B3CC4" disabled={saving} onClick={handleSave} className="flex-1 min-h-[48px]">
             <CheckCircle2 size={15} />
             {saving ? 'در حال ثبت...' : 'ثبت طرح درمان'}
           </Button>
           <button
             type="button"
-            onClick={goBack}
-            className="min-h-[44px] px-4 rounded-[12px] bg-[#EEF3F7] dark:bg-[#162738] text-[#14283B] dark:text-[#F1F5F9] text-xs font-bold"
+            onClick={handleRequestCancel}
+            className="min-h-[48px] px-4 rounded-[12px] bg-[#EEF3F7] dark:bg-[#162738] text-[#14283B] dark:text-[#F1F5F9] text-xs font-bold"
           >
             انصراف
           </button>

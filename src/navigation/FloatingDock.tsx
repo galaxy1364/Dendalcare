@@ -85,7 +85,7 @@ export function FloatingDock({ active, onChange, onOpenServices }: FloatingDockP
                 }}
                 aria-label={shortLabel}
                 aria-current={isActive ? 'page' : undefined}
-                className={`min-h-[46px] rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${
+                className={`min-h-[48px] rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C76] ${
                   isActive
                     ? 'flex-[1.55] px-3 gap-1.5 shadow-sm'
                     : 'flex-1 px-1.5 gap-1'
@@ -116,7 +116,7 @@ export function FloatingDock({ active, onChange, onOpenServices }: FloatingDockP
                   className={`leading-none whitespace-nowrap transition-all ${
                     isActive
                       ? 'text-[12.5px] font-black'
-                      : 'text-[10.5px] font-bold opacity-85 dark:text-[#9FB1C1]'
+                      : 'text-[11.5px] font-bold opacity-90 dark:text-[#9FB1C1]'
                   }`}
                   style={isActive ? { color: tok.primaryDark } : undefined}
                 >
@@ -140,7 +140,7 @@ export function FloatingDock({ active, onChange, onOpenServices }: FloatingDockP
           }}
           aria-label="همه خدمات کلینیک"
           data-testid="dock_more_button"
-          className="w-[54px] h-[54px] rounded-full shrink-0 flex flex-col items-center justify-center transition-transform active:scale-92 bg-white dark:bg-[#11202E]"
+          className="w-[56px] h-[56px] rounded-full shrink-0 flex flex-col items-center justify-center transition-transform active:scale-92 bg-white dark:bg-[#11202E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C76]"
           style={{
             background: !isPrimaryActive
               ? activeToken.surfaceTintEnd
@@ -158,7 +158,7 @@ export function FloatingDock({ active, onChange, onOpenServices }: FloatingDockP
             primaryColor={!isPrimaryActive ? activeToken.primaryDark : '#142E43'}
             secondaryColor={!isPrimaryActive ? activeToken.primary : '#087C76'}
           />
-          <span className="text-[9.5px] font-extrabold mt-0.5 leading-none truncate max-w-[44px] dark:text-[#E2E8F0]">
+          <span className="text-[11px] font-extrabold mt-0.5 leading-none truncate max-w-[48px] dark:text-[#E2E8F0]">
             {!isPrimaryActive ? resolvedLabel : 'خدمات'}
           </span>
         </button>

@@ -16,7 +16,10 @@ import { SectionStatusBanner } from '@/components/shared/SectionStatusBanner';
 import { ModuleDuotoneIcon } from '@/design-system/icons/DentalDuotoneIcons';
 import { PlatformHapticAdapter } from '@/platform/haptics';
 import { canAccessRoute } from '@/services/permissions/accessControl';
-import { isGuaranteeCheck } from '@/features/dashboard/dashboard.metrics';
+import {
+  isGuaranteeCheck,
+  resolveTreatmentRealizationDate,
+} from '@/features/dashboard/dashboard.metrics';
 import { shiftGregorianDate, todayInClinicTz, toJalaliStr } from '@/lib/jalali';
 
 const fmt = (n: number) => Number(n || 0).toLocaleString('fa-IR');
@@ -53,9 +56,11 @@ export function ReportsPage() {
     const confirmedCount = dayAppts.filter(
       (a) => a.status === 'confirmed' || a.status === 'completed'
     ).length;
-    const dayCompletedTreatments = sources.treatments.filter(
-      (t) => t.status === 'completed' && ((t.updated_at || t.created_at || '').slice(0, 10) === activeHuddleIso)
-    );
+    const dayCompletedTreatments = sources.treatments.filter((t) => {
+      if (t.status !== 'completed') return false;
+      const realization = resolveTreatmentRealizationDate(t);
+      return Boolean(realization && realization.slice(0, 10) === activeHuddleIso);
+    });
     const dayCollected = status.financialDataComplete
       ? sources.payments
           .filter((p) => (p.payment_date || '').slice(0, 10) === activeHuddleIso)
@@ -249,9 +254,17 @@ export function ReportsPage() {
             </div>
           </div>
           {revenue.monthPlannedProduction !== null && revenue.monthPlannedProduction > 0 && (
-            <p className="text-[10px] font-semibold text-[#526779] dark:text-[#9FB1C1] pt-1">
+            <p className="text-xs font-semibold text-[#526779] dark:text-[#9FB1C1] pt-1">
               طرح‌های درمان در انتظار اجرا (خارج از سود تحقق‌یافته):{' '}
               <span className="font-bold tabular-nums">{fmt(revenue.monthPlannedProduction)} تومان</span>
+            </p>
+          )}
+          {revenue.unverifiedCompletionDateCount > 0 && (
+            <p
+              data-testid="reports_unverified_completion_notice"
+              className="text-xs font-bold text-[#92510C] dark:text-[#FCD34D] bg-[#FFFBEB] dark:bg-[#291E0B] border border-[#FDE0A6] dark:border-[#78350F] rounded-[12px] px-2.5 py-1.5"
+            >
+              {fmt(revenue.unverifiedCompletionDateCount)} درمان تکمیل‌شده بدون تاریخ انجام (performed_at/completed_at) از سود تعهدی کنار گذاشته شده است.
             </p>
           )}
         </div>
@@ -292,6 +305,12 @@ export function ReportsPage() {
               </strong>
             </div>
           </div>
+          {revenue.monthRefunded !== null && revenue.monthRefunded > 0 && (
+            <p className="text-xs font-semibold text-[#AD293C] dark:text-[#FDA4AF] pt-1">
+              استرداد/برگشت وجه ماه جاری (کسرشده از وصولی):{' '}
+              <span className="font-bold tabular-nums">{fmt(revenue.monthRefunded)} تومان</span>
+            </p>
+          )}
         </div>
       </div>
 

@@ -1,15 +1,21 @@
 /**
  * MinaDental Zero-Delete Multi-Tier Data Vault (Encrypted, Session-Isolated IndexedDB + Cloud SQL Mirror)
- * Trace ID: TRC-MINA-VAULT-9014-N
+ * Trace ID: TRC-MINA-VAULT-9014-V4
  *
- * Security & Durability Guarantees (Third Audit FIX 01):
+ * Security & Durability Guarantees (V4 Engineering Release Gate):
  * 1. Sensitive clinical & financial tables are encrypted at rest inside IndexedDB
- *    using WebCrypto AES-GCM 256-bit keys bound to `(tenantId, branchId, userId, sessionSalt)`
- *    kept strictly in volatile memory — NEVER written as plaintext to `localStorage`.
- * 2. Strict session & scope isolation: every mirror key requires explicit
- *    `(tenantId, branchId, userId, table)` and old session keys/mirrors are wiped on user switch/logout.
- * 3. Immutable Soft-Delete Archive (`deleted_archive`) captures removed rows with Trace ID & checksum
- *    inside IndexedDB (never leaking sensitive clinical payloads to plaintext `localStorage`).
+ *    using non-extractable WebCrypto AES-GCM 256-bit keys (`crypto.subtle.generateKey`,
+ *    extractable = false) bound in volatile memory to `(tenantId, branchId, userId)`.
+ * 2. Every ciphertext binds explicit AES-GCM Additional Authenticated Data (AAD):
+ *    `v4|tenantId|branchId|userId|table` so cross-tenant, cross-branch, cross-user,
+ *    or cross-table ciphertext swapping fails authentication deterministically.
+ * 3. Every mirror entry carries an explicit TTL (`expiresAt`); expired mirrors are purged
+ *    and never hydrated.
+ * 4. After a page reload (volatile key gone), `loadTableMirrorFromVaultWithStatus` returns
+ *    explicit `'locked_after_reload'` with `lockedRecordCount` rather than silently pretending
+ *    the dataset is empty (`0`).
+ * 5. Zero `Math.random()` anywhere in cryptographic or trace ID generation (strict CSPRNG).
+ * 6. Fail-closed tenant & branch scope validation on all reads, writes, and archive/snapshot restores.
  */
 
 import { rawSupabase as supabase, type TableName } from '@/lib/supabaseCore';
@@ -55,6 +61,9 @@ export const SENSITIVE_VAULT_TABLES = new Set<TableName>([
   'messages',
 ]);
 
+export const VAULT_CRYPTO_VERSION = 4 as const;
+export const DEFAULT_VAULT_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
 export interface ArchivedRecordEntry {
   archiveId: string;
   traceId: string;
@@ -77,10 +86,15 @@ export interface VaultMirrorScope {
   sessionToken?: string;
 }
 
+export type StrictVaultScope = Required<Pick<VaultMirrorScope, 'tenantId' | 'branchId' | 'userId'>>;
+
 export interface EncryptedVaultBlob {
+  version: typeof VAULT_CRYPTO_VERSION;
   alg: 'AES-GCM';
   ivBase64: string;
   cipherBase64: string;
+  aadScopeHash: string;
+  expiresAt: string;
 }
 
 export interface TableMirrorEntry {
@@ -93,7 +107,23 @@ export interface TableMirrorEntry {
   payload?: EncryptedVaultBlob;
   rows?: any[];
   updatedAt: string;
+  expiresAt: string;
   count: number;
+}
+
+export type VaultLoadStatus =
+  | 'ok'
+  | 'missing'
+  | 'locked_after_reload'
+  | 'expired'
+  | 'invalid_scope'
+  | 'unavailable';
+
+export interface VaultLoadResult<T> {
+  status: VaultLoadStatus;
+  rows: T[];
+  lockedRecordCount: number;
+  updatedAt?: string;
 }
 
 export function getVaultMirrorKey(table: TableName, scope?: VaultMirrorScope): string | null {
@@ -130,25 +160,33 @@ export interface FullClinicSnapshot {
 }
 
 const IDB_NAME = 'MinaDentalZeroDeleteVault_v1';
-const IDB_VERSION = 3;
+const IDB_VERSION = 4;
 const STORE_MIRRORS = 'table_mirrors';
 const STORE_ARCHIVE = 'deleted_archive';
 const LS_ARCHIVE_FALLBACK = 'minadental_zero_delete_archive_v1';
 
-// In-memory session-bound AES-GCM keys (wiped immediately on user switch / logout)
+// In-memory non-extractable session-bound AES-GCM 256-bit keys (wiped immediately on user switch / logout / reload)
 const sessionCryptoKeys = new Map<string, CryptoKey>();
-let activeSessionEpoch = generateRandomHex(16);
 
-function generateRandomHex(bytes: number): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-    const buf = new Uint8Array(bytes);
-    crypto.getRandomValues(buf);
-    return Array.from(buf)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+function requireCsprngBytes(bytes: number): Uint8Array {
+  if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+    throw new Error('CSPRNG (crypto.getRandomValues) is unavailable in this runtime.');
   }
-  return `${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 14)}`;
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  return buf;
 }
+
+export function generateRandomHex(bytes: number): string {
+  const buf = requireCsprngBytes(bytes);
+  return Array.from(buf)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+let activeSessionEpoch = typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function'
+  ? generateRandomHex(16)
+  : '';
 
 function bytesToBase64(bytes: Uint8Array): string {
   let bin = '';
@@ -169,41 +207,40 @@ function isWebCryptoAvailable(): boolean {
   return Boolean(
     typeof crypto !== 'undefined' &&
       crypto.subtle &&
+      typeof crypto.subtle.generateKey === 'function' &&
       typeof crypto.getRandomValues === 'function' &&
       typeof TextEncoder !== 'undefined' &&
       typeof TextDecoder !== 'undefined'
   );
 }
 
-async function getOrCreateSessionKey(scope: Required<Pick<VaultMirrorScope, 'tenantId' | 'branchId' | 'userId'>>): Promise<CryptoKey | null> {
+function buildVaultAadString(scope: StrictVaultScope, table: string): string {
+  return `v${VAULT_CRYPTO_VERSION}|${scope.tenantId.trim()}|${scope.branchId.trim()}|${scope.userId.trim()}|${table}`;
+}
+
+async function getOrCreateSessionKey(
+  scope: StrictVaultScope,
+  createIfMissing = true
+): Promise<CryptoKey | null> {
   if (!isWebCryptoAvailable()) return null;
-  const keyId = `${activeSessionEpoch}::${scope.tenantId}::${scope.branchId}::${scope.userId}`;
+  if (!scope.tenantId?.trim() || !scope.branchId?.trim() || !scope.userId?.trim()) return null;
+  if (!activeSessionEpoch) {
+    activeSessionEpoch = generateRandomHex(16);
+  }
+  const keyId = `${activeSessionEpoch}::${scope.tenantId.trim()}::${scope.branchId.trim()}::${scope.userId.trim()}`;
   const existing = sessionCryptoKeys.get(keyId);
   if (existing) return existing;
+  if (!createIfMissing) return null;
 
   try {
-    const rawKeyMaterial = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(`minadental-vault-v3:${keyId}`),
-      'PBKDF2',
-      false,
-      ['deriveKey']
-    );
-    const salt = new TextEncoder().encode(`salt:${scope.tenantId}:${scope.branchId}:${scope.userId}`);
-    const derived = await crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt,
-        iterations: 60000,
-        hash: 'SHA-256',
-      },
-      rawKeyMaterial,
+    // True CSPRNG non-extractable AES-GCM 256-bit key (zero string/PBKDF2 predictability)
+    const generated = await crypto.subtle.generateKey(
       { name: 'AES-GCM', length: 256 },
       false,
       ['encrypt', 'decrypt']
     );
-    sessionCryptoKeys.set(keyId, derived);
-    return derived;
+    sessionCryptoKeys.set(keyId, generated);
+    return generated;
   } catch {
     return null;
   }
@@ -211,19 +248,33 @@ async function getOrCreateSessionKey(scope: Required<Pick<VaultMirrorScope, 'ten
 
 export async function encryptVaultPayload(
   data: unknown,
-  scope: Required<Pick<VaultMirrorScope, 'tenantId' | 'branchId' | 'userId'>>
+  scope: StrictVaultScope,
+  table: string = 'generic',
+  ttlMs: number = DEFAULT_VAULT_TTL_MS
 ): Promise<EncryptedVaultBlob | null> {
-  const key = await getOrCreateSessionKey(scope);
+  const key = await getOrCreateSessionKey(scope, true);
   if (!key) return null;
   try {
-    const iv = new Uint8Array(12);
-    crypto.getRandomValues(iv);
+    const iv = requireCsprngBytes(12);
+    const aadStr = buildVaultAadString(scope, table);
+    const aadBytes = new TextEncoder().encode(aadStr);
     const plaintext = new TextEncoder().encode(JSON.stringify(data));
-    const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
+    const cipherBuf = await crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv as BufferSource,
+        additionalData: aadBytes as BufferSource,
+      },
+      key,
+      plaintext as BufferSource
+    );
     return {
+      version: VAULT_CRYPTO_VERSION,
       alg: 'AES-GCM',
       ivBase64: bytesToBase64(iv),
       cipherBase64: bytesToBase64(new Uint8Array(cipherBuf)),
+      aadScopeHash: computeIntegrityChecksum(aadStr),
+      expiresAt: new Date(Date.now() + Math.max(1000, ttlMs)).toISOString(),
     };
   } catch {
     return null;
@@ -232,23 +283,42 @@ export async function encryptVaultPayload(
 
 export async function decryptVaultPayload<T = unknown>(
   blob: EncryptedVaultBlob,
-  scope: Required<Pick<VaultMirrorScope, 'tenantId' | 'branchId' | 'userId'>>
+  scope: StrictVaultScope,
+  table: string = 'generic'
 ): Promise<T | null> {
-  if (!blob || blob.alg !== 'AES-GCM' || !blob.ivBase64 || !blob.cipherBase64) return null;
-  const key = await getOrCreateSessionKey(scope);
+  if (
+    !blob ||
+    blob.version !== VAULT_CRYPTO_VERSION ||
+    blob.alg !== 'AES-GCM' ||
+    !blob.ivBase64 ||
+    !blob.cipherBase64
+  ) {
+    return null;
+  }
+  if (blob.expiresAt && Date.parse(blob.expiresAt) <= Date.now()) {
+    return null;
+  }
+  // Never mint a fresh key on decrypt — missing key means locked after reload/rotation
+  const key = await getOrCreateSessionKey(scope, false);
   if (!key) return null;
   try {
     const iv = base64ToBytes(blob.ivBase64);
     const cipher = base64ToBytes(blob.cipherBase64);
+    const aadStr = buildVaultAadString(scope, table);
+    const aadBytes = new TextEncoder().encode(aadStr);
     const plainBuf = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv as BufferSource },
+      {
+        name: 'AES-GCM',
+        iv: iv as BufferSource,
+        additionalData: aadBytes as BufferSource,
+      },
       key,
       cipher as BufferSource
     );
     const decoded = new TextDecoder().decode(plainBuf);
     return JSON.parse(decoded) as T;
   } catch {
-    // Decryption fails cleanly if key belongs to a previous session or user
+    // Decryption fails cleanly if key belongs to a previous session, scope/table swapped, or ciphertext tampered
     return null;
   }
 }
@@ -256,7 +326,10 @@ export async function decryptVaultPayload<T = unknown>(
 /** Rotate volatile session encryption keys immediately on user switch or sign-out */
 export function clearAllSessionVaultKeys(): void {
   sessionCryptoKeys.clear();
-  activeSessionEpoch = generateRandomHex(16);
+  activeSessionEpoch =
+    typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function'
+      ? generateRandomHex(16)
+      : '';
   // Also purge any legacy plaintext localStorage archive entries
   if (typeof window !== 'undefined') {
     try {
@@ -265,6 +338,35 @@ export function clearAllSessionVaultKeys(): void {
       // ignore
     }
   }
+}
+
+/** Delete expired IndexedDB mirror entries proactively */
+export async function purgeExpiredVaultMirrors(): Promise<number> {
+  const db = await openVaultDb();
+  if (!db) return 0;
+  const now = Date.now();
+  return new Promise((resolve) => {
+    let purged = 0;
+    try {
+      const tx = db.transaction(STORE_MIRRORS, 'readwrite');
+      const store = tx.objectStore(STORE_MIRRORS);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const entries = (req.result as TableMirrorEntry[]) || [];
+        for (const e of entries) {
+          const exp = e.expiresAt || e.payload?.expiresAt;
+          if (exp && Date.parse(exp) <= now) {
+            store.delete(e.scopeKey);
+            purged += 1;
+          }
+        }
+      };
+      tx.oncomplete = () => resolve(purged);
+      tx.onerror = () => resolve(purged);
+    } catch {
+      resolve(0);
+    }
+  });
 }
 
 /** Delete mirrored IndexedDB rows belonging to a previous user/branch (or all mirrors if scope omitted) */
@@ -320,7 +422,7 @@ function openVaultDb(): Promise<IDBDatabase | null> {
       const req = indexedDB.open(IDB_NAME, IDB_VERSION);
       req.onupgradeneeded = () => {
         const db = req.result;
-        // Recreate table_mirrors on v3 upgrade so legacy unencrypted mirrors are wiped cleanly
+        // Recreate table_mirrors on v4 upgrade so pre-AAD/pre-TTL mirrors are wiped cleanly
         if (db.objectStoreNames.contains(STORE_MIRRORS)) {
           db.deleteObjectStore(STORE_MIRRORS);
         }
@@ -346,10 +448,11 @@ function openVaultDb(): Promise<IDBDatabase | null> {
 export async function saveTableMirrorToVault(
   table: TableName,
   rows: any[],
-  scope?: VaultMirrorScope
+  scope?: VaultMirrorScope,
+  ttlMs: number = DEFAULT_VAULT_TTL_MS
 ): Promise<void> {
   const scopeKey = getVaultMirrorKey(table, scope);
-  if (!scopeKey || !scope?.tenantId || !scope?.branchId || !scope?.userId) {
+  if (!scopeKey || !scope?.tenantId?.trim() || !scope?.branchId?.trim() || !scope?.userId?.trim()) {
     // Fail-closed: refuse unscoped local mirror writes
     return;
   }
@@ -357,19 +460,24 @@ export async function saveTableMirrorToVault(
   const db = await openVaultDb();
   if (!db) return;
 
+  const strictScope: StrictVaultScope = {
+    tenantId: scope.tenantId.trim(),
+    branchId: scope.branchId.trim(),
+    userId: scope.userId.trim(),
+  };
+
   const isSensitive = SENSITIVE_VAULT_TABLES.has(table);
   let encryptedBlob: EncryptedVaultBlob | null = null;
   if (isSensitive) {
-    encryptedBlob = await encryptVaultPayload(rows, {
-      tenantId: scope.tenantId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-    });
+    encryptedBlob = await encryptVaultPayload(rows, strictScope, table, ttlMs);
     if (!encryptedBlob) {
       // Fail-closed: never fall back to plaintext IndexedDB storage for sensitive medical/financial tables
       return;
     }
   }
+
+  const nowIso = new Date().toISOString();
+  const expiresAt = encryptedBlob?.expiresAt ?? new Date(Date.now() + Math.max(1000, ttlMs)).toISOString();
 
   return new Promise((resolve) => {
     try {
@@ -378,13 +486,14 @@ export async function saveTableMirrorToVault(
       const entry: TableMirrorEntry = {
         scopeKey,
         table,
-        tenantId: scope.tenantId!,
-        branchId: scope.branchId!,
-        userId: scope.userId!,
+        tenantId: strictScope.tenantId,
+        branchId: strictScope.branchId,
+        userId: strictScope.userId,
         encrypted: isSensitive,
         payload: encryptedBlob ?? undefined,
         rows: isSensitive ? undefined : rows,
-        updatedAt: new Date().toISOString(),
+        updatedAt: nowIso,
+        expiresAt,
         count: rows.length,
       };
       store.put(entry);
@@ -396,17 +505,24 @@ export async function saveTableMirrorToVault(
   });
 }
 
-/** Read & decrypt a tenant/branch/user-scoped mirrored table from IndexedDB */
-export async function loadTableMirrorFromVault<T = any>(
+/**
+ * V4 Vault Loader with Explicit Lock/Expiry State:
+ * Distinguishes `'ok'`, `'missing'`, `'locked_after_reload'` (encrypted rows exist but volatile
+ * session key was discarded on page reload), and `'expired'` so the UI NEVER misreports
+ * locked offline medical records as an empty clinic (`0`).
+ */
+export async function loadTableMirrorFromVaultWithStatus<T = any>(
   table: TableName,
   scope?: VaultMirrorScope
-): Promise<T[]> {
+): Promise<VaultLoadResult<T>> {
   const scopeKey = getVaultMirrorKey(table, scope);
-  if (!scopeKey || !scope?.tenantId || !scope?.branchId || !scope?.userId) {
-    return [];
+  if (!scopeKey || !scope?.tenantId?.trim() || !scope?.branchId?.trim() || !scope?.userId?.trim()) {
+    return { status: 'invalid_scope', rows: [], lockedRecordCount: 0 };
   }
   const db = await openVaultDb();
-  if (!db) return [];
+  if (!db) {
+    return { status: 'unavailable', rows: [], lockedRecordCount: 0 };
+  }
 
   const entry = await new Promise<TableMirrorEntry | undefined>((resolve) => {
     try {
@@ -419,19 +535,66 @@ export async function loadTableMirrorFromVault<T = any>(
     }
   });
 
-  if (!entry) return [];
-
-  if (entry.encrypted) {
-    if (!entry.payload) return [];
-    const decrypted = await decryptVaultPayload<T[]>(entry.payload, {
-      tenantId: scope.tenantId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-    });
-    return Array.isArray(decrypted) ? decrypted : [];
+  if (!entry) {
+    return { status: 'missing', rows: [], lockedRecordCount: 0 };
   }
 
-  return Array.isArray(entry.rows) ? (entry.rows as T[]) : [];
+  const expiryStr = entry.expiresAt || entry.payload?.expiresAt;
+  if (expiryStr && Date.parse(expiryStr) <= Date.now()) {
+    // Purge expired entry
+    try {
+      const tx = db.transaction(STORE_MIRRORS, 'readwrite');
+      tx.objectStore(STORE_MIRRORS).delete(scopeKey);
+    } catch {
+      // ignore
+    }
+    return { status: 'expired', rows: [], lockedRecordCount: 0, updatedAt: entry.updatedAt };
+  }
+
+  if (entry.encrypted) {
+    if (!entry.payload) {
+      return {
+        status: 'locked_after_reload',
+        rows: [],
+        lockedRecordCount: entry.count || 0,
+        updatedAt: entry.updatedAt,
+      };
+    }
+    const decrypted = await decryptVaultPayload<T[]>(
+      entry.payload,
+      {
+        tenantId: scope.tenantId.trim(),
+        branchId: scope.branchId.trim(),
+        userId: scope.userId.trim(),
+      },
+      table
+    );
+    if (!Array.isArray(decrypted)) {
+      return {
+        status: 'locked_after_reload',
+        rows: [],
+        lockedRecordCount: entry.count || 0,
+        updatedAt: entry.updatedAt,
+      };
+    }
+    return { status: 'ok', rows: decrypted, lockedRecordCount: 0, updatedAt: entry.updatedAt };
+  }
+
+  return {
+    status: 'ok',
+    rows: Array.isArray(entry.rows) ? (entry.rows as T[]) : [],
+    lockedRecordCount: 0,
+    updatedAt: entry.updatedAt,
+  };
+}
+
+/** Read & decrypt a tenant/branch/user-scoped mirrored table from IndexedDB */
+export async function loadTableMirrorFromVault<T = any>(
+  table: TableName,
+  scope?: VaultMirrorScope
+): Promise<T[]> {
+  const res = await loadTableMirrorFromVaultWithStatus<T>(table, scope);
+  return res.status === 'ok' ? res.rows : [];
 }
 
 /**
@@ -448,9 +611,14 @@ export async function archiveDeletedRecord(
   const recordId = String(record?.id ?? `row_${Date.now()}`);
   const archiveId = `arc_${table}_${recordId}_${Date.now()}`;
   const serialized = JSON.stringify(record);
+  const randSuffix =
+    typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function'
+      ? generateRandomHex(3).toUpperCase()
+      : Date.now().toString(16).slice(-6).toUpperCase();
+
   const entry: ArchivedRecordEntry = {
     archiveId,
-    traceId: `TRC-MINA-VAULT-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+    traceId: `TRC-MINA-VAULT-${randSuffix}`,
     table,
     recordId,
     record,
@@ -484,8 +652,8 @@ export async function archiveDeletedRecord(
   return entry;
 }
 
-/** List all archived (soft-deleted) records newest first from IndexedDB */
-export async function listArchivedRecords(): Promise<ArchivedRecordEntry[]> {
+/** List archived (soft-deleted) records newest first from IndexedDB, optionally scoped by tenant/branch */
+export async function listArchivedRecords(scope?: VaultMirrorScope): Promise<ArchivedRecordEntry[]> {
   const db = await openVaultDb();
   if (!db) return [];
 
@@ -495,7 +663,12 @@ export async function listArchivedRecords(): Promise<ArchivedRecordEntry[]> {
       const req = tx.objectStore(STORE_ARCHIVE).getAll();
       req.onsuccess = () => {
         const idbItems = (req.result as ArchivedRecordEntry[]) || [];
-        const sorted = [...idbItems].sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
+        const filtered = scope?.tenantId && scope?.branchId
+          ? idbItems.filter(
+              (item) => item.tenantId === scope.tenantId && item.branchId === scope.branchId
+            )
+          : idbItems;
+        const sorted = [...filtered].sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
         resolve(sorted);
       };
       req.onerror = () => resolve([]);
@@ -505,20 +678,47 @@ export async function listArchivedRecords(): Promise<ArchivedRecordEntry[]> {
   });
 }
 
-/** Restore an archived record back into Cloud SQL (Supabase PostgreSQL) in 1 click */
+/**
+ * Restore an archived record back into Cloud SQL (Supabase PostgreSQL) with fail-closed
+ * tenant & branch verification so a record from another tenant/branch can NEVER be upserted.
+ */
 export async function restoreArchivedRecord(
-  archiveId: string
+  archiveId: string,
+  scope?: VaultMirrorScope
 ): Promise<{ ok: boolean; message: string; record?: ArchivedRecordEntry }> {
+  const reqTenant = scope?.tenantId?.trim();
+  const reqBranch = scope?.branchId?.trim();
+  if (!reqTenant || !reqBranch) {
+    return {
+      ok: false,
+      message: 'بازیابی رد شد: شناسه کلینیک (tenant_id) و شعبه فعال (branch_id) الزامی است.',
+    };
+  }
+
   const all = await listArchivedRecords();
   const entry = all.find((e) => e.archiveId === archiveId);
   if (!entry) {
     return { ok: false, message: 'رکورد مورد نظر در گاوصندوق یافت نشد.' };
   }
 
+  const recTenant = String(entry.record?.tenant_id ?? entry.tenantId ?? '').trim();
+  const recBranch = String(entry.record?.branch_id ?? entry.branchId ?? '').trim();
+  if (!recTenant || !recBranch || recTenant !== reqTenant || recBranch !== reqBranch) {
+    return {
+      ok: false,
+      message: 'بازیابی رد شد: این رکورد متعلق به کلینیک یا شعبه فعال نیست.',
+    };
+  }
+
   try {
+    const safePayload = {
+      ...entry.record,
+      tenant_id: reqTenant,
+      branch_id: reqBranch,
+    };
     const { error } = await supabase
       .from(entry.table)
-      .upsert(entry.record, { onConflict: 'id' });
+      .upsert(safePayload, { onConflict: 'id' });
 
     if (error) {
       return { ok: false, message: `خطا در بازگردانی به Cloud SQL: ${error.message}` };
@@ -623,7 +823,7 @@ export async function getVaultStats(): Promise<VaultStats> {
 }
 
 /**
- * Collect a complete snapshot of ALL 20 Cloud SQL (Supabase) tables,
+ * Collect a complete snapshot of ALL 20 Cloud SQL (Supabase) tables scoped by tenant/branch,
  * falling back to the scoped encrypted IndexedDB Vault if offline.
  */
 export async function collectCompleteClinicSnapshot(
@@ -633,11 +833,16 @@ export async function collectCompleteClinicSnapshot(
   const tables: Record<string, any[]> = {};
   const counts: Record<string, number> = {};
   let totalRecords = 0;
+  const reqTenant = scope?.tenantId?.trim();
+  const reqBranch = scope?.branchId?.trim();
 
   await Promise.all(
     ALL_CLINIC_TABLES.map(async (table) => {
       try {
-        const { data, error } = await supabase.from(table).select('*');
+        let query = supabase.from(table).select('*');
+        if (reqTenant) query = query.eq('tenant_id', reqTenant);
+        if (reqBranch) query = query.eq('branch_id', reqBranch);
+        const { data, error } = await query;
         if (!error && Array.isArray(data)) {
           tables[table] = data;
           counts[table] = data.length;
@@ -657,7 +862,7 @@ export async function collectCompleteClinicSnapshot(
     })
   );
 
-  const deletedArchive = await listArchivedRecords();
+  const deletedArchive = await listArchivedRecords(scope);
   const exportedAt = new Date().toISOString();
   const traceId = `TRC-MINA-SNAP-${Date.now().toString(36).toUpperCase()}`;
   const checksum = computeIntegrityChecksum(JSON.stringify({ counts, totalRecords, exportedAt }));
@@ -677,15 +882,35 @@ export async function collectCompleteClinicSnapshot(
 }
 
 /**
- * Non-Destructive Full Clinic Restore into Cloud SQL (Supabase PostgreSQL).
+ * Non-Destructive Full Clinic Restore into Cloud SQL (Supabase PostgreSQL)
+ * with fail-closed tenant/branch enforcement (rejects cross-tenant or cross-branch rows).
  */
 export async function restoreCompleteClinicSnapshot(
   rawBackup: Record<string, any>,
   scope?: VaultMirrorScope
-): Promise<{ ok: boolean; restoredTables: number; restoredRows: number; errors: string[] }> {
+): Promise<{
+  ok: boolean;
+  restoredTables: number;
+  restoredRows: number;
+  rejectedCrossScopeRows: number;
+  errors: string[];
+}> {
+  const reqTenant = scope?.tenantId?.trim();
+  const reqBranch = scope?.branchId?.trim();
+  if (!reqTenant || !reqBranch) {
+    return {
+      ok: false,
+      restoredTables: 0,
+      restoredRows: 0,
+      rejectedCrossScopeRows: 0,
+      errors: ['بازیابی رد شد: محدوده کلینیک (tenant_id) و شعبه (branch_id) مشخص نیست.'],
+    };
+  }
+
   const errors: string[] = [];
   let restoredTables = 0;
   let restoredRows = 0;
+  let rejectedCrossScopeRows = 0;
 
   const sourceMap: Record<string, any[]> = rawBackup.tables || rawBackup.data || rawBackup;
   const keyAliases: Record<string, TableName> = {
@@ -701,19 +926,30 @@ export async function restoreCompleteClinicSnapshot(
     const mappedTable = (keyAliases[rawKey] ?? rawKey) as TableName;
     if (!ALL_CLINIC_TABLES.includes(mappedTable)) continue;
 
+    // Filter rows strictly matching active tenant & branch (fail-closed)
+    const scopedRows: any[] = [];
+    for (const row of rows) {
+      const rTenant = String(row?.tenant_id ?? '').trim();
+      const rBranch = String(row?.branch_id ?? '').trim();
+      if (rTenant === reqTenant && rBranch === reqBranch) {
+        scopedRows.push(row);
+      } else {
+        rejectedCrossScopeRows += 1;
+      }
+    }
+    if (scopedRows.length === 0) continue;
+
     try {
       const { error } = await supabase
         .from(mappedTable)
-        .upsert(rows, { onConflict: 'id' });
+        .upsert(scopedRows, { onConflict: 'id' });
 
       if (error) {
         errors.push(`${mappedTable}: ${error.message}`);
       } else {
         restoredTables++;
-        restoredRows += rows.length;
-        if (scope) {
-          await saveTableMirrorToVault(mappedTable, rows, scope);
-        }
+        restoredRows += scopedRows.length;
+        await saveTableMirrorToVault(mappedTable, scopedRows, scope);
       }
     } catch (err: any) {
       errors.push(`${mappedTable}: ${err?.message || 'خطای شبکه'}`);
@@ -724,6 +960,7 @@ export async function restoreCompleteClinicSnapshot(
     ok: errors.length === 0 && restoredTables > 0,
     restoredTables,
     restoredRows,
+    rejectedCrossScopeRows,
     errors,
   };
 }

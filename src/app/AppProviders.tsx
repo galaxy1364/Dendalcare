@@ -84,8 +84,13 @@ import {
 } from '@/services/authentication/authService';
 import { ACTIVE_TENANT_ID } from '@/services/authentication/authService';
 import { resolveEffectiveRole } from '@/services/permissions/accessControl';
-import { clearAllSessionVaultKeys, clearVaultMirrorsForScope } from '@/lib/dataVault';
+import {
+  clearAllSessionVaultKeys,
+  clearVaultMirrorsForScope,
+  purgeExpiredVaultMirrors,
+} from '@/lib/dataVault';
 import { purgeClinicalLocalStorageCaches } from '@/services/supabase/scopedCache';
+import { disconnectAllRealtimeChannels } from '@/services/realtime/realtimeHub';
 
 export interface SmartWorkflowPopupState {
   id: string;
@@ -309,6 +314,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     }
 
     getVerifiedSupabaseSession().then(setVerifiedSession).catch(() => {});
+    purgeExpiredVaultMirrors().catch(() => {});
 
     MemPalace.recordAudit({
       traceId: 'TRC-MINA-CORE-9001-A',
@@ -799,6 +805,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     (u: ClinicUserAccount) => {
       const prevUserId = currentUser.id;
       if (prevUserId && prevUserId !== u.id) {
+        disconnectAllRealtimeChannels();
         clearAllSessionVaultKeys();
         purgeClinicalLocalStorageCaches({ userId: prevUserId });
         void clearVaultMirrorsForScope({ userId: prevUserId });

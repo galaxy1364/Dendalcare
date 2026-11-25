@@ -1,5 +1,9 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRealtimeTable, type TableDataStatus } from '@/lib/useRealtimeTable';
 import { rawSupabase } from '@/lib/supabaseCore';
+import { getCurrentJalaliMonthBounds, todayGregorian } from '@/lib/jalali';
+import { getActiveClinicUser } from '@/lib/cloudSyncEngine';
+import { ACTIVE_TENANT_ID, getActiveBranchId } from '@/services/authentication/authService';
 import type {
   Appointment,
   Check,
@@ -16,26 +20,32 @@ import type {
   Staff,
   Treatment,
 } from '@/lib/supabase';
-import type { DashboardAggregateStatus, DashboardSourceKey } from './dashboard.types';
+import type {
+  DashboardAggregateStatus,
+  DashboardServerSummary,
+  DashboardSourceKey,
+} from './dashboard.types';
 
 /**
- * Third Audit FIX 02 & FIX 09:
- * - Minimal column projections strictly aligned with schema (zero select('*'))
- * - Per-source status reporting (`sourceStatuses`, `incompleteSources`, `migrationRequiredTables`)
- * - Complete `refreshAll()` refreshing ALL 14 data sources
- * - Explicit pagination limit (500) + optional server-side RPC aggregation helper
+ * V4 Engineering Release Gate — Data Minimization & Full-Dataset Accuracy:
+ * - Zero `phone` (PII) projected on Dashboard patients query
+ * - Accounting realization & reversal dates (`performed_at, completed_at, cancelled_at`,
+ *   `refunded_at, voided_at, reversed_payment_id`) explicitly projected
+ * - Server-side RPC `get_clinic_dashboard_summary` wired as primary aggregate source
+ * - Client hooks use `fetchAllPages: true` with explicit truncation (`partial`) detection
  */
 export const DASHBOARD_SELECTS = {
-  patients: 'id,tenant_id,branch_id,first_name,last_name,phone,created_at',
+  patients: 'id,tenant_id,branch_id,first_name,last_name,created_at',
   appointments:
     'id,tenant_id,branch_id,patient_id,staff_id,title,appointment_date,appointment_time,duration_min,type,status,created_at',
   treatments:
-    'id,tenant_id,branch_id,patient_id,status,total_cost,paid_amount,discount,doctor_cost,lab_cost,material_cost,other_cost,created_at',
+    'id,tenant_id,branch_id,patient_id,status,total_cost,paid_amount,discount,doctor_cost,lab_cost,material_cost,other_cost,performed_at,completed_at,cancelled_at,created_at',
   lab_orders:
     'id,tenant_id,branch_id,patient_id,lab_name,tooth_numbers,status,due_date,received_date,sent_date,created_at',
   implants:
     'id,tenant_id,branch_id,patient_id,tooth_number,brand,stage,placement_date,osseointegration_date,abutment_date,crown_date,created_at',
-  payments: 'id,tenant_id,branch_id,patient_id,treatment_id,amount,payment_date,status,created_at',
+  payments:
+    'id,tenant_id,branch_id,patient_id,treatment_id,amount,payment_date,status,refunded_at,voided_at,reversed_payment_id,created_at',
   inventory:
     'id,tenant_id,branch_id,name,quantity,min_quantity,unit,expiry_date,reorder_quantity,created_at',
   reminders: 'id,tenant_id,branch_id,patient_id,title,reminder_date,status,priority,created_at',
@@ -59,44 +69,70 @@ export const FINANCIAL_REQUIRED_SOURCES: readonly DashboardSourceKey[] = [
   'safteh',
 ];
 
-const DASHBOARD_PAGE_OPTIONS = { limit: 500, offset: 0 } as const;
+const DASHBOARD_PAGE_OPTIONS = {
+  limit: 500,
+  offset: 0,
+  fetchAllPages: true,
+  maxPages: 20,
+} as const;
 
 /**
- * Pure status aggregator (exported for Phase 14 unit testing).
- * Evaluates each data source independently so partial failure or missing schema migration
- * is surfaced transparently and financial KPIs are gated behind `financialDataComplete`.
+ * Pure status aggregator (exported for production-import testing).
+ * Evaluates each data source independently so partial truncation, locked offline vault,
+ * unauthorized access, or missing schema migration is surfaced transparently and gates financial KPIs.
  */
 export function evaluateDashboardSourceStatuses(
   sourceStatuses: Record<DashboardSourceKey, TableDataStatus>,
-  meta: { isStale: boolean; isLoading: boolean; errorMessage: string | null }
+  meta: {
+    isStale: boolean;
+    isLoading: boolean;
+    errorMessage: string | null;
+    serverSummaryValid?: boolean;
+  }
 ): DashboardAggregateStatus {
   const keys = Object.keys(sourceStatuses) as DashboardSourceKey[];
   const statuses = keys.map((k) => sourceStatuses[k]);
 
   const migrationRequiredTables = keys.filter((k) => sourceStatuses[k] === 'migration_required');
+  const truncatedSources = keys.filter((k) => sourceStatuses[k] === 'partial');
+  const lockedOfflineTables = keys.filter((k) => sourceStatuses[k] === 'locked_offline');
   const incompleteSources = keys.filter((k) => {
     const st = sourceStatuses[k];
-    return st === 'error' || st === 'unauthorized' || st === 'migration_required' || st === 'loading';
+    return (
+      st === 'error' ||
+      st === 'unauthorized' ||
+      st === 'migration_required' ||
+      st === 'loading' ||
+      st === 'partial' ||
+      st === 'locked_offline'
+    );
   });
 
-  const financialDataComplete = FINANCIAL_REQUIRED_SOURCES.every((k) => {
+  const serverSummaryValid = Boolean(meta.serverSummaryValid);
+  const clientFinancialComplete = FINANCIAL_REQUIRED_SOURCES.every((k) => {
     const st = sourceStatuses[k];
     return st === 'ready' || st === 'empty';
   });
 
+  const financialDataComplete = serverSummaryValid || clientFinancialComplete;
+
   const hasMigration = migrationRequiredTables.length > 0;
   const hasUnauthorized = statuses.some((s) => s === 'unauthorized');
+  const hasLockedOffline = lockedOfflineTables.length > 0;
   const hasOffline = statuses.some((s) => s === 'offline');
   const hasError = statuses.some((s) => s === 'error');
+  const hasPartial = truncatedSources.length > 0 && !serverSummaryValid;
   const anyReady = statuses.some((s) => s === 'ready');
 
   let overall: TableDataStatus = 'ready';
   if (hasMigration) overall = 'migration_required';
   else if (hasUnauthorized) overall = 'unauthorized';
+  else if (hasLockedOffline) overall = 'locked_offline';
   else if (hasOffline) overall = 'offline';
   else if (hasError) overall = 'error';
+  else if (hasPartial) overall = 'partial';
   else if (meta.isLoading && !anyReady) overall = 'loading';
-  else if (!anyReady && statuses.every((s) => s === 'empty')) overall = 'empty';
+  else if (!anyReady && !serverSummaryValid && statuses.every((s) => s === 'empty')) overall = 'empty';
 
   return {
     overall,
@@ -105,32 +141,55 @@ export function evaluateDashboardSourceStatuses(
     errorMessage: meta.errorMessage,
     sourceStatuses,
     incompleteSources,
+    truncatedSources,
+    lockedOfflineTables,
     migrationRequiredTables,
     financialDataComplete,
+    dataSourceMode: serverSummaryValid ? 'server_rpc' : 'client_paginated',
   };
 }
 
+export function isValidDashboardServerSummary(
+  raw: unknown,
+  expectedTenantId: string,
+  expectedBranchId: string
+): raw is DashboardServerSummary {
+  if (!raw || typeof raw !== 'object') return false;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.tenant_id !== 'string' || typeof obj.branch_id !== 'string') return false;
+  if (obj.tenant_id.trim() !== expectedTenantId.trim()) return false;
+  if (obj.branch_id.trim() !== expectedBranchId.trim()) return false;
+  if (typeof obj.month_collected !== 'number' || typeof obj.month_net_profit !== 'number') {
+    return false;
+  }
+  return true;
+}
+
 /**
- * Optional server-side aggregation RPC hook for high-volume clinics (>500 monthly records).
- * Returns null gracefully if the optional RPC function is not deployed yet on Supabase.
+ * Authoritative server-side aggregation RPC for clinics of any size (>500 monthly records).
+ * Validates returned tenant_id & branch_id strictly (fail-closed) and returns null gracefully
+ * if the RPC function is not deployed yet on the target Supabase instance.
  */
 export async function fetchDashboardServerSummary(params: {
   tenantId: string;
   branchId: string;
+  todayIso: string;
   monthStartIso: string;
   monthEndIso: string;
-}): Promise<Record<string, unknown> | null> {
+}): Promise<DashboardServerSummary | null> {
+  if (!params.tenantId?.trim() || !params.branchId?.trim()) return null;
   try {
     const rpcFn = (rawSupabase as any).rpc;
     if (typeof rpcFn !== 'function') return null;
     const { data, error } = await rpcFn.call(rawSupabase, 'get_clinic_dashboard_summary', {
-      p_tenant_id: params.tenantId,
-      p_branch_id: params.branchId,
+      p_tenant_id: params.tenantId.trim(),
+      p_branch_id: params.branchId.trim(),
+      p_today_iso: params.todayIso,
       p_month_start: params.monthStartIso,
       p_month_end: params.monthEndIso,
     });
     if (error || !data) return null;
-    return data as Record<string, unknown>;
+    return isValidDashboardServerSummary(data, params.tenantId, params.branchId) ? data : null;
   } catch {
     return null;
   }
@@ -151,6 +210,44 @@ export function useDashboardDataSources() {
   const safteh = useRealtimeTable<Safteh>('safteh', DASHBOARD_SELECTS.safteh, null, DASHBOARD_PAGE_OPTIONS);
   const clinicSettings = useRealtimeTable<ClinicSetting>('clinic_settings', DASHBOARD_SELECTS.clinic_settings, null, DASHBOARD_PAGE_OPTIONS);
   const staff = useRealtimeTable<Staff>('staff', DASHBOARD_SELECTS.staff, null, DASHBOARD_PAGE_OPTIONS);
+
+  const [serverSummary, setServerSummary] = useState<DashboardServerSummary | null>(null);
+  const [scopeEpoch, setScopeEpoch] = useState(0);
+  const rpcGenRef = useRef(0);
+
+  const loadServerSummary = useCallback(async () => {
+    const gen = ++rpcGenRef.current;
+    const activeUser = getActiveClinicUser();
+    const tenantId = activeUser.tenantId || ACTIVE_TENANT_ID;
+    const branchId = getActiveBranchId();
+    const todayIso = todayGregorian();
+    const bounds = getCurrentJalaliMonthBounds(todayIso);
+    const summary = await fetchDashboardServerSummary({
+      tenantId,
+      branchId,
+      todayIso,
+      monthStartIso: bounds.startGregorian,
+      monthEndIso: bounds.endGregorian,
+    });
+    if (gen === rpcGenRef.current) {
+      setServerSummary(summary);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadServerSummary();
+    const onScopeChange = () => {
+      rpcGenRef.current += 1;
+      setServerSummary(null);
+      setScopeEpoch((e) => e + 1);
+    };
+    window.addEventListener('minadental-user-changed', onScopeChange);
+    window.addEventListener('minadental-branch-changed', onScopeChange);
+    return () => {
+      window.removeEventListener('minadental-user-changed', onScopeChange);
+      window.removeEventListener('minadental-branch-changed', onScopeChange);
+    };
+  }, [loadServerSummary, scopeEpoch]);
 
   const allHooks = [
     patients,
@@ -190,6 +287,8 @@ export function useDashboardDataSources() {
   const isStale = allHooks.some((h) => h.isStale);
   const firstError =
     allHooks.find((h) => h.status === 'migration_required')?.error ||
+    allHooks.find((h) => h.status === 'locked_offline')?.error ||
+    allHooks.find((h) => h.status === 'partial')?.error ||
     allHooks.find((h) => h.status === 'error')?.error ||
     null;
 
@@ -197,6 +296,7 @@ export function useDashboardDataSources() {
     isStale,
     isLoading,
     errorMessage: firstError,
+    serverSummaryValid: serverSummary !== null,
   });
 
   return {
@@ -214,10 +314,11 @@ export function useDashboardDataSources() {
     safteh: safteh.data,
     clinicSettings: clinicSettings.data,
     staff: staff.data,
+    serverSummary,
     status,
-    // FIX 09: Refresh ALL 14 dashboard data sources together
     refreshAll: async () => {
       await Promise.all([
+        loadServerSummary(),
         patients.refresh(),
         appointments.refresh(),
         treatments.refresh(),

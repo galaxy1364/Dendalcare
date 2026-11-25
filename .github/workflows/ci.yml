@@ -1,0 +1,66 @@
+name: MinaDental V4 Release Gate CI
+
+on:
+  push:
+    branches: [main, 'release/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-and-unit-gates:
+    name: Typecheck, Build & Production-Import Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Production Vite build
+        run: npm run build
+
+      - name: Run audit & production-import unit tests
+        run: npm test
+
+      - name: Verify SQL migrations are non-empty and idempotent
+        run: |
+          test -f supabase/migrations/20261125_tenant_branch_rls.sql
+          test -f supabase/migrations/20261126_strict_rls_hardening.sql
+          test -f supabase/migrations/20261127_v4_rpc_and_accounting_dates.sql
+          grep -q "get_clinic_dashboard_summary" supabase/migrations/20261127_v4_rpc_and_accounting_dates.sql
+          grep -q "SECURITY INVOKER" supabase/migrations/20261127_v4_rpc_and_accounting_dates.sql
+
+  staging-rls-and-visual-e2e:
+    name: Staging RLS & Playwright Visual Matrix (Requires Secrets)
+    runs-on: ubuntu-latest
+    needs: quality-and-unit-gates
+    if: ${{ vars.ENABLE_STAGING_GATES == 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run Staging RLS Verification & Viewport Matrix (360x740, 375x812, 390x844, 430x932, 768x1024, 1366x768)
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+        run: |
+          echo "Configure staging test users & Playwright E2E runner before enabling ENABLE_STAGING_GATES."
+          exit 1

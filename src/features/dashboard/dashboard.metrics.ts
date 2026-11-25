@@ -22,7 +22,12 @@ import { computeLiveSmartAlerts, loadSmartReminderRules } from '@/lib/smartRemin
 import { buildSmartDailyBrief } from '@/services/intelligence/clinicIntelligence';
 import { canAccessRoute } from '@/services/permissions/accessControl';
 import { CORE_PALETTE, getModuleToken } from '@/design-system/tokens';
-import type { DashboardCapacityMetrics, DashboardMetrics, DashboardPriorityAction } from './dashboard.types';
+import type {
+  DashboardCapacityMetrics,
+  DashboardMetrics,
+  DashboardPriorityAction,
+  DashboardServerSummary,
+} from './dashboard.types';
 
 export interface DashboardMetricsInput {
   patients: Patient[];
@@ -41,11 +46,13 @@ export interface DashboardMetricsInput {
   staff: Staff[];
   units: DentalUnit[];
   branchId: string;
-  tenantId?: string;
+  tenantId: string;
   userRole: ClinicUserRole;
   referenceDateIso?: string;
-  /** Defaults to true for pure unit callers; set false when any financial source errored/unauthorized/migration_required */
+  /** Defaults to true for pure unit callers; set false when any financial source errored/unauthorized/partial/locked_offline/migration_required */
   financialDataComplete?: boolean;
+  /** Authoritative full-dataset server RPC summary when deployed on Supabase */
+  serverSummary?: DashboardServerSummary | null;
 }
 
 type TenantBranchScopedRecord = {
@@ -54,21 +61,52 @@ type TenantBranchScopedRecord = {
 };
 
 /**
- * Strict tenant & branch isolation:
- * Records without an explicit matching `branch_id` are NEVER leaked across branches.
+ * Base-unit integer money conversion (IRR_TOMAN).
+ * Avoids floating-point drift on accumulated clinic financial totals.
+ */
+export function toBaseIntMoney(val: unknown): number {
+  const n = Number(val ?? 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n);
+}
+
+/**
+ * Strict fail-closed tenant & branch isolation (V4 P0):
+ * Rejects rows with missing/empty `tenant_id` or `branch_id`, AND rejects calls with
+ * missing/empty expected `tenantId` or `branchId`.
  */
 export function matchesTenantAndBranch<T extends TenantBranchScopedRecord>(
   row: T,
   branchId: string,
-  tenantId?: string
+  tenantId: string
 ): boolean {
-  if (tenantId && row.tenant_id && row.tenant_id !== tenantId) {
+  if (!tenantId || !tenantId.trim() || !row.tenant_id || !row.tenant_id.trim()) {
+    return false;
+  }
+  if (row.tenant_id.trim() !== tenantId.trim()) {
     return false;
   }
   if (!row.branch_id) {
     return false;
   }
-  return row.branch_id === branchId;
+  if (!branchId || !branchId.trim()) {
+    return false;
+  }
+  return row.branch_id.trim() === branchId.trim();
+}
+
+/**
+ * V4 Accounting Realization Date Rule:
+ * Accrual revenue and direct clinical costs are recognized STRICTLY on `performed_at` or `completed_at`.
+ * NEVER falls back to `created_at` (which is when a treatment plan was drafted, not performed).
+ * Completed treatments lacking both timestamps return `null` and are reported via `unverifiedCompletionDateCount`.
+ */
+export function resolveTreatmentRealizationDate(t: Treatment): string | null {
+  const perf = typeof t.performed_at === 'string' ? t.performed_at.trim() : '';
+  if (perf) return perf;
+  const comp = typeof t.completed_at === 'string' ? t.completed_at.trim() : '';
+  if (comp) return comp;
+  return null;
 }
 
 function parseShiftRangeMinutes(rangeStr: string | undefined): number {
@@ -100,24 +138,32 @@ export function isGuaranteeCheck(c: Check): boolean {
 }
 
 /**
- * Third Audit FIX 03: Date-aware chair capacity based on active units, active doctors,
- * clinic shift schedule, AND working days for `referenceDateIso`.
- * Missing any real denominator returns `null` rather than hiding gaps with guessed defaults.
+ * V4 Date-Aware Chair Capacity:
+ * Computes real chair capacity from active units, active doctors, clinic shift schedule,
+ * explicit `default_appointment_duration` (NO silent 30-min fallback!), working days,
+ * and booked appointment minutes. Preserves real unclamped utilization (>100% visible when overbooked).
  */
 export function computeRealChairCapacity(params: {
   units: DentalUnit[];
   staff: Staff[];
   clinicSettings: ClinicSetting[];
   activeTodaySlots: number;
+  todayActiveAppointments?: Appointment[];
   referenceDateIso?: string;
 }): DashboardCapacityMetrics {
-  const { units, staff, clinicSettings, activeTodaySlots, referenceDateIso } = params;
+  const {
+    units,
+    staff,
+    clinicSettings,
+    activeTodaySlots,
+    todayActiveAppointments,
+    referenceDateIso,
+  } = params;
   const activeUnits = units.filter((u) => u.status === 'active');
   const activeDoctors = staff.filter(
     (st) => st.active !== false && (st.role === 'manager' || st.role === 'dentist')
   );
 
-  // Check if selected date is explicitly configured as a closed weekday (e.g., "5" for Friday)
   let isClosedDay = false;
   if (referenceDateIso) {
     const dt = new Date(`${referenceDateIso.slice(0, 10)}T12:00:00Z`);
@@ -152,23 +198,56 @@ export function computeRealChairCapacity(params: {
     ? 0
     : parseShiftRangeMinutes(morningStr) + parseShiftRangeMinutes(eveningStr);
 
-  const slotDurationMinutes =
-    parsePositiveNumberSetting(clinicSettings, 'default_appointment_duration') ?? 30;
+  // V4 P0: Require explicit `default_appointment_duration` from clinic settings — zero silent 30m fallback
+  const slotDurationMinutes = parsePositiveNumberSetting(
+    clinicSettings,
+    'default_appointment_duration'
+  );
 
   const shiftMinutesPerDay = parsedShiftMinutes;
   const effectiveChairs = Math.min(activeUnits.length, activeDoctors.length);
+  const totalAvailableChairMinutes = effectiveChairs * shiftMinutesPerDay;
 
   let dailyChairCapacity: number | null = null;
   if (isClosedDay) {
     dailyChairCapacity = 0;
-  } else if (effectiveChairs > 0 && shiftMinutesPerDay > 0 && slotDurationMinutes > 0) {
-    dailyChairCapacity = Math.floor((effectiveChairs * shiftMinutesPerDay) / slotDurationMinutes);
+  } else if (
+    effectiveChairs > 0 &&
+    shiftMinutesPerDay > 0 &&
+    slotDurationMinutes !== null &&
+    slotDurationMinutes > 0
+  ) {
+    dailyChairCapacity = Math.floor(totalAvailableChairMinutes / slotDurationMinutes);
   }
 
-  const chairUtilizationPct =
-    dailyChairCapacity && dailyChairCapacity > 0
-      ? Math.min(100, Math.round((activeTodaySlots / dailyChairCapacity) * 100))
-      : null;
+  // Prefer actual booked appointment duration minutes when available, else slot-based calculation
+  let bookedMinutesToday = 0;
+  let allAppointmentsHaveDuration = false;
+  if (Array.isArray(todayActiveAppointments) && todayActiveAppointments.length > 0) {
+    let validDurationCount = 0;
+    for (const appt of todayActiveAppointments) {
+      const dur = Number(appt.duration_min || 0);
+      if (Number.isFinite(dur) && dur > 0) {
+        bookedMinutesToday += Math.round(dur);
+        validDurationCount += 1;
+      } else if (slotDurationMinutes !== null) {
+        bookedMinutesToday += Math.round(slotDurationMinutes);
+      }
+    }
+    allAppointmentsHaveDuration = validDurationCount === todayActiveAppointments.length;
+  } else if (slotDurationMinutes !== null && activeTodaySlots > 0) {
+    bookedMinutesToday = Math.round(activeTodaySlots * slotDurationMinutes);
+  }
+
+  // Real unclamped utilization (>100% preserved so overbooking is never hidden)
+  let chairUtilizationPct: number | null = null;
+  if (!isClosedDay && totalAvailableChairMinutes > 0) {
+    if (allAppointmentsHaveDuration && bookedMinutesToday > 0) {
+      chairUtilizationPct = Math.round((bookedMinutesToday / totalAvailableChairMinutes) * 100);
+    } else if (dailyChairCapacity !== null && dailyChairCapacity > 0) {
+      chairUtilizationPct = Math.round((activeTodaySlots / dailyChairCapacity) * 100);
+    }
+  }
 
   return {
     activeUnitsCount: activeUnits.length,
@@ -177,17 +256,17 @@ export function computeRealChairCapacity(params: {
     slotDurationMinutes,
     dailyChairCapacity,
     activeTodaySlots,
+    bookedMinutesToday,
     chairUtilizationPct,
     isClosedDay,
   };
 }
 
 /**
- * Third Audit FIX 03: Deterministic foreign-key payment deduplication ONLY.
+ * Deterministic foreign-key payment deduplication ONLY.
  * A `finance_transactions` income row is deduplicated ONLY when it references an ACTUAL
  * existing `Payment.id` in `completedPayments` (via `payment_id`, exact `PAY:<id>` reference,
  * or exact `[PAY_ID:<id>]` tag).
- * NEVER drops a transaction solely because `reference` starts with `PAY:` or `PAYMENT_`!
  */
 export function isDuplicatePaymentTransaction(
   tx: FinanceTransaction & { payment_id?: string | null },
@@ -230,10 +309,9 @@ export function isDuplicatePaymentTransaction(
 }
 
 /**
- * Third Audit FIX 03: Prevent double-counting direct clinical treatment costs (`doctor_cost`,
- * `lab_cost`, `material_cost`, `other_cost` on `treatments`) when an accounting expense row
- * in `finance_transactions` is explicitly linked to that same performed treatment (`treatment_id`
- * or `[TREAT_ID:<id>]` / `TREAT:<id>`).
+ * Prevent double-counting direct clinical treatment costs (`doctor_cost`, `lab_cost`,
+ * `material_cost`, `other_cost` on `treatments`) when an accounting expense row in
+ * `finance_transactions` is explicitly linked to that same performed treatment.
  */
 export function isLinkedTreatmentDirectCostExpense(
   tx: FinanceTransaction & { treatment_id?: string | null },
@@ -245,10 +323,10 @@ export function isLinkedTreatmentDirectCostExpense(
   const treatIdsUpper = new Set<string>();
   for (const t of performedTreatmentsWithDirectCosts) {
     const directCost =
-      Number(t.doctor_cost || 0) +
-      Number(t.lab_cost || 0) +
-      Number(t.material_cost || 0) +
-      Number(t.other_cost || 0);
+      toBaseIntMoney(t.doctor_cost) +
+      toBaseIntMoney(t.lab_cost) +
+      toBaseIntMoney(t.material_cost) +
+      toBaseIntMoney(t.other_cost);
     if (directCost > 0 && t.id) {
       treatIds.add(String(t.id).trim());
       treatIdsUpper.add(String(t.id).trim().toUpperCase());
@@ -278,11 +356,29 @@ export function isLinkedTreatmentDirectCostExpense(
   return false;
 }
 
+function isVoidedPayment(p: Payment): boolean {
+  const st = String(p.status || '').toLowerCase();
+  return st === 'voided' || st === 'cancelled' || Boolean(p.voided_at);
+}
+
+function isRefundedPayment(p: Payment): boolean {
+  const st = String(p.status || '').toLowerCase();
+  return st === 'refunded' || st === 'reversed' || Boolean(p.refunded_at);
+}
+
 export function computeDashboardMetrics(input: DashboardMetricsInput): DashboardMetrics {
   const todayIso = input.referenceDateIso || todayGregorian();
   const monthBounds = getCurrentJalaliMonthBounds(todayIso);
   const { startGregorian: monthStartIso, endGregorian: monthEndIso, monthLabel } = monthBounds;
-  const financialDataComplete = input.financialDataComplete !== false;
+
+  const validServerSummary =
+    input.serverSummary &&
+    input.serverSummary.tenant_id?.trim() === input.tenantId?.trim() &&
+    input.serverSummary.branch_id?.trim() === input.branchId?.trim()
+      ? input.serverSummary
+      : null;
+
+  const financialDataComplete = validServerSummary !== null || input.financialDataComplete !== false;
 
   const patients = input.patients.filter((r) =>
     matchesTenantAndBranch(r as Patient & TenantBranchScopedRecord, input.branchId, input.tenantId)
@@ -325,9 +421,12 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
   const confirmedAppts = todayAppts.filter(
     (a) => a.status === 'confirmed' || a.status === 'scheduled'
   );
-  const activeTodaySlots = todayAppts.filter(
+  const activeTodayAppts = todayAppts.filter(
     (a) => a.status !== 'cancelled' && a.status !== 'no_show'
-  ).length;
+  );
+  const activeTodaySlots = validServerSummary
+    ? toBaseIntMoney(validServerSummary.active_today_slots)
+    : activeTodayAppts.length;
 
   const plannedTreat = treatments.filter((t) => t.status === 'planned');
   const completedTreat = treatments.filter((t) => t.status === 'completed');
@@ -340,81 +439,99 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
   const pendingLab = labOrders.filter((l) => l.status === 'sent' || l.status === 'in_progress');
   const activeImp = implants.filter((i) => i.stage !== 'completed' && i.stage !== 'failed');
 
-  // Strict Solar Month (Jalali) + Asia/Tehran date bounds
-  const completedPaymentsAll = payments.filter((p) => p.status === 'completed');
-  const todayCollectedVal = completedPaymentsAll
+  // Strict Solar Month (Jalali) + Asia/Tehran date bounds + Refunds/Voids handling
+  const nonVoidPayments = payments.filter((p) => !isVoidedPayment(p));
+  const completedPaymentsAll = nonVoidPayments.filter(
+    (p) => p.status === 'completed' && !isRefundedPayment(p)
+  );
+  const refundedPaymentsAll = nonVoidPayments.filter((p) => isRefundedPayment(p));
+
+  const todayGrossCollected = completedPaymentsAll
     .filter((p) => p.payment_date?.slice(0, 10) === todayIso)
-    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    .reduce((sum, p) => sum + toBaseIntMoney(p.amount), 0);
+  const todayRefunded = refundedPaymentsAll
+    .filter((p) => (p.refunded_at || p.payment_date)?.slice(0, 10) === todayIso)
+    .reduce((sum, p) => sum + Math.abs(toBaseIntMoney(p.amount)), 0);
+  const clientTodayCollectedVal = todayGrossCollected - todayRefunded;
 
   const monthPayments = completedPaymentsAll.filter((p) =>
     isDateInRange(p.payment_date, monthStartIso, monthEndIso)
   );
-  const monthCollectedVal = monthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const monthGrossCollected = monthPayments.reduce((sum, p) => sum + toBaseIntMoney(p.amount), 0);
+  const clientMonthRefundedVal = refundedPaymentsAll
+    .filter((p) => isDateInRange(p.refunded_at || p.payment_date, monthStartIso, monthEndIso))
+    .reduce((sum, p) => sum + Math.abs(toBaseIntMoney(p.amount)), 0);
+  const clientMonthCollectedVal = monthGrossCollected - clientMonthRefundedVal;
 
   const monthFinance = finance.filter((f) =>
     isDateInRange(f.transaction_date, monthStartIso, monthEndIso)
   );
 
-  // FIX 03: ONLY performed/completed treatments count toward realized accrual profit & production
-  const monthPerformedTreatments = treatments.filter(
-    (t) => t.status === 'completed' && isDateInRange(t.created_at, monthStartIso, monthEndIso)
-  );
+  // V4 P0: Accrual revenue & direct costs recognized STRICTLY on `performed_at` / `completed_at` (NEVER `created_at`)
+  let clientUnverifiedCompletionDateCount = 0;
+  const monthPerformedTreatments: Treatment[] = [];
+  for (const t of treatments) {
+    if (t.status !== 'completed') continue;
+    const realizationDate = resolveTreatmentRealizationDate(t);
+    if (!realizationDate) {
+      clientUnverifiedCompletionDateCount += 1;
+      continue;
+    }
+    if (isDateInRange(realizationDate, monthStartIso, monthEndIso)) {
+      monthPerformedTreatments.push(t);
+    }
+  }
+
   const monthPlannedTreatments = treatments.filter(
     (t) =>
       (t.status === 'planned' || t.status === 'in_progress') &&
       isDateInRange(t.created_at, monthStartIso, monthEndIso)
   );
 
-  const monthTreatmentProductionVal = monthPerformedTreatments.reduce(
-    (sum, t) => sum + Math.max(0, Number(t.total_cost || 0) - Number(t.discount || 0)),
+  const clientMonthTreatmentProductionVal = monthPerformedTreatments.reduce(
+    (sum, t) => sum + Math.max(0, toBaseIntMoney(t.total_cost) - toBaseIntMoney(t.discount)),
     0
   );
-  const monthPlannedProductionVal = monthPlannedTreatments.reduce(
-    (sum, t) => sum + Math.max(0, Number(t.total_cost || 0) - Number(t.discount || 0)),
+  const clientMonthPlannedProductionVal = monthPlannedTreatments.reduce(
+    (sum, t) => sum + Math.max(0, toBaseIntMoney(t.total_cost) - toBaseIntMoney(t.discount)),
     0
   );
-  const monthDirectCostsVal = monthPerformedTreatments.reduce(
+  const clientMonthDirectCostsVal = monthPerformedTreatments.reduce(
     (sum, t) =>
       sum +
-      Number(t.doctor_cost || 0) +
-      Number(t.lab_cost || 0) +
-      Number(t.material_cost || 0) +
-      Number(t.other_cost || 0),
+      toBaseIntMoney(t.doctor_cost) +
+      toBaseIntMoney(t.lab_cost) +
+      toBaseIntMoney(t.material_cost) +
+      toBaseIntMoney(t.other_cost),
     0
   );
 
-  const monthExtraIncomeVal = monthFinance
+  const clientMonthExtraIncomeVal = monthFinance
     .filter((f) => f.type === 'income' && !isDuplicatePaymentTransaction(f, monthPayments))
-    .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+    .reduce((sum, f) => sum + toBaseIntMoney(f.amount), 0);
 
-  // Cash operating expense (all cash outflows for Cash Flow)
-  const monthTotalCashExpenseVal = monthFinance
+  const clientMonthTotalCashExpenseVal = monthFinance
     .filter((f) => f.type === 'expense')
-    .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+    .reduce((sum, f) => sum + toBaseIntMoney(f.amount), 0);
 
-  // Operating expense deduplicated against treatment direct costs for Accrual Net Profit
-  const monthDedupedOperatingExpenseVal = monthFinance
+  const clientMonthDedupedOperatingExpenseVal = monthFinance
     .filter(
       (f) =>
         f.type === 'expense' &&
         !isLinkedTreatmentDirectCostExpense(f, monthPerformedTreatments)
     )
-    .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+    .reduce((sum, f) => sum + toBaseIntMoney(f.amount), 0);
 
-  // Cash flow = actual cash received minus cash outflows
-  const monthCashFlowVal = monthCollectedVal + monthExtraIncomeVal - monthTotalCashExpenseVal;
+  const clientMonthCashFlowVal =
+    clientMonthCollectedVal + clientMonthExtraIncomeVal - clientMonthTotalCashExpenseVal;
 
-  // Accrual Net Profit = Realized (Completed) Production + Extra Income - Direct Clinical Costs - Deduplicated Operating Expenses
-  const monthNetProfitVal =
-    monthTreatmentProductionVal +
-    monthExtraIncomeVal -
-    monthDirectCostsVal -
-    monthDedupedOperatingExpenseVal;
+  const clientMonthNetProfitVal =
+    clientMonthTreatmentProductionVal +
+    clientMonthExtraIncomeVal -
+    clientMonthDirectCostsVal -
+    clientMonthDedupedOperatingExpenseVal;
 
-  // Reconciled Receivables (A/R):
-  // - Only performed/in-progress treatments have collectible balances (never planned/unaccepted quotes)
-  // - Installments linked via `treatment_id` are reconciled against their parent treatment (not double-counted)
-  // - Collectible checks linked via `treatment_id` or `installment_id` are not double-counted; guarantee checks stay isolated
+  // Reconciled Receivables (A/R)
   const treatmentIdSet = new Set(
     treatments.filter((t) => t.status !== 'cancelled' && t.status !== 'planned').map((t) => t.id)
   );
@@ -429,8 +546,8 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
         sum +
         Math.max(
           0,
-          Math.max(0, Number(t.total_cost || 0) - Number(t.discount || 0)) -
-            Number(t.paid_amount || 0)
+          Math.max(0, toBaseIntMoney(t.total_cost) - toBaseIntMoney(t.discount)) -
+            toBaseIntMoney(t.paid_amount)
         ),
       0
     );
@@ -442,17 +559,17 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
         (!i.treatment_id || !treatmentIdSet.has(i.treatment_id))
     )
     .reduce(
-      (sum, i) => sum + Math.max(0, Number(i.total_amount || 0) - Number(i.paid_amount || 0)),
+      (sum, i) => sum + Math.max(0, toBaseIntMoney(i.total_amount) - toBaseIntMoney(i.paid_amount)),
       0
     );
 
-  const collectionChecksPendingAmountVal = checks
+  const clientCollectionChecksPendingAmountVal = checks
     .filter((c) => c.status === 'pending' && !isGuaranteeCheck(c))
-    .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    .reduce((sum, c) => sum + toBaseIntMoney(c.amount), 0);
 
-  const guaranteeChecksPendingAmountVal = checks
+  const clientGuaranteeChecksPendingAmountVal = checks
     .filter((c) => c.status === 'pending' && isGuaranteeCheck(c))
-    .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    .reduce((sum, c) => sum + toBaseIntMoney(c.amount), 0);
 
   const standaloneCollectionChecksAmount = checks
     .filter(
@@ -462,16 +579,60 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
         (!c.treatment_id || !treatmentIdSet.has(c.treatment_id)) &&
         (!c.installment_id || !installmentIdSet.has(c.installment_id))
     )
-    .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    .reduce((sum, c) => sum + toBaseIntMoney(c.amount), 0);
 
-  const totalReceivablesVal =
+  const clientTotalReceivablesVal =
     treatmentReceivables + standaloneInstallmentReceivables + standaloneCollectionChecksAmount;
 
-  // Explicit denominators — NEVER return artificial defaults or conflate incomplete data with 0
+  // Prefer authoritative full-dataset server RPC values when present & verified
+  const todayCollectedVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.today_collected)
+    : clientTodayCollectedVal;
+  const monthCollectedVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.month_collected)
+    : clientMonthCollectedVal;
+  const monthRefundedVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.month_refunded)
+    : clientMonthRefundedVal;
+  const monthExtraIncomeVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.month_extra_income)
+    : clientMonthExtraIncomeVal;
+  const monthDedupedOperatingExpenseVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.month_operating_expense)
+    : clientMonthDedupedOperatingExpenseVal;
+  const monthDirectCostsVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.month_direct_costs)
+    : clientMonthDirectCostsVal;
+  const monthTreatmentProductionVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.month_treatment_production)
+    : clientMonthTreatmentProductionVal;
+  const monthPlannedProductionVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.month_planned_production)
+    : clientMonthPlannedProductionVal;
+  const monthCashFlowVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.month_cash_flow)
+    : clientMonthCashFlowVal;
+  const monthNetProfitVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.month_net_profit)
+    : clientMonthNetProfitVal;
+  const collectionChecksPendingAmountVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.collection_checks_pending_amount)
+    : clientCollectionChecksPendingAmountVal;
+  const guaranteeChecksPendingAmountVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.guarantee_checks_pending_amount)
+    : clientGuaranteeChecksPendingAmountVal;
+  const totalReceivablesVal = validServerSummary
+    ? toBaseIntMoney(validServerSummary.total_receivables)
+    : clientTotalReceivablesVal;
+  const unverifiedCompletionDateCount = validServerSummary
+    ? toBaseIntMoney(validServerSummary.unverified_completion_date_count)
+    : clientUnverifiedCompletionDateCount;
+
+  // V4 P0: Unclamped real percentages (NEVER hide >100% collections or target overachievement)
   const monthPaidTowardsProduction = monthCollectedVal + monthExtraIncomeVal;
   const pcRatioPct =
     financialDataComplete && monthTreatmentProductionVal > 0
-      ? Math.min(100, Math.round((monthPaidTowardsProduction / monthTreatmentProductionVal) * 100))
+      ? Math.round((monthPaidTowardsProduction / monthTreatmentProductionVal) * 100)
       : null;
 
   const totalCasesCount = plannedTreat.length + acceptedTreat.length;
@@ -485,11 +646,11 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
   );
   const dailyGoalProgressPct =
     financialDataComplete && dailyRevenueTarget && dailyRevenueTarget > 0
-      ? Math.min(100, Math.round((todayCollectedVal / dailyRevenueTarget) * 100))
+      ? Math.round((todayCollectedVal / dailyRevenueTarget) * 100)
       : null;
   const monthlyGoalProgressPct =
     financialDataComplete && monthlyRevenueTarget && monthlyRevenueTarget > 0
-      ? Math.min(100, Math.round(((monthCollectedVal + monthExtraIncomeVal) / monthlyRevenueTarget) * 100))
+      ? Math.round(((monthCollectedVal + monthExtraIncomeVal) / monthlyRevenueTarget) * 100)
       : null;
 
   const capacity = computeRealChairCapacity({
@@ -497,6 +658,7 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
     staff: input.staff,
     clinicSettings: input.clinicSettings,
     activeTodaySlots,
+    todayActiveAppointments: activeTodayAppts,
     referenceDateIso: todayIso,
   });
 
@@ -506,17 +668,56 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
   const pendingRem = reminders.filter((r) => r.status === 'pending');
   const overdueRem = pendingRem.filter((r) => r.reminder_date < todayIso);
 
-  const overdueInstallments = installments.filter(
-    (i) => (i.status === 'active' || i.status === 'overdue') && i.next_due_date && i.next_due_date < todayIso
-  ).length;
-  const overdueChecks = checks.filter(
-    (c) => c.status === 'pending' && !isGuaranteeCheck(c) && c.due_date < todayIso
-  ).length;
-  const overdueGuaranteeChecks = checks.filter(
-    (c) => c.status === 'pending' && isGuaranteeCheck(c) && c.due_date < todayIso
-  ).length;
-  const overdueSafteh = safteh.filter((sf) => sf.status === 'pending' && sf.due_date < todayIso).length;
+  const overdueInstallments = validServerSummary
+    ? toBaseIntMoney(validServerSummary.overdue_installments_count)
+    : installments.filter(
+        (i) =>
+          (i.status === 'active' || i.status === 'overdue') &&
+          i.next_due_date &&
+          i.next_due_date < todayIso
+      ).length;
+  const overdueChecks = validServerSummary
+    ? toBaseIntMoney(validServerSummary.overdue_checks_count)
+    : checks.filter(
+        (c) => c.status === 'pending' && !isGuaranteeCheck(c) && c.due_date < todayIso
+      ).length;
+  const overdueGuaranteeChecks = validServerSummary
+    ? toBaseIntMoney(validServerSummary.overdue_guarantee_checks_count)
+    : checks.filter(
+        (c) => c.status === 'pending' && isGuaranteeCheck(c) && c.due_date < todayIso
+      ).length;
+  const overdueSafteh = validServerSummary
+    ? toBaseIntMoney(validServerSummary.overdue_safteh_count)
+    : safteh.filter((sf) => sf.status === 'pending' && sf.due_date < todayIso).length;
   const totalOverdueFinCount = overdueInstallments + overdueChecks;
+
+  const todayApptsCount = validServerSummary
+    ? toBaseIntMoney(validServerSummary.today_appointments_count)
+    : todayAppts.length;
+  const confirmedApptsCount = validServerSummary
+    ? toBaseIntMoney(validServerSummary.confirmed_appointments_count)
+    : confirmedAppts.length;
+  const activeTreatCount = validServerSummary
+    ? toBaseIntMoney(validServerSummary.active_treatments_count)
+    : activeTreat.length;
+  const plannedTreatCount = validServerSummary
+    ? toBaseIntMoney(validServerSummary.planned_treatments_count)
+    : plannedTreat.length;
+  const completedTreatCount = validServerSummary
+    ? toBaseIntMoney(validServerSummary.completed_treatments_count)
+    : completedTreat.length;
+  const pendingLabCount = validServerSummary
+    ? toBaseIntMoney(validServerSummary.pending_lab_count)
+    : pendingLab.length;
+  const activeImplantCount = validServerSummary
+    ? toBaseIntMoney(validServerSummary.active_implant_count)
+    : activeImp.length;
+  const lowStockCount = validServerSummary
+    ? toBaseIntMoney(validServerSummary.low_stock_count)
+    : lowStock.length;
+  const pendingRemindersCount = validServerSummary
+    ? toBaseIntMoney(validServerSummary.pending_reminders_count)
+    : pendingRem.length;
 
   const patientMap = new Map<string, Patient>();
   for (const p of patients) patientMap.set(p.id, p);
@@ -551,8 +752,8 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
   let priorityAction: DashboardPriorityAction = {
     title: 'برنامه نوبت‌های امروز مطب',
     subtitle:
-      todayAppts.length > 0
-        ? `${fmt(confirmedAppts.length)} نوبت تاییدشده از ${fmt(todayAppts.length)} نوبت امروز`
+      todayApptsCount > 0
+        ? `${fmt(confirmedApptsCount)} نوبت تاییدشده از ${fmt(todayApptsCount)} نوبت امروز`
         : 'نوبت فعالی برای امروز ثبت نشده است',
     cta: 'مدیریت نوبت‌ها',
     target: 'appointments',
@@ -585,9 +786,9 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
       border: '#FECDD3',
       urgent: true,
     };
-  } else if (lowStock.length > 0 && canAccessRoute(input.userRole, 'inventory')) {
+  } else if (lowStockCount > 0 && canAccessRoute(input.userRole, 'inventory')) {
     priorityAction = {
-      title: `${fmt(lowStock.length)} قلم مصرفی زیر حد نصاب`,
+      title: `${fmt(lowStockCount)} قلم مصرفی زیر حد نصاب`,
       subtitle: 'ثبت سفارش مجدد اقلام حیاتی انبار کلینیک',
       cta: 'بررسی انبار',
       target: 'inventory',
@@ -596,9 +797,9 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
       border: '#FDE68A',
       urgent: true,
     };
-  } else if (pendingLab.length > 0 && canAccessRoute(input.userRole, 'lab')) {
+  } else if (pendingLabCount > 0 && canAccessRoute(input.userRole, 'lab')) {
     priorityAction = {
-      title: `${fmt(pendingLab.length)} سفارش لابراتوار در جریان`,
+      title: `${fmt(pendingLabCount)} سفارش لابراتوار در جریان`,
       subtitle: 'پیگیری وضعیت ارسال و دریافت پروتز بیماران',
       cta: 'بخش لابراتوار',
       target: 'lab',
@@ -624,6 +825,7 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
   });
 
   const hasSufficientData =
+    validServerSummary !== null ||
     patients.length > 0 ||
     appointments.length > 0 ||
     treatments.length > 0 ||
@@ -633,31 +835,31 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
   const smartBrief = buildSmartDailyBrief({
     alerts: liveAlerts,
     todayDate: todayIso,
-    todayApptsCount: todayAppts.length,
-    confirmedApptsCount: confirmedAppts.length,
-    pendingLabCount: pendingLab.length,
-    lowStockCount: lowStock.length,
+    todayApptsCount,
+    confirmedApptsCount,
+    pendingLabCount,
+    lowStockCount,
     userRole: input.userRole,
     hasSufficientData,
   });
 
   const serviceValues: Record<SectionId, number | string> = {
-    dashboard: todayAppts.length,
+    dashboard: todayApptsCount,
     patients: patients.length,
-    appointments: todayAppts.length,
-    calendar: todayAppts.length + pendingRem.length,
-    treatments: activeTreat.length,
-    lab: pendingLab.length,
-    implants: activeImp.length,
+    appointments: todayApptsCount,
+    calendar: todayApptsCount + pendingRemindersCount,
+    treatments: activeTreatCount,
+    lab: pendingLabCount,
+    implants: activeImplantCount,
     finance: !financialDataComplete
       ? 'ناقص'
       : totalOverdueFinCount > 0
       ? `${fmt(totalOverdueFinCount)} معوق`
       : `${fmt(todayCollectedVal)} ت`,
-    inventory: lowStock.length,
-    reminders: pendingRem.length,
-    staff: activeTreat.length,
-    messages: pendingRem.length,
+    inventory: lowStockCount,
+    reminders: pendingRemindersCount,
+    staff: activeTreatCount,
+    messages: pendingRemindersCount,
     settings: 0,
   };
 
@@ -667,17 +869,19 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
     monthStartIso,
     monthEndIso,
     branchId: input.branchId,
+    dataSourceMode: validServerSummary ? 'server_rpc' : 'client_paginated',
     hasSufficientData,
     financialDataComplete,
-    todayApptsCount: todayAppts.length,
-    confirmedApptsCount: confirmedAppts.length,
-    activeTreatCount: activeTreat.length,
-    plannedTreatCount: plannedTreat.length,
-    completedTreatCount: completedTreat.length,
-    pendingLabCount: pendingLab.length,
-    activeImplantCount: activeImp.length,
-    lowStockCount: lowStock.length,
-    pendingRemindersCount: pendingRem.length,
+    unverifiedCompletionDateCount,
+    todayApptsCount,
+    confirmedApptsCount,
+    activeTreatCount,
+    plannedTreatCount,
+    completedTreatCount,
+    pendingLabCount,
+    activeImplantCount,
+    lowStockCount,
+    pendingRemindersCount,
     overdueChecksCount: overdueChecks,
     overdueGuaranteeChecksCount: overdueGuaranteeChecks,
     overdueInstallmentsCount: overdueInstallments,
@@ -686,9 +890,11 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
     pcRatioPct,
     caseAcceptancePct,
     revenue: {
+      currencyUnit: 'IRR_TOMAN',
       financialDataComplete,
       todayCollected: financialDataComplete ? todayCollectedVal : null,
       monthCollected: financialDataComplete ? monthCollectedVal : null,
+      monthRefunded: financialDataComplete ? monthRefundedVal : null,
       monthExtraIncome: financialDataComplete ? monthExtraIncomeVal : null,
       monthExpense: financialDataComplete ? monthDedupedOperatingExpenseVal : null,
       monthDirectCosts: financialDataComplete ? monthDirectCostsVal : null,
@@ -696,6 +902,7 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
       monthCashFlow: financialDataComplete ? monthCashFlowVal : null,
       monthTreatmentProduction: financialDataComplete ? monthTreatmentProductionVal : null,
       monthPlannedProduction: financialDataComplete ? monthPlannedProductionVal : null,
+      unverifiedCompletionDateCount,
       collectionChecksPendingAmount: financialDataComplete ? collectionChecksPendingAmountVal : null,
       guaranteeChecksPendingAmount: financialDataComplete ? guaranteeChecksPendingAmountVal : null,
       totalReceivables: financialDataComplete ? totalReceivablesVal : null,

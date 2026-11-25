@@ -155,7 +155,7 @@ export function QBankTile({
           handleClick();
         }
       }}
-      className="qbank-notch-card group relative w-full select-none cursor-pointer"
+      className="qbank-notch-card group relative w-full select-none cursor-pointer rounded-[22px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C76] focus-visible:ring-offset-2"
       style={{
         minHeight: `${tileMinHeight}px`,
         ['--qbt-start' as string]: surfaceBg,
@@ -209,18 +209,21 @@ export function QBankTile({
             {icon}
           </div>
 
-          {/* Title (14-16px) & Subtitle (13-14px) */}
+          {/* Title (14-16px, clean 2-line wrap) & Subtitle (13-14px) */}
           <div className="min-w-0 flex-1 text-right pt-0.5">
-            <p className="text-[14px] sm:text-[15px] font-black text-[#14283B] dark:text-[#F1F5F9] leading-snug line-clamp-1">
+            <p
+              title={label}
+              className="text-[14px] sm:text-[15px] font-black text-[#14283B] dark:text-[#F1F5F9] leading-snug line-clamp-2"
+            >
               {label}
             </p>
             {sub ? (
-              <p className="text-[12.5px] sm:text-[13px] font-semibold text-[#526779] dark:text-[#9FB1C1] leading-snug line-clamp-1 mt-0.5">
+              <p className="text-[13px] sm:text-[13.5px] font-semibold text-[#526779] dark:text-[#9FB1C1] leading-snug line-clamp-1 mt-0.5">
                 {sub}
               </p>
             ) : value !== undefined ? (
               <p
-                className="text-[12.5px] sm:text-[13px] font-bold tabular-nums leading-snug line-clamp-1 mt-0.5 dark:text-[#CBD5E1]"
+                className="text-[13px] sm:text-[13.5px] font-bold tabular-nums leading-snug line-clamp-1 mt-0.5 dark:text-[#CBD5E1]"
                 style={{ color: effectiveDark }}
               >
                 {typeof value === 'number' ? `${value.toLocaleString('fa-IR')} مورد` : value}
@@ -233,7 +236,7 @@ export function QBankTile({
         <div className="flex items-center justify-start gap-1.5 pl-[48px] min-h-[22px]">
           {value !== undefined && sub && (
             <span
-              className="text-[11.5px] font-black px-2 py-0.5 rounded-full tabular-nums bg-white dark:bg-[#16283B] dark:text-[#F1F5F9]"
+              className="text-[12px] font-black px-2 py-0.5 rounded-full tabular-nums bg-white dark:bg-[#16283B] dark:text-[#F1F5F9]"
               style={{
                 color: effectiveDark,
                 border: `1px solid ${effectiveBorder}`,
@@ -244,7 +247,7 @@ export function QBankTile({
           )}
           {badge && (
             <span
-              className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-[#16283B] dark:text-[#F1F5F9]"
+              className="text-[12px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-[#16283B] dark:text-[#F1F5F9]"
               style={{
                 color: effectiveDark,
                 border: `1px solid ${effectiveBorder}`,

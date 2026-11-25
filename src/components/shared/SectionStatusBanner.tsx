@@ -83,6 +83,62 @@ export function SectionStatusBanner({
     );
   }
 
+  if (status === 'locked_offline') {
+    return (
+      <div
+        role="alert"
+        data-testid="section_status_locked_offline"
+        className="rounded-card px-3.5 py-2.5 bg-[#FFF1F2] dark:bg-[#2A1218] border border-[#FECDD3] dark:border-[#7F1D1D] flex items-center justify-between gap-2 text-xs font-bold text-[#AD293C] dark:text-[#FDA4AF]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <Lock size={16} className="shrink-0" />
+          <span className="leading-snug">
+            {errorMessage ||
+              'حافظه رمزنگاری‌شده آفلاین پس از بارگذاری مجدد قفل شده است. برای مشاهده داده‌ها به اینترنت متصل شوید.'}
+          </span>
+        </div>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="min-h-[40px] px-3 py-1 rounded-btn bg-white dark:bg-[#11202E] border border-[#FECDD3] dark:border-[#7F1D1D] text-[#AD293C] dark:text-[#FDA4AF] font-bold flex items-center gap-1 shrink-0"
+          >
+            <RefreshCw size={13} />
+            <span>اتصال مجدد</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (status === 'partial') {
+    return (
+      <div
+        role="status"
+        data-testid="section_status_partial"
+        className="rounded-card px-3.5 py-2.5 bg-[#FFFBEB] dark:bg-[#291E0B] border border-[#FDE68A] dark:border-[#78350F] flex items-center justify-between gap-2 text-xs font-bold text-[#92510C] dark:text-[#FCD34D]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <Database size={16} className="shrink-0" />
+          <span className="leading-snug">
+            {errorMessage ||
+              'داده‌های نمایشی بخشی از رکوردها هستند (Partial). شاخص‌های مالی تا تکمیل همگام‌سازی سرور به‌صورت ناقص علامت‌گذاری شده‌اند.'}
+          </span>
+        </div>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="min-h-[40px] px-3 py-1 rounded-btn bg-white dark:bg-[#11202E] border border-[#FDE68A] text-[#92510C] font-bold flex items-center gap-1 shrink-0"
+          >
+            <RefreshCw size={13} />
+            <span>تلاش مجدد</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (status === 'offline') {
     return (
       <div

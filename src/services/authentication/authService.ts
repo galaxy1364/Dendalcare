@@ -1,6 +1,7 @@
 import { rawSupabase } from '@/lib/supabaseCore';
 import { purgeClinicalLocalStorageCaches } from '@/services/supabase/scopedCache';
 import { clearAllSessionVaultKeys, clearVaultMirrorsForScope } from '@/lib/dataVault';
+import { disconnectAllRealtimeChannels } from '@/services/realtime/realtimeHub';
 
 export type ClinicBranch = {
   id: string;
@@ -45,6 +46,7 @@ export function setActiveBranchId(branchId: string): string {
       const prev = window.localStorage.getItem(ACTIVE_BRANCH_KEY);
       window.localStorage.setItem(ACTIVE_BRANCH_KEY, valid);
       if (prev && prev !== valid) {
+        disconnectAllRealtimeChannels();
         purgeClinicalLocalStorageCaches({ branchId: prev });
         clearAllSessionVaultKeys();
         void clearVaultMirrorsForScope({ branchId: prev });
@@ -71,14 +73,14 @@ function deterministicFallbackHash(input: string): string {
 }
 
 export function generateSaltHex(bytes = 12): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-    const arr = new Uint8Array(bytes);
-    crypto.getRandomValues(arr);
-    return Array.from(arr)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+  if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+    throw new Error('CSPRNG (crypto.getRandomValues) is unavailable for salt generation.');
   }
-  return `${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 10)}`;
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
@@ -132,10 +134,8 @@ export async function getVerifiedSupabaseSession(): Promise<VerifiedSessionState
       };
     }
     const user = data.session.user;
-    const roleClaim =
-      (user.app_metadata?.clinic_role as string | undefined) ||
-      (user.user_metadata?.clinic_role as string | undefined) ||
-      null;
+    // Security: ONLY trust server-signed app_metadata (NEVER client-writable user_metadata)
+    const roleClaim = (user.app_metadata?.clinic_role as string | undefined) || null;
 
     return {
       status: 'authenticated',
@@ -187,6 +187,7 @@ export async function signOutSupabaseSession(): Promise<void> {
   } catch {
     // ignore signout network error
   }
+  disconnectAllRealtimeChannels();
   purgeClinicalLocalStorageCaches();
   clearAllSessionVaultKeys();
   void clearVaultMirrorsForScope();

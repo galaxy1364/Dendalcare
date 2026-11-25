@@ -66,7 +66,7 @@ import { detectPlatformCapabilities } from '@/lib/platformEngine';
 import { HapticEngine } from '@/lib/hapticsAudio';
 import { verifyServerMutation } from '@/lib/supabaseGuardian';
 import { Sun, Moon, Monitor, Type, Gauge, Cpu, Target } from 'lucide-react';
-import { CLINIC_BRANCHES, getActiveBranchId, setActiveBranchId } from '@/services/authentication/authService';
+import { ACTIVE_TENANT_ID, CLINIC_BRANCHES, getActiveBranchId, setActiveBranchId } from '@/services/authentication/authService';
 
 type SettingsTab = 'clinic' | 'diagnostics' | 'integrations' | 'ads';
 
@@ -396,11 +396,20 @@ function ClinicSettingsTab({
     setRestoring(true);
     setRestoreMessage(null);
     try {
-      const res = await restoreCompleteClinicSnapshot(restorePreview);
+      const activeUser = loadActiveUser();
+      const res = await restoreCompleteClinicSnapshot(restorePreview, {
+        tenantId: activeUser.tenantId || ACTIVE_TENANT_ID,
+        branchId: getActiveBranchId(),
+        userId: activeUser.id,
+      });
       if (res.ok) {
+        const rejectedNote =
+          res.rejectedCrossScopeRows > 0
+            ? ` (${res.rejectedCrossScopeRows.toLocaleString('fa-IR')} رکورد خارج از محدوده شعبه رد شد)`
+            : '';
         setRestoreMessage({
           type: 'success',
-          text: `بازیابی غیرمخرب با موفقیت انجام شد: ${res.restoredTables.toLocaleString('fa-IR')} جدول (${res.restoredRows.toLocaleString('fa-IR')} رکورد) با Cloud SQL همگام شد.`,
+          text: `بازیابی غیرمخرب با موفقیت انجام شد: ${res.restoredTables.toLocaleString('fa-IR')} جدول (${res.restoredRows.toLocaleString('fa-IR')} رکورد) با Cloud SQL همگام شد${rejectedNote}.`,
         });
         setRestorePreview(null);
       } else {
@@ -1017,7 +1026,13 @@ function ZeroDeleteVaultCard() {
   const [vaultMsg, setVaultMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const loadVault = useCallback(async () => {
-    const [s, list] = await Promise.all([getVaultStats(), listArchivedRecords()]);
+    const activeUser = loadActiveUser();
+    const activeScope = {
+      tenantId: activeUser.tenantId || ACTIVE_TENANT_ID,
+      branchId: getActiveBranchId(),
+      userId: activeUser.id,
+    };
+    const [s, list] = await Promise.all([getVaultStats(), listArchivedRecords(activeScope)]);
     setStats(s);
     setArchived(list);
   }, []);
@@ -1032,7 +1047,12 @@ function ZeroDeleteVaultCard() {
   const handleRestore = async (archiveId: string) => {
     setRestoringId(archiveId);
     setVaultMsg(null);
-    const res = await restoreArchivedRecord(archiveId);
+    const activeUser = loadActiveUser();
+    const res = await restoreArchivedRecord(archiveId, {
+      tenantId: activeUser.tenantId || ACTIVE_TENANT_ID,
+      branchId: getActiveBranchId(),
+      userId: activeUser.id,
+    });
     setRestoringId(null);
     setVaultMsg({ ok: res.ok, text: res.message });
     await loadVault();

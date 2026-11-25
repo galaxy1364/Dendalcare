@@ -9,7 +9,7 @@ import {
 import { CLINIC_SEED_MAP } from './seedClinicData';
 import {
   archiveDeletedRecord,
-  loadTableMirrorFromVault,
+  loadTableMirrorFromVaultWithStatus,
   saveTableMirrorToVault,
 } from './dataVault';
 import {
@@ -27,20 +27,27 @@ import { subscribeToTableRealtime } from '@/services/realtime/realtimeHub';
 export type TableDataStatus =
   | 'loading'
   | 'ready'
+  | 'partial'
   | 'empty'
   | 'error'
   | 'offline'
+  | 'locked_offline'
   | 'unauthorized'
   | 'migration_required';
 
 export interface RealtimeTableOptions {
   limit?: number;
   offset?: number;
+  /** Paginate through all server pages until rows.length < pageSize (true end-of-data detection) */
+  fetchAllPages?: boolean;
+  /** Maximum pages fetched when fetchAllPages=true before marking status='partial' & truncated=true */
+  maxPages?: number;
 }
 
 const REQUEST_TIMEOUT_MS = 6500;
 const MAX_RETRY_ATTEMPTS = 2;
 const DEFAULT_QUERY_LIMIT = 500;
+const DEFAULT_MAX_PAGES = 20;
 
 function isUnauthorizedResponse(err: { code?: string; status?: number; message?: string } | null): boolean {
   if (!err) return false;
@@ -94,23 +101,28 @@ export function shouldAcceptTableResponse(params: {
 /**
  * Pure server-reconciliation helper (exported for unit testing).
  * - Empty `[]` clears state & cache.
- * - `42703` / schema mismatch returns explicit `migration_required` and clears local cache.
- * - `401/403/42501` returns explicit `unauthorized` and clears local cache.
+ * - Truncated dataset (`truncated === true`) surfaces explicit `'partial'` status.
+ * - `42703` / schema mismatch returns explicit `'migration_required'` and clears local cache.
+ * - `401/403/42501` returns explicit `'unauthorized'` and clears local cache.
  */
 export function reconcileServerRows<T>(params: {
   serverRows: T[] | null | undefined;
   error: { message?: string; code?: string; status?: number } | null;
   isOffline: boolean;
+  truncated?: boolean;
 }): {
   rows: T[] | null;
   status: TableDataStatus;
   clearCache: boolean;
   isStale: boolean;
 } {
-  const { serverRows, error, isOffline } = params;
+  const { serverRows, error, isOffline, truncated } = params;
   if (!error && Array.isArray(serverRows)) {
     if (serverRows.length === 0) {
       return { rows: [], status: 'empty', clearCache: true, isStale: false };
+    }
+    if (truncated) {
+      return { rows: serverRows, status: 'partial', clearCache: false, isStale: false };
     }
     return { rows: serverRows, status: 'ready', clearCache: false, isStale: false };
   }
@@ -142,12 +154,12 @@ function resolveCurrentScope(table: TableName, filter?: { column: string; value:
 }
 
 /**
- * Hardened realtime table hook (Third Audit FIX 01, FIX 02, FIX 09):
+ * Hardened realtime table hook (V4 Engineering Release Gate):
+ * - Fail-closed tenant_id + branch_id filtering on every query and realtime channel
  * - Zero `42703` column-stripping fallback: surfaces `migration_required` explicitly
+ * - Multi-page fetch (`fetchAllPages`) with real end-of-data detection & explicit `'partial'` truncation state
+ * - Explicit `'locked_offline'` state when encrypted IndexedDB cache cannot be decrypted after reload
  * - Immediate abort + state wipe on user/branch switch
- * - Monotonic `requestSeqRef` + `activeScopeKeyRef` prevent stale previous-user data entering state
- * - Supports explicit pagination (`limit`, `offset`) for scalability on large datasets
- * - Uses encrypted, session-isolated IndexedDB Vault for offline resilience
  */
 export function useRealtimeTable<T extends { id: string }>(
   table: TableName,
@@ -159,6 +171,8 @@ export function useRealtimeTable<T extends { id: string }>(
   const scope = resolveCurrentScope(table, filter);
   const queryLimit = options?.limit ?? DEFAULT_QUERY_LIMIT;
   const queryOffset = options?.offset ?? 0;
+  const fetchAllPages = Boolean(options?.fetchAllPages);
+  const maxPages = Math.max(1, options?.maxPages ?? DEFAULT_MAX_PAGES);
 
   const [data, setData] = useState<T[]>(() => {
     const cached = readScopedNonSensitiveCache<T>(scope);
@@ -174,6 +188,8 @@ export function useRealtimeTable<T extends { id: string }>(
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState<boolean>(false);
+  const [truncated, setTruncated] = useState<boolean>(false);
+  const [lockedOfflineCount, setLockedOfflineCount] = useState<number>(0);
 
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
@@ -200,7 +216,6 @@ export function useRealtimeTable<T extends { id: string }>(
   );
 
   const fetchData = useCallback(async () => {
-    // Cancel any previous in-flight request and advance monotonic sequence
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -209,6 +224,17 @@ export function useRealtimeTable<T extends { id: string }>(
     const requestScopeKey = currentScope.scopeKey;
     activeScopeKeyRef.current = requestScopeKey;
     const reqSeq = ++requestSeqRef.current;
+
+    // Fail-closed: refuse unscoped queries if tenantId or branchId is missing
+    if (!currentScope.tenantId?.trim() || !currentScope.branchId?.trim()) {
+      setData([]);
+      setStatus('unauthorized');
+      setError('شناسه کلینیک یا شعبه فعال نامعتبر است.');
+      setTruncated(false);
+      setLockedOfflineCount(0);
+      setLoading(false);
+      return;
+    }
 
     const vaultScope = {
       tenantId: currentScope.tenantId,
@@ -223,7 +249,7 @@ export function useRealtimeTable<T extends { id: string }>(
     // Hydrate from encrypted scoped IndexedDB Vault ONLY when offline
     if (offlineNow && !filter?.value) {
       try {
-        const vaultRows = await loadTableMirrorFromVault<T>(table, vaultScope);
+        const vaultRes = await loadTableMirrorFromVaultWithStatus<T>(table, vaultScope);
         if (
           shouldAcceptTableResponse({
             requestSeq: reqSeq,
@@ -234,9 +260,23 @@ export function useRealtimeTable<T extends { id: string }>(
             mounted: mountedRef.current,
           })
         ) {
-          setData(vaultRows);
-          setStatus(vaultRows.length > 0 ? 'offline' : 'empty');
-          setIsStale(vaultRows.length > 0);
+          if (vaultRes.status === 'locked_after_reload') {
+            setData([]);
+            setLockedOfflineCount(vaultRes.lockedRecordCount);
+            setStatus('locked_offline');
+            setError(
+              `حافظه رمزنگاری‌شده آفلاین پس از بارگذاری مجدد قفل شده است (${vaultRes.lockedRecordCount.toLocaleString('fa-IR')} رکورد). برای بازگشایی به اینترنت متصل شوید.`
+            );
+            setIsStale(true);
+            setTruncated(false);
+            setLoading(false);
+            return;
+          }
+          setLockedOfflineCount(0);
+          setData(vaultRes.rows);
+          setStatus(vaultRes.rows.length > 0 ? 'offline' : 'empty');
+          setIsStale(vaultRes.rows.length > 0);
+          setTruncated(false);
           setLoading(false);
         }
       } catch {
@@ -248,55 +288,102 @@ export function useRealtimeTable<T extends { id: string }>(
       return;
     }
 
-    let attempt = 0;
     const activeSelect = select ?? '*';
+    const pageSize = queryLimit > 0 ? queryLimit : DEFAULT_QUERY_LIMIT;
     let lastError: { message?: string; code?: string; status?: number } | null = null;
     let resolvedRows: T[] | null = null;
+    let isTruncated = false;
 
-    while (attempt <= MAX_RETRY_ATTEMPTS && !controller.signal.aborted) {
-      const timeoutHandle = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-      try {
-        let query = supabase.from(table).select(activeSelect);
-        if (filter && filter.value !== null && filter.value !== undefined) {
-          query = query.eq(filter.column, filter.value);
-        }
-        if (typeof (query as any).abortSignal === 'function') {
-          query = (query as any).abortSignal(controller.signal);
-        }
-        let ordered = query.order('created_at', { ascending: false });
-        if (typeof (ordered as any).range === 'function' && queryLimit > 0) {
-          ordered = (ordered as any).range(queryOffset, queryOffset + queryLimit - 1);
-        } else if (typeof (ordered as any).limit === 'function' && queryLimit > 0) {
-          ordered = (ordered as any).limit(queryLimit);
-        }
-        const { data: rows, error: err, status: httpStatus } = await ordered;
-        clearTimeout(timeoutHandle);
+    const fetchSinglePage = async (
+      fromIdx: number,
+      toIdx: number
+    ): Promise<{ rows: T[] | null; error: { message?: string; code?: string; status?: number } | null }> => {
+      let attempt = 0;
+      let pageErr: { message?: string; code?: string; status?: number } | null = null;
 
-        if (!err && Array.isArray(rows)) {
-          resolvedRows = rows as unknown as T[];
-          lastError = null;
-          break;
+      while (attempt <= MAX_RETRY_ATTEMPTS && !controller.signal.aborted) {
+        const timeoutHandle = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        try {
+          let query = supabase
+            .from(table)
+            .select(activeSelect)
+            .eq('tenant_id', currentScope.tenantId)
+            .eq('branch_id', currentScope.branchId);
+
+          if (filter && filter.value !== null && filter.value !== undefined) {
+            query = query.eq(filter.column, filter.value);
+          }
+          if (typeof (query as any).abortSignal === 'function') {
+            query = (query as any).abortSignal(controller.signal);
+          }
+          let ordered = query.order('created_at', { ascending: false });
+          if (typeof (ordered as any).range === 'function') {
+            ordered = (ordered as any).range(fromIdx, toIdx);
+          } else if (typeof (ordered as any).limit === 'function') {
+            ordered = (ordered as any).limit(toIdx - fromIdx + 1);
+          }
+          const { data: rows, error: err, status: httpStatus } = await ordered;
+          clearTimeout(timeoutHandle);
+
+          if (!err && Array.isArray(rows)) {
+            return { rows: rows as unknown as T[], error: null };
+          }
+          pageErr = {
+            message: err?.message,
+            code: err?.code,
+            status: httpStatus,
+          };
+          if (isSchemaMigrationRequiredError(pageErr) || isUnauthorizedResponse(pageErr)) {
+            return { rows: null, error: pageErr };
+          }
+        } catch (e: unknown) {
+          clearTimeout(timeoutHandle);
+          if (controller.signal.aborted) break;
+          const msg = e instanceof Error ? e.message : 'خطای ارتباط با سرور';
+          pageErr = { message: msg };
         }
-        lastError = {
-          message: err?.message,
-          code: err?.code,
-          status: httpStatus,
-        };
-        // FIX 02: Never strip tenant_id/branch_id on 42703; fail explicitly with migration_required
-        if (isSchemaMigrationRequiredError(lastError) || isUnauthorizedResponse(lastError)) {
-          break;
+
+        attempt += 1;
+        if (attempt <= MAX_RETRY_ATTEMPTS && !controller.signal.aborted) {
+          await new Promise((r) => setTimeout(r, 350 * attempt));
         }
-      } catch (e: unknown) {
-        clearTimeout(timeoutHandle);
-        if (controller.signal.aborted) break;
-        const msg = e instanceof Error ? e.message : 'خطای ارتباط با سرور';
-        lastError = { message: msg };
       }
 
-      attempt += 1;
-      if (attempt <= MAX_RETRY_ATTEMPTS && !controller.signal.aborted) {
-        await new Promise((r) => setTimeout(r, 350 * attempt));
+      return { rows: null, error: pageErr };
+    };
+
+    if (fetchAllPages) {
+      const accumulated: T[] = [];
+      let page = 0;
+      while (page < maxPages && !controller.signal.aborted) {
+        const fromIdx = queryOffset + page * pageSize;
+        const toIdx = fromIdx + pageSize - 1;
+        const res = await fetchSinglePage(fromIdx, toIdx);
+        if (res.error || !res.rows) {
+          lastError = res.error;
+          resolvedRows = null;
+          break;
+        }
+        accumulated.push(...res.rows);
+        if (res.rows.length < pageSize) {
+          // True end-of-data reached
+          resolvedRows = accumulated;
+          isTruncated = false;
+          break;
+        }
+        page += 1;
+        if (page >= maxPages) {
+          // Hit ceiling while server still returned a full page — mark dataset partial/truncated
+          resolvedRows = accumulated;
+          isTruncated = true;
+        }
       }
+    } else {
+      const res = await fetchSinglePage(queryOffset, queryOffset + pageSize - 1);
+      lastError = res.error;
+      resolvedRows = res.rows;
+      // Single-page query that filled the exact page limit may be truncated
+      isTruncated = Array.isArray(res.rows) && res.rows.length >= pageSize;
     }
 
     if (
@@ -316,15 +403,20 @@ export function useRealtimeTable<T extends { id: string }>(
       serverRows: resolvedRows,
       error: lastError,
       isOffline: typeof navigator !== 'undefined' && navigator.onLine === false,
+      truncated: isTruncated,
     });
 
     if (reconciled.rows !== null) {
+      setLockedOfflineCount(0);
+      setTruncated(isTruncated);
       setData(reconciled.rows);
       setError(
         reconciled.status === 'migration_required'
           ? `ساختار جدول ${table} با نسخه امنیتی همخوانی ندارد. اجرای Migration الزامی است.`
           : reconciled.status === 'unauthorized'
           ? lastError?.message || 'دسترسی غیرمجاز'
+          : reconciled.status === 'partial'
+          ? `بخشی از رکوردهای جدول ${table} دریافت شد (بیش از سقف صفحه‌بندی).`
           : null
       );
       setStatus(reconciled.status);
@@ -340,7 +432,7 @@ export function useRealtimeTable<T extends { id: string }>(
     } else {
       if (!filter?.value) {
         try {
-          const vaultRows = await loadTableMirrorFromVault<T>(table, vaultScope);
+          const vaultRes = await loadTableMirrorFromVaultWithStatus<T>(table, vaultScope);
           if (
             shouldAcceptTableResponse({
               requestSeq: reqSeq,
@@ -349,10 +441,23 @@ export function useRealtimeTable<T extends { id: string }>(
               activeScopeKey: activeScopeKeyRef.current,
               aborted: controller.signal.aborted,
               mounted: mountedRef.current,
-            }) &&
-            vaultRows.length > 0
+            })
           ) {
-            setData(vaultRows);
+            if (vaultRes.status === 'locked_after_reload') {
+              setData([]);
+              setLockedOfflineCount(vaultRes.lockedRecordCount);
+              setError(
+                `حافظه رمزنگاری‌شده آفلاین پس از بارگذاری مجدد قفل شده است (${vaultRes.lockedRecordCount.toLocaleString('fa-IR')} رکورد).`
+              );
+              setStatus('locked_offline');
+              setIsStale(true);
+              setTruncated(false);
+              setLoading(false);
+              return;
+            }
+            if (vaultRes.rows.length > 0) {
+              setData(vaultRes.rows);
+            }
           }
         } catch {
           // ignore
@@ -366,7 +471,7 @@ export function useRealtimeTable<T extends { id: string }>(
     if (mountedRef.current && reqSeq === requestSeqRef.current) {
       setLoading(false);
     }
-  }, [table, select, filter?.column, filter?.value, queryLimit, queryOffset, persistLocalMirror]);
+  }, [table, select, filter?.column, filter?.value, queryLimit, queryOffset, fetchAllPages, maxPages, persistLocalMirror]);
 
   const refreshAndBroadcast = useCallback(async () => {
     await fetchData();
@@ -389,7 +494,6 @@ export function useRealtimeTable<T extends { id: string }>(
       }
     };
 
-    // FIX 01: On user or branch switch, IMMEDIATELY abort in-flight requests and wipe prior user's UI state
     const handleScopeSwitch = () => {
       abortRef.current?.abort();
       requestSeqRef.current += 1;
@@ -398,6 +502,8 @@ export function useRealtimeTable<T extends { id: string }>(
       setData([]);
       setError(null);
       setIsStale(false);
+      setTruncated(false);
+      setLockedOfflineCount(0);
       setStatus('loading');
       setLoading(true);
       setScopeVersion((v) => v + 1);
@@ -407,8 +513,13 @@ export function useRealtimeTable<T extends { id: string }>(
     window.addEventListener('minadental-user-changed', handleScopeSwitch);
     window.addEventListener('minadental-branch-changed', handleScopeSwitch);
 
+    const activeScope = resolveCurrentScope(table, filter);
     const unsubscribeRealtime = subscribeToTableRealtime<T>(table, {
       filter,
+      scope: {
+        tenantId: activeScope.tenantId,
+        branchId: activeScope.branchId,
+      },
       onInsert: (newRow) => {
         const currentScope = resolveCurrentScope(table, filter);
         if (currentScope.scopeKey !== activeScopeKeyRef.current) return;
@@ -455,5 +566,14 @@ export function useRealtimeTable<T extends { id: string }>(
     };
   }, [table, select, filter?.column, filter?.value, scopeVersion, fetchData, persistLocalMirror]);
 
-  return { data, loading, status, isStale, error, refresh: refreshAndBroadcast };
+  return {
+    data,
+    loading,
+    status,
+    isStale,
+    truncated,
+    lockedOfflineCount,
+    error,
+    refresh: refreshAndBroadcast,
+  };
 }
