@@ -104,6 +104,75 @@
 
     <script type="module" src="./src/main.tsx"></script>
     <script>
+      window.__minaAppMounted = false;
+      window.__minaBootErrors = [];
+
+      function showBootRecovery(reason) {
+        if (window.__minaAppMounted) return;
+        var splash = document.getElementById('app-splash');
+        if (!splash || document.getElementById('mina-boot-recovery')) return;
+        var box = document.createElement('div');
+        box.id = 'mina-boot-recovery';
+        box.style.cssText = 'margin-top:24px;max-width:320px;background:rgba(15,23,42,0.88);border:1px solid rgba(255,255,255,0.2);border-radius:16px;padding:14px 16px;color:#F8FAFC;font-size:12px;line-height:1.7;';
+        box.innerHTML =
+          '<div style="font-weight:800;margin-bottom:6px;color:#FDE047;">بارگذاری برنامه با تاخیر یا خطای کش مواجه شد</div>' +
+          '<div style="font-size:11px;color:#CBD5E1;margin-bottom:12px;word-break:break-word;">' +
+          (reason || 'لطفاً کش مرورگر را پاک‌سازی و مجدداً بارگذاری کنید.') +
+          '</div>' +
+          '<button id="mina-recover-btn" type="button" style="width:100%;min-height:44px;border:none;border-radius:12px;background:#087C76;color:#FFFFFF;font-weight:800;font-size:12px;cursor:pointer;">پاک‌سازی کش و بارگذاری مجدد</button>';
+        splash.appendChild(box);
+        var btn = document.getElementById('mina-recover-btn');
+        if (btn) {
+          btn.onclick = function() {
+            var finish = function() {
+              var sep = window.location.search ? '&' : '?';
+              window.location.replace(window.location.pathname + window.location.search + sep + 'v64_recover=' + Date.now());
+            };
+            Promise.resolve()
+              .then(function() {
+                if ('serviceWorker' in navigator) {
+                  return navigator.serviceWorker.getRegistrations().then(function(regs) {
+                    return Promise.all(regs.map(function(r) { return r.unregister(); }));
+                  });
+                }
+              })
+              .then(function() {
+                if (window.caches) {
+                  return caches.keys().then(function(keys) {
+                    return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+                  });
+                }
+              })
+              .finally(finish);
+          };
+        }
+      }
+
+      window.addEventListener('error', function(ev) {
+        if (window.__minaAppMounted) return;
+        var target = ev && ev.target;
+        var src = target && (target.src || target.href);
+        if (src && src.indexOf('/src/main.tsx') !== -1 && window.location.hostname.indexOf('github.io') !== -1) {
+          return;
+        }
+        var msg = (ev && ev.message) || (src ? 'خطا در دریافت فایل: ' + src.split('/').pop() : 'خطای بارگذاری ماژول');
+        window.__minaBootErrors.push(msg);
+        showBootRecovery(msg);
+      }, true);
+
+      window.addEventListener('unhandledrejection', function(ev) {
+        if (window.__minaAppMounted) return;
+        var reason = ev && ev.reason;
+        var msg = (reason && reason.message) ? reason.message : String(reason || 'خطای ناهمزمان هنگام راه‌اندازی');
+        window.__minaBootErrors.push(msg);
+      });
+
+      setTimeout(function() {
+        if (!window.__minaAppMounted) {
+          showBootRecovery(window.__minaBootErrors[0] || 'اتصال اینترنت یا فایل‌های برنامه پاسخ ندادند.');
+        }
+      }, 9000);
+
       // Automatic pre-built bundle loader ONLY when served raw from GitHub Pages root branch (without built assets)
       if (window.location.hostname.indexOf('github.io') !== -1 && !document.querySelector('script[src*="./assets/index-"]')) {
         var bust = 'v=64&b=' + Math.floor(Date.now() / 60000);
@@ -115,6 +184,9 @@
         ghJs.type = 'module';
         ghJs.crossOrigin = 'anonymous';
         ghJs.src = './gh-pages-dist/app.js?' + bust;
+        ghJs.onerror = function() {
+          showBootRecovery('فایل اجرایی ./gh-pages-dist/app.js بارگذاری نشد.');
+        };
         document.head.appendChild(ghJs);
       }
 

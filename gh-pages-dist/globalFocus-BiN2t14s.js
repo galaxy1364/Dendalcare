@@ -1,0 +1,1 @@
+import{b as e,y as t}from"./index-CuaEiaCh.js";function n(e){t(e)}function r(t,n){return e(t,e=>{n({...e,section:e.section})})}export{r as n,n as t};

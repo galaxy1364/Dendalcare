@@ -381,7 +381,21 @@ export async function publishWebAppToGitHubPages(
       'index.html',
       'gh-pages-dist/app.js',
       'gh-pages-dist/app.css',
+      'gh-pages-dist/chunks.json',
     ];
+    try {
+      const chunksRes = await fetch(`./gh-pages-dist/chunks.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (chunksRes.ok) {
+        const parsed = await chunksRes.json();
+        if (Array.isArray(parsed?.files)) {
+          for (const chunkFile of parsed.files) {
+            if (typeof chunkFile === 'string' && chunkFile.trim()) {
+              textFilesToSync.push(`gh-pages-dist/${chunkFile}`);
+            }
+          }
+        }
+      }
+    } catch {}
     for (const file of textFilesToSync) {
       try {
         const r = await fetch(`./${file}?t=${Date.now()}`, { cache: 'no-store' });

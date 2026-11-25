@@ -93,10 +93,11 @@ self.addEventListener('fetch', (event) => {
 
   const isCriticalBundle =
     url.pathname.endsWith('version.json') ||
+    url.pathname.endsWith('chunks.json') ||
     url.pathname.endsWith('index.html') ||
-    url.pathname.endsWith('app.js') ||
-    url.pathname.endsWith('app.css') ||
-    url.pathname.endsWith('sw.js');
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.css') ||
+    url.pathname.endsWith('/');
 
   const fetchPromise = isCriticalBundle
     ? fetch(event.request, { cache: 'no-store' })
