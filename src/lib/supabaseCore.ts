@@ -1,10 +1,26 @@
 import { createClient } from '@supabase/supabase-js';
 
-export const supabaseUrl =
-  (import.meta.env.VITE_SUPABASE_URL as string) || 'https://civqyrhmrjcgmmtwkkmi.supabase.co';
-export const supabaseAnonKey =
-  (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpdnF5cmhtcmpjZ21tdHdra21pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNzgyMjUsImV4cCI6MjEwNTk1NDIyNX0.RQO1-KIULLQikZ0f7mEYLWunn6j0GCxfiARWnM93054';
+// V11 development database cutover. Only the low-privilege publishable key is client-side.
+const EXPECTED_SUPABASE_URL = 'https://npzcweiphmyhtzxxnlov.supabase.co';
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_H8XKNNvn_52H4s1bgMtcjQ_YAvOLtAB';
+
+const configuredUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim().replace(/\/+$/, '');
+const configuredKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim();
+const legacyKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
+
+if (configuredUrl && configuredUrl !== EXPECTED_SUPABASE_URL) {
+  throw new Error('SUPABASE_PROJECT_MISMATCH: update the environment to the V11 development project.');
+}
+if (legacyKey && legacyKey !== (configuredKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY)) {
+  throw new Error('SUPABASE_LEGACY_KEY_MISMATCH: remove the old VITE_SUPABASE_ANON_KEY.');
+}
+if (configuredKey && !configuredKey.startsWith('sb_publishable_')) {
+  throw new Error('SUPABASE_INVALID_PUBLIC_KEY: a publishable key is required.');
+}
+
+export const supabaseUrl = EXPECTED_SUPABASE_URL;
+// Compatibility export for existing consumers; never contains a secret/service-role key.
+export const supabaseAnonKey = configuredKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 
 export const rawSupabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
