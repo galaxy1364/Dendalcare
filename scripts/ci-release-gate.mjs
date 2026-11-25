@@ -37,65 +37,88 @@ export async function computeMonotonicSequence(options = {}) {
   const overrideRaw = String(options.overrideInput ?? '').trim();
   const requireRemotePointer = Boolean(options.requireRemotePointer);
   const bootstrapFirstRelease = Boolean(options.bootstrapFirstRelease);
+  const allowLegacyRootMigration = Boolean(options.allowLegacyRootMigration);
   let remoteSequence = 0;
   let remoteError = null;
+  let pointerStatus = null;
+  let bootstrapped = false;
+
+  // Bound both connection and body reads; never interpret a network/5xx error as first deployment.
+  const fetchFresh = (url) => fetch(url, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' },
+    signal: AbortSignal.timeout(15000),
+    redirect: 'error',
+  });
 
   if (options.remotePointerUrl) {
     try {
-      const res = await fetch(options.remotePointerUrl, {
-        headers: { 'Cache-Control': 'no-cache' },
-      });
+      const res = await fetchFresh(options.remotePointerUrl);
+      pointerStatus = res.status;
       if (res.ok) {
         const ct = String(res.headers.get('content-type') || '').toLowerCase();
-        if (ct.includes('text/html')) {
-          remoteError = `Remote pointer returned HTML instead of JSON (${options.remotePointerUrl})`;
+        if (!ct.includes('json')) {
+          remoteError = 'Remote pointer did not return JSON';
         } else {
           const pointer = await res.json();
-          if (
-            typeof pointer?.releaseSequence === 'number' &&
-            Number.isSafeInteger(pointer.releaseSequence) &&
-            pointer.releaseSequence > 0
-          ) {
+          if (typeof pointer?.releaseSequence === 'number' &&
+              Number.isSafeInteger(pointer.releaseSequence) && pointer.releaseSequence > 0) {
             remoteSequence = pointer.releaseSequence;
           } else {
-            remoteError = `Remote pointer missing valid positive releaseSequence (${options.remotePointerUrl})`;
+            remoteError = 'Remote pointer missing valid positive releaseSequence';
           }
         }
       } else {
-        remoteError = `Remote pointer returned HTTP ${res.status} (${options.remotePointerUrl})`;
+        remoteError = `Remote pointer returned HTTP ${res.status}`;
       }
     } catch (err) {
-      remoteError = `Remote pointer unreachable (${options.remotePointerUrl}): ${err instanceof Error ? err.message : String(err)}`;
+      remoteError = `Remote pointer unreachable: ${err instanceof Error ? err.message : String(err)}`;
     }
-  } else if (requireRemotePointer && !bootstrapFirstRelease) {
+  } else if (requireRemotePointer) {
     remoteError = 'Remote pointer URL required when --require-remote-pointer is set';
   }
 
-  // V9 P0.5: Fail closed if remote pointer could not be verified, unless explicit first-release bootstrap is requested!
-  if (requireRemotePointer && !bootstrapFirstRelease && remoteSequence <= 0) {
+  // A 404 alone is NOT evidence of a first release. Inspect the live root independently.
+  // The automatic migration is restricted to a real raw TS/TSX entry script; do not match
+  // error messages or strings embedded in a production HTML document.
+  if (requireRemotePointer && remoteSequence <= 0 && pointerStatus === 404 &&
+      (bootstrapFirstRelease || allowLegacyRootMigration)) {
+    try {
+      const rootUrl = new URL('./', options.remotePointerUrl);
+      const rootRes = await fetchFresh(rootUrl);
+      const ct = String(rootRes.headers.get('content-type') || '').toLowerCase();
+      const html = rootRes.ok && ct.includes('text/html') ? await rootRes.text() : '';
+      const rawEntry = /<script\b[^>]*\bsrc\s*=\s*["'](?:\.\/|\/)?(?:[^"'<>]*\/)?src\/main\.(?:tsx|ts)["'][^>]*>/i.test(html);
+      const productionIdentity = /<meta\b[^>]*\bname=["']minadental-build-id["'][^>]*\bcontent=["']v\d+\.\d+\.\d+-[a-f0-9]{10}["']/i.test(html);
+      if ((rawEntry && !productionIdentity) || (bootstrapFirstRelease && rootRes.status === 404)) {
+        bootstrapped = true;
+      } else {
+        remoteError = `Pointer is 404 but root is not a verified legacy raw entry or explicitly authorized empty site (HTTP ${rootRes.status})`;
+      }
+    } catch (err) {
+      remoteError = `First-release root verification failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
+  if (requireRemotePointer && remoteSequence <= 0 && !bootstrapped) {
     throw new Error(
-      `Fail-closed monotonic sequence guard: cannot safely increment release sequence because remote pointer could not be read (${remoteError || 'unknown reason'}). Pass --bootstrap-first-release ONLY for initial deployment bootstrap.`
+      `Fail-closed monotonic sequence guard: cannot safely increment release sequence (${remoteError || 'unknown reason'}). Bootstrap requires a confirmed 404 pointer and a verified legacy root, or an explicitly authorized empty site.`
     );
   }
 
+  const floor = Math.max(baseSeq, remoteSequence);
   let candidate;
   if (overrideRaw) {
     candidate = parseStrictPositiveInt(overrideRaw, 'release_sequence');
-    if (remoteSequence > 0 && candidate <= remoteSequence) {
-      throw new Error(
-        `Non-monotonic release_sequence override rejected: requested #${candidate} <= deployed #${remoteSequence}`
-      );
+    if (candidate <= floor) {
+      throw new Error(`Non-monotonic release_sequence override rejected: requested #${candidate} <= floor #${floor}`);
     }
   } else {
-    candidate = Math.max(baseSeq + runNumber, remoteSequence + 1);
+    candidate = Math.max(baseSeq + runNumber, floor + 1);
   }
+  if (!Number.isSafeInteger(candidate)) throw new Error('Release sequence exceeds safe integer range');
 
-  return {
-    sequence: candidate,
-    remoteSequence,
-    usedOverride: Boolean(overrideRaw),
-    bootstrapped: Boolean(bootstrapFirstRelease && remoteSequence <= 0),
-  };
+  return { sequence: candidate, remoteSequence, usedOverride: Boolean(overrideRaw), bootstrapped };
 }
 
 function assertValidMime(pathname, contentType) {
@@ -379,6 +402,7 @@ async function runCli() {
       remotePointerUrl,
       requireRemotePointer,
       bootstrapFirstRelease,
+      allowLegacyRootMigration: args.includes('--allow-legacy-root-migration'),
     });
     if (process.env.GITHUB_OUTPUT) {
       fs.appendFileSync(process.env.GITHUB_OUTPUT, `value=${res.sequence}\n`);
