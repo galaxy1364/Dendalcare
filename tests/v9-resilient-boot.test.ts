@@ -411,33 +411,29 @@ export async function runAllV9ResilientBootTests(): Promise<V9TestResult[]> {
     }
   });
 
-  await run('V9-06: CI monotonic sequence fails CLOSED when remote pointer is unreachable unless bootstrapFirstRelease=true', async () => {
+  await run('V9-06: CI monotonic sequence fails CLOSED on network failure even with bootstrap authorization; only confirmed initial migration may bootstrap', async () => {
     const unreachableUrl = 'http://127.0.0.1:1/non-existent-release-pointer.json';
 
-    let threw = false;
-    try {
-      await computeMonotonicSequence({
-        baseSequence: 65,
-        runNumber: 1,
-        remotePointerUrl: unreachableUrl,
-        requireRemotePointer: true,
-        bootstrapFirstRelease: false,
-      });
-    } catch (err) {
-      threw = true;
-      assert.ok(String(err).includes('Fail-closed monotonic sequence guard'));
+    for (const bootstrapFirstRelease of [false, true]) {
+      for (const allowLegacyRootMigration of [false, true]) {
+        await assert.rejects(
+          () => computeMonotonicSequence({
+            baseSequence: 65,
+            runNumber: 2,
+            remotePointerUrl: unreachableUrl,
+            requireRemotePointer: true,
+            bootstrapFirstRelease,
+            allowLegacyRootMigration,
+          }),
+          /Fail-closed monotonic sequence guard/,
+          'Unreachable pointer must never authorize a first release'
+        );
+      }
     }
-    assert.equal(threw, true, 'Expected computeMonotonicSequence to fail closed without bootstrapFirstRelease');
 
-    const bootstrapped = await computeMonotonicSequence({
-      baseSequence: 65,
-      runNumber: 2,
-      remotePointerUrl: unreachableUrl,
-      requireRemotePointer: true,
-      bootstrapFirstRelease: true,
-    });
-    assert.equal(bootstrapped.sequence, 67);
-    assert.equal(bootstrapped.bootstrapped, true);
+    // The positive bootstrap cases (confirmed 404 + raw entry or explicitly
+    // authorized empty root), and negative 503/invalid JSON/compiled-root cases
+    // are exercised by V8-11 with actual local HTTP responses.
   });
 
   await run('V9-07: Fail-closed signature verification rejects unsigned manifest whenever pinnedKeys are configured (without explicit requireSignature)', async () => {
