@@ -259,7 +259,11 @@ export async function applyAppUpdateAtomically(options?: {
   try {
     if (typeof window !== 'undefined' && 'caches' in window) {
       const keys = await window.caches.keys();
-      await Promise.all(keys.map((k) => window.caches.delete(k)));
+      await Promise.all(
+        keys
+          .filter((k) => k.startsWith('minadental-'))
+          .map((k) => window.caches.delete(k))
+      );
     }
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();

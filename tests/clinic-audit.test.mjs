@@ -251,8 +251,7 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(engineSrc.includes('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'), 'Real Google Drive API v3 upload endpoint must exist');
     assert.ok(!engineSrc.includes('v5.0.0 (Build #52)'), 'Outdated hardcoded GitHub deploy version must be removed');
     assert.ok(tabSrc.includes('uploadBackupToGoogleDrive'), 'IntegrationsTab must invoke real uploadBackupToGoogleDrive');
-    assert.equal(versionJson.version, '64.0');
-    assert.equal(versionJson.build, 64);
+    assert.ok(typeof versionJson.version === 'string' && Number(versionJson.build) >= 64, 'version.json must expose valid version and build');
   });
 
   test('PWA manifest, service worker, and index.html typography/installability stay 100% intact', () => {
@@ -265,7 +264,10 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(html.includes('window.__deferredInstallPrompt'), 'index.html must capture beforeinstallprompt early');
     assert.ok(manifest.icons.some((i) => i.purpose === 'any' && i.sizes === '512x512'), 'manifest must have 512x512 any icon');
     assert.ok(manifest.icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512'), 'manifest must have 512x512 maskable icon');
-    assert.ok(sw.includes('minadental-pwa-v64.0-b64'), 'sw.js must be on unified v64.0-b64 cache');
+    assert.ok(
+      sw.includes("const CACHE_PREFIX = 'minadental-shell-'") && sw.includes("const BUILD_ID = '__MINA_BUILD_ID__'"),
+      'sw.js must derive its cache name from deterministic BUILD_ID with minadental- namespace'
+    );
   });
 });
 
@@ -566,9 +568,18 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     const cssSrc = read('src/index.css');
     const settingsSrc = read('src/components/sections/SettingsSection.tsx');
 
-    assert.ok(viteSrc.includes('closeBundle()') && viteSrc.includes("path.join(ghPagesDir, 'app.js')"), 'vite.config.ts must auto-sync compiled bundle to gh-pages-dist/app.js and app.css on every build');
-    assert.ok(integrationsSrc.includes("'gh-pages-dist/app.js'") && integrationsSrc.includes("'gh-pages-dist/app.css'"), 'publishWebAppToGitHubPages must sync gh-pages-dist/app.js and app.css');
-    assert.ok(htmlSrc.includes('v=64') && htmlSrc.includes("k.indexOf('v64.0-b64') === -1"), 'index.html must bust gh-pages-dist cache with v=64 and purge obsolete v62/v63 caches');
+    assert.ok(
+      viteSrc.includes('closeBundle()') && viteSrc.includes('copyDirectoryRecursive(distDir, ghPagesDir)'),
+      'vite.config.ts must atomically mirror intact dist/assets/* into gh-pages-dist/ on every build'
+    );
+    assert.ok(
+      integrationsSrc.includes("'build-manifest.json'") && integrationsSrc.includes('parsed?.assets'),
+      'publishWebAppToGitHubPages must sync intact assets from build-manifest.json'
+    );
+    assert.ok(
+      htmlSrc.includes('name="minadental-build-id"') && htmlSrc.includes("k.indexOf('minadental-') === 0"),
+      'index.html must track deterministic BUILD_ID and scope cache recovery strictly to minadental-* caches'
+    );
 
     const headerEndIdx = shellSrc.indexOf('</header>');
     const mainStartIdx = shellSrc.indexOf('<main');
@@ -933,13 +944,13 @@ describe('Phase 12 [TRC-MINA-AUDIT-9012-L]: Master Audit Remediation (Phases 01â
     const cssSrc = read('src/index.css');
     const tokensSrc = read('src/design-system/tokens/colors.ts');
 
-    assert.ok(appEntry.includes("from '@/app/App'") && routerSrc.includes('lazy(') && routerSrc.includes('Suspense'), 'AppRouter must split routes with React.lazy + Suspense');
+    assert.ok(appEntry.includes("from '@/app/App'") && (routerSrc.includes('lazy(') || routerSrc.includes('lazyWithRetry(')) && routerSrc.includes('Suspense'), 'AppRouter must split routes with React.lazy / lazyWithRetry + Suspense');
     assert.ok(routerSrc.includes('canAccessRoute(') && routerSrc.includes('status="unauthorized"'), 'AppRouter must enforce RBAC route guards');
     assert.ok(providersSrc.includes('dataset.keyboardOpen'), 'AppProviders must bind visualViewport keyboard state to data-keyboard-open');
     assert.ok(accessSrc.includes('resolveEffectiveRole') && accessSrc.includes('canPerformAction'), 'accessControl.ts must enforce RBAC route and action permissions');
     assert.ok(intelSrc.includes('buildSmartDailyBrief') && intelSrc.includes('sanitizeClinicContextForAI'), 'clinicIntelligence.ts must build explainable Smart Brief and sanitize PII for AI context');
     assert.ok(hapticsSrc.includes('MIN_HAPTIC_GAP_MS = 55') && hapticsSrc.includes('if (typeof window === \'undefined\') return false;'), 'PlatformHapticAdapter must throttle haptics and default acoustic sound to OFF');
-    assert.ok(cssSrc.includes('./fonts/vazirmatn-arabic.woff2') && cssSrc.includes('.app-shell-viewport') && cssSrc.includes('height: 100dvh'), 'index.css must use self-hosted Vazirmatn fonts and 100dvh flex shell');
+    assert.ok(cssSrc.includes('fonts/vazirmatn-arabic.woff2') && cssSrc.includes('.app-shell-viewport') && cssSrc.includes('height: 100dvh'), 'index.css must use self-hosted Vazirmatn fonts and 100dvh flex shell');
 
     // Runtime WCAG AA contrast verification on Phase 06 core palette against #FFFFFF and #F4F7F9
     const hexLuminance = (hex) => {

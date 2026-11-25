@@ -1,4 +1,4 @@
-import { AlertCircle, Database, Lock, RefreshCw, WifiOff, Inbox } from 'lucide-react';
+import { AlertCircle, Clock, Database, Lock, RefreshCw, WifiOff, Inbox } from 'lucide-react';
 import type { TableDataStatus } from '@/lib/useRealtimeTable';
 
 interface SectionStatusBannerProps {
@@ -159,6 +159,34 @@ export function SectionStatusBanner({
             className="min-h-[40px] px-3 py-1 rounded-btn bg-white dark:bg-[#11202E] border border-[#FDE68A] text-[#92510C] font-bold shrink-0"
           >
             تلاش مجدد
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (status === 'timeout') {
+    return (
+      <div
+        role="alert"
+        data-testid="section_status_timeout"
+        className="rounded-card px-3.5 py-2.5 bg-[#FFFBEB] dark:bg-[#291E0B] border border-[#FDE68A] dark:border-[#78350F] flex items-center justify-between gap-2 text-xs font-bold text-[#92510C] dark:text-[#FCD34D]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <Clock size={16} className="shrink-0" />
+          <span className="leading-snug">
+            {errorMessage || 'پاسخ سرور در زمان مجاز دریافت نشد (Timeout). لطفاً دوباره تلاش کنید.'}
+          </span>
+        </div>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            data-testid="section_status_timeout_retry"
+            className="min-h-[40px] px-3 py-1 rounded-btn bg-white dark:bg-[#11202E] border border-[#FDE68A] text-[#92510C] font-bold flex items-center gap-1 shrink-0"
+          >
+            <RefreshCw size={13} />
+            <span>تلاش مجدد</span>
           </button>
         )}
       </div>

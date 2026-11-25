@@ -29,6 +29,7 @@ export type TableDataStatus =
   | 'ready'
   | 'partial'
   | 'empty'
+  | 'timeout'
   | 'error'
   | 'offline'
   | 'locked_offline'
@@ -44,12 +45,50 @@ export interface RealtimeTableOptions {
   maxPages?: number;
 }
 
+export interface TableRequestError {
+  message?: string;
+  code?: string;
+  status?: number;
+}
+
+export interface TableFetchExecutionResult<T> {
+  rows: T[] | null;
+  error: TableRequestError | null;
+  timedOut: boolean;
+  cancelled: boolean;
+  truncated: boolean;
+  attempts: number;
+}
+
+export interface PageFetcherParams {
+  from: number;
+  to: number;
+  signal: AbortSignal;
+}
+
+export interface ExecuteTableFetchConfig<T> {
+  parentSignal: AbortSignal;
+  fetchPage: (
+    params: PageFetcherParams
+  ) => Promise<{ rows: T[] | null; error: TableRequestError | null }>;
+  pageSize?: number;
+  offset?: number;
+  fetchAllPages?: boolean;
+  maxPages?: number;
+  maxRetries?: number;
+  timeoutMs?: number;
+  baseBackoffMs?: number;
+  delayFn?: (ms: number, signal: AbortSignal) => Promise<void>;
+  randomFn?: () => number;
+}
+
 const REQUEST_TIMEOUT_MS = 6500;
 const MAX_RETRY_ATTEMPTS = 2;
+const BASE_BACKOFF_MS = 350;
 const DEFAULT_QUERY_LIMIT = 500;
 const DEFAULT_MAX_PAGES = 20;
 
-function isUnauthorizedResponse(err: { code?: string; status?: number; message?: string } | null): boolean {
+function isUnauthorizedResponse(err: TableRequestError | null): boolean {
   if (!err) return false;
   if (err.status === 401 || err.status === 403) return true;
   const code = String(err.code || '').toUpperCase();
@@ -67,9 +106,7 @@ function isUnauthorizedResponse(err: { code?: string; status?: number; message?:
  * FIX 02: Detect missing required schema columns (PostgreSQL 42703 / PostgREST PGRST204).
  * We NEVER strip `tenant_id` / `branch_id` or fall back to unscoped queries.
  */
-export function isSchemaMigrationRequiredError(
-  err: { code?: string; status?: number; message?: string } | null
-): boolean {
+export function isSchemaMigrationRequiredError(err: TableRequestError | null): boolean {
   if (!err) return false;
   const code = String(err.code || '').toUpperCase();
   const msg = String(err.message || '').toLowerCase();
@@ -81,8 +118,10 @@ export function isSchemaMigrationRequiredError(
 }
 
 /**
- * Pure monotonic request guard (FIX 01 & FIX 09):
- * Rejects stale/late/aborted responses from a superseded request or previous user/branch scope.
+ * Pure monotonic request guard (FIX 01, FIX 09 & V5 P0-02):
+ * Rejects stale/late/parent-cancelled responses from a superseded request or previous user/branch scope.
+ * IMPORTANT: Network timeouts abort ONLY the per-attempt controller — never the parent controller —
+ * so timeouts are NEVER misclassified as `aborted` here.
  */
 export function shouldAcceptTableResponse(params: {
   requestSeq: number;
@@ -98,25 +137,258 @@ export function shouldAcceptTableResponse(params: {
   return true;
 }
 
+function defaultAbortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted || ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * V5 P0-02 Async State Machine Executor (exported for deterministic fake-timer & unit testing):
+ * - Separates parent cancellation (unmount / scope switch / newer generation) from per-attempt timeout.
+ * - Creates an independent per-attempt `AbortController` bounded by `timeoutMs`.
+ * - A per-attempt timeout aborts ONLY `attemptController`, NEVER `parentSignal`, allowing bounded
+ *   retries with jittered exponential backoff and guaranteed transition to `timeout` (never stuck loading).
+ */
+export async function executeRealtimeTableFetch<T>(
+  config: ExecuteTableFetchConfig<T>
+): Promise<TableFetchExecutionResult<T>> {
+  const {
+    parentSignal,
+    fetchPage,
+    pageSize = DEFAULT_QUERY_LIMIT,
+    offset = 0,
+    fetchAllPages = false,
+    maxPages = DEFAULT_MAX_PAGES,
+    maxRetries = MAX_RETRY_ATTEMPTS,
+    timeoutMs = REQUEST_TIMEOUT_MS,
+    baseBackoffMs = BASE_BACKOFF_MS,
+    delayFn = defaultAbortableDelay,
+    randomFn = Math.random,
+  } = config;
+
+  const effectivePageSize = pageSize > 0 ? pageSize : DEFAULT_QUERY_LIMIT;
+  let totalAttempts = 0;
+
+  const runSinglePageWithRetry = async (
+    fromIdx: number,
+    toIdx: number
+  ): Promise<{
+    rows: T[] | null;
+    error: TableRequestError | null;
+    timedOut: boolean;
+    cancelled: boolean;
+  }> => {
+    let attempt = 0;
+    let lastErr: TableRequestError | null = null;
+    let lastAttemptTimedOut = false;
+
+    while (attempt <= maxRetries) {
+      if (parentSignal.aborted) {
+        return { rows: null, error: null, timedOut: false, cancelled: true };
+      }
+
+      totalAttempts += 1;
+      const attemptController = new AbortController();
+      let attemptTimedOut = false;
+
+      const onParentAbort = () => {
+        attemptController.abort();
+      };
+      parentSignal.addEventListener('abort', onParentAbort, { once: true });
+
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+      const timeoutPromise = new Promise<'__MINA_ATTEMPT_TIMEOUT__'>((resolve) => {
+        timeoutHandle = setTimeout(() => {
+          attemptTimedOut = true;
+          attemptController.abort();
+          resolve('__MINA_ATTEMPT_TIMEOUT__');
+        }, timeoutMs);
+      });
+
+      try {
+        const result = await Promise.race([
+          fetchPage({ from: fromIdx, to: toIdx, signal: attemptController.signal }),
+          timeoutPromise,
+        ]);
+
+        if (parentSignal.aborted) {
+          return { rows: null, error: null, timedOut: false, cancelled: true };
+        }
+
+        if (result === '__MINA_ATTEMPT_TIMEOUT__' || attemptTimedOut) {
+          lastAttemptTimedOut = true;
+          lastErr = {
+            code: 'REQUEST_TIMEOUT',
+            message: 'پاسخ سرور کلینیک در زمان مجاز دریافت نشد.',
+          };
+        } else if (!result.error && Array.isArray(result.rows)) {
+          return { rows: result.rows, error: null, timedOut: false, cancelled: false };
+        } else {
+          lastAttemptTimedOut = false;
+          lastErr = result.error ?? { message: 'خطای دریافت اطلاعات از سرور' };
+          if (isSchemaMigrationRequiredError(lastErr) || isUnauthorizedResponse(lastErr)) {
+            return { rows: null, error: lastErr, timedOut: false, cancelled: false };
+          }
+        }
+      } catch (err: unknown) {
+        if (parentSignal.aborted) {
+          return { rows: null, error: null, timedOut: false, cancelled: true };
+        }
+        if (attemptTimedOut) {
+          lastAttemptTimedOut = true;
+          lastErr = {
+            code: 'REQUEST_TIMEOUT',
+            message: 'پاسخ سرور کلینیک در زمان مجاز دریافت نشد.',
+          };
+        } else {
+          lastAttemptTimedOut = false;
+          lastErr = {
+            message: err instanceof Error ? err.message : 'خطای ارتباط با سرور',
+          };
+        }
+      } finally {
+        if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+        parentSignal.removeEventListener('abort', onParentAbort);
+      }
+
+      attempt += 1;
+      if (attempt <= maxRetries && !parentSignal.aborted) {
+        const expDelay = baseBackoffMs * Math.pow(2, attempt - 1);
+        const jitter = Math.round(expDelay * 0.25 * Math.max(0, Math.min(1, randomFn())));
+        await delayFn(expDelay + jitter, parentSignal);
+      }
+    }
+
+    if (parentSignal.aborted) {
+      return { rows: null, error: null, timedOut: false, cancelled: true };
+    }
+
+    return {
+      rows: null,
+      error: lastErr,
+      timedOut: lastAttemptTimedOut,
+      cancelled: false,
+    };
+  };
+
+  if (fetchAllPages) {
+    const accumulated: T[] = [];
+    let page = 0;
+    const boundedMaxPages = Math.max(1, maxPages);
+
+    while (page < boundedMaxPages) {
+      if (parentSignal.aborted) {
+        return {
+          rows: null,
+          error: null,
+          timedOut: false,
+          cancelled: true,
+          truncated: false,
+          attempts: totalAttempts,
+        };
+      }
+      const fromIdx = offset + page * effectivePageSize;
+      const toIdx = fromIdx + effectivePageSize - 1;
+      const res = await runSinglePageWithRetry(fromIdx, toIdx);
+      if (res.cancelled) {
+        return {
+          rows: null,
+          error: null,
+          timedOut: false,
+          cancelled: true,
+          truncated: false,
+          attempts: totalAttempts,
+        };
+      }
+      if (res.error || !res.rows) {
+        return {
+          rows: null,
+          error: res.error,
+          timedOut: res.timedOut,
+          cancelled: false,
+          truncated: false,
+          attempts: totalAttempts,
+        };
+      }
+      accumulated.push(...res.rows);
+      if (res.rows.length < effectivePageSize) {
+        return {
+          rows: accumulated,
+          error: null,
+          timedOut: false,
+          cancelled: false,
+          truncated: false,
+          attempts: totalAttempts,
+        };
+      }
+      page += 1;
+      if (page >= boundedMaxPages) {
+        return {
+          rows: accumulated,
+          error: null,
+          timedOut: false,
+          cancelled: false,
+          truncated: true,
+          attempts: totalAttempts,
+        };
+      }
+    }
+  }
+
+  const singleRes = await runSinglePageWithRetry(offset, offset + effectivePageSize - 1);
+  if (singleRes.cancelled) {
+    return {
+      rows: null,
+      error: null,
+      timedOut: false,
+      cancelled: true,
+      truncated: false,
+      attempts: totalAttempts,
+    };
+  }
+  const truncated =
+    Array.isArray(singleRes.rows) && singleRes.rows.length >= effectivePageSize;
+  return {
+    rows: singleRes.rows,
+    error: singleRes.error,
+    timedOut: singleRes.timedOut,
+    cancelled: false,
+    truncated,
+    attempts: totalAttempts,
+  };
+}
+
 /**
  * Pure server-reconciliation helper (exported for unit testing).
  * - Empty `[]` clears state & cache.
  * - Truncated dataset (`truncated === true`) surfaces explicit `'partial'` status.
  * - `42703` / schema mismatch returns explicit `'migration_required'` and clears local cache.
  * - `401/403/42501` returns explicit `'unauthorized'` and clears local cache.
+ * - Timeout returns explicit `'timeout'` (never frozen in `'loading'`).
  */
 export function reconcileServerRows<T>(params: {
   serverRows: T[] | null | undefined;
-  error: { message?: string; code?: string; status?: number } | null;
+  error: TableRequestError | null;
   isOffline: boolean;
   truncated?: boolean;
+  timedOut?: boolean;
 }): {
   rows: T[] | null;
   status: TableDataStatus;
   clearCache: boolean;
   isStale: boolean;
 } {
-  const { serverRows, error, isOffline, truncated } = params;
+  const { serverRows, error, isOffline, truncated, timedOut } = params;
   if (!error && Array.isArray(serverRows)) {
     if (serverRows.length === 0) {
       return { rows: [], status: 'empty', clearCache: true, isStale: false };
@@ -134,6 +406,9 @@ export function reconcileServerRows<T>(params: {
   }
   if (isOffline) {
     return { rows: null, status: 'offline', clearCache: false, isStale: true };
+  }
+  if (timedOut || error?.code === 'REQUEST_TIMEOUT') {
+    return { rows: null, status: 'timeout', clearCache: false, isStale: true };
   }
   return { rows: null, status: 'error', clearCache: false, isStale: true };
 }
@@ -154,12 +429,11 @@ function resolveCurrentScope(table: TableName, filter?: { column: string; value:
 }
 
 /**
- * Hardened realtime table hook (V4 Engineering Release Gate):
- * - Fail-closed tenant_id + branch_id filtering on every query and realtime channel
- * - Zero `42703` column-stripping fallback: surfaces `migration_required` explicitly
- * - Multi-page fetch (`fetchAllPages`) with real end-of-data detection & explicit `'partial'` truncation state
- * - Explicit `'locked_offline'` state when encrypted IndexedDB cache cannot be decrypted after reload
- * - Immediate abort + state wipe on user/branch switch
+ * Hardened realtime table hook (V4 + V5 P0-02 Async State Machine):
+ * - Separate parent cancellation (unmount / scope switch / newer generation) vs per-attempt timeout
+ * - Guaranteed `finally` loading termination for the active generation & scope (zero infinite spinners)
+ * - Stale responses never mutate React state or local cache/vault
+ * - Explicit `'timeout'`, `'offline'`, `'locked_offline'`, `'empty'`, `'partial'`, `'unauthorized'`, `'migration_required'` states
  */
 export function useRealtimeTable<T extends { id: string }>(
   table: TableName,
@@ -191,7 +465,7 @@ export function useRealtimeTable<T extends { id: string }>(
   const [truncated, setTruncated] = useState<boolean>(false);
   const [lockedOfflineCount, setLockedOfflineCount] = useState<number>(0);
 
-  const abortRef = useRef<AbortController | null>(null);
+  const parentAbortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
   const requestSeqRef = useRef(0);
   const activeScopeKeyRef = useRef(scope.scopeKey);
@@ -216,14 +490,25 @@ export function useRealtimeTable<T extends { id: string }>(
   );
 
   const fetchData = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+    // Cancel any previous in-flight generation
+    parentAbortRef.current?.abort();
+    const parentController = new AbortController();
+    parentAbortRef.current = parentController;
 
     const currentScope = resolveCurrentScope(table, filter);
     const requestScopeKey = currentScope.scopeKey;
     activeScopeKeyRef.current = requestScopeKey;
     const reqSeq = ++requestSeqRef.current;
+
+    const isActiveGeneration = () =>
+      shouldAcceptTableResponse({
+        requestSeq: reqSeq,
+        currentSeq: requestSeqRef.current,
+        requestScopeKey,
+        activeScopeKey: activeScopeKeyRef.current,
+        aborted: parentController.signal.aborted,
+        mounted: mountedRef.current,
+      });
 
     // Fail-closed: refuse unscoped queries if tenantId or branchId is missing
     if (!currentScope.tenantId?.trim() || !currentScope.branchId?.trim()) {
@@ -246,20 +531,13 @@ export function useRealtimeTable<T extends { id: string }>(
     setLoading(true);
     setStatus((prev) => (prev === 'ready' ? 'ready' : offlineNow ? 'offline' : 'loading'));
 
-    // Hydrate from encrypted scoped IndexedDB Vault ONLY when offline
-    if (offlineNow && !filter?.value) {
-      try {
-        const vaultRes = await loadTableMirrorFromVaultWithStatus<T>(table, vaultScope);
-        if (
-          shouldAcceptTableResponse({
-            requestSeq: reqSeq,
-            currentSeq: requestSeqRef.current,
-            requestScopeKey,
-            activeScopeKey: activeScopeKeyRef.current,
-            aborted: controller.signal.aborted,
-            mounted: mountedRef.current,
-          })
-        ) {
+    try {
+      // Hydrate from encrypted scoped IndexedDB Vault ONLY when offline
+      if (offlineNow && !filter?.value) {
+        try {
+          const vaultRes = await loadTableMirrorFromVaultWithStatus<T>(table, vaultScope);
+          if (!isActiveGeneration()) return;
+
           if (vaultRes.status === 'locked_after_reload') {
             setData([]);
             setLockedOfflineCount(vaultRes.lockedRecordCount);
@@ -269,7 +547,6 @@ export function useRealtimeTable<T extends { id: string }>(
             );
             setIsStale(true);
             setTruncated(false);
-            setLoading(false);
             return;
           }
           setLockedOfflineCount(0);
@@ -277,33 +554,28 @@ export function useRealtimeTable<T extends { id: string }>(
           setStatus(vaultRes.rows.length > 0 ? 'offline' : 'empty');
           setIsStale(vaultRes.rows.length > 0);
           setTruncated(false);
-          setLoading(false);
-        }
-      } catch {
-        if (mountedRef.current && reqSeq === requestSeqRef.current) {
-          setStatus('offline');
-          setLoading(false);
+          return;
+        } catch {
+          if (isActiveGeneration()) {
+            setStatus('offline');
+          }
+          return;
         }
       }
-      return;
-    }
 
-    const activeSelect = select ?? '*';
-    const pageSize = queryLimit > 0 ? queryLimit : DEFAULT_QUERY_LIMIT;
-    let lastError: { message?: string; code?: string; status?: number } | null = null;
-    let resolvedRows: T[] | null = null;
-    let isTruncated = false;
+      const activeSelect = select ?? '*';
+      const pageSize = queryLimit > 0 ? queryLimit : DEFAULT_QUERY_LIMIT;
 
-    const fetchSinglePage = async (
-      fromIdx: number,
-      toIdx: number
-    ): Promise<{ rows: T[] | null; error: { message?: string; code?: string; status?: number } | null }> => {
-      let attempt = 0;
-      let pageErr: { message?: string; code?: string; status?: number } | null = null;
-
-      while (attempt <= MAX_RETRY_ATTEMPTS && !controller.signal.aborted) {
-        const timeoutHandle = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-        try {
+      const execRes = await executeRealtimeTableFetch<T>({
+        parentSignal: parentController.signal,
+        pageSize,
+        offset: queryOffset,
+        fetchAllPages,
+        maxPages,
+        maxRetries: MAX_RETRY_ATTEMPTS,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        baseBackoffMs: BASE_BACKOFF_MS,
+        fetchPage: async ({ from, to, signal }) => {
           let query = supabase
             .from(table)
             .select(activeSelect)
@@ -314,135 +586,70 @@ export function useRealtimeTable<T extends { id: string }>(
             query = query.eq(filter.column, filter.value);
           }
           if (typeof (query as any).abortSignal === 'function') {
-            query = (query as any).abortSignal(controller.signal);
+            query = (query as any).abortSignal(signal);
           }
           let ordered = query.order('created_at', { ascending: false });
           if (typeof (ordered as any).range === 'function') {
-            ordered = (ordered as any).range(fromIdx, toIdx);
+            ordered = (ordered as any).range(from, to);
           } else if (typeof (ordered as any).limit === 'function') {
-            ordered = (ordered as any).limit(toIdx - fromIdx + 1);
+            ordered = (ordered as any).limit(to - from + 1);
           }
           const { data: rows, error: err, status: httpStatus } = await ordered;
-          clearTimeout(timeoutHandle);
-
           if (!err && Array.isArray(rows)) {
             return { rows: rows as unknown as T[], error: null };
           }
-          pageErr = {
-            message: err?.message,
-            code: err?.code,
-            status: httpStatus,
+          return {
+            rows: null,
+            error: {
+              message: err?.message,
+              code: err?.code,
+              status: httpStatus,
+            },
           };
-          if (isSchemaMigrationRequiredError(pageErr) || isUnauthorizedResponse(pageErr)) {
-            return { rows: null, error: pageErr };
+        },
+      });
+
+      if (execRes.cancelled || !isActiveGeneration()) {
+        return;
+      }
+
+      const reconciled = reconcileServerRows<T>({
+        serverRows: execRes.rows,
+        error: execRes.error,
+        isOffline: typeof navigator !== 'undefined' && navigator.onLine === false,
+        truncated: execRes.truncated,
+        timedOut: execRes.timedOut,
+      });
+
+      if (reconciled.rows !== null) {
+        setLockedOfflineCount(0);
+        setTruncated(execRes.truncated);
+        setData(reconciled.rows);
+        setError(
+          reconciled.status === 'migration_required'
+            ? `ساختار جدول ${table} با نسخه امنیتی همخوانی ندارد. اجرای Migration الزامی است.`
+            : reconciled.status === 'unauthorized'
+            ? execRes.error?.message || 'دسترسی غیرمجاز'
+            : reconciled.status === 'partial'
+            ? `بخشی از رکوردهای جدول ${table} دریافت شد (بیش از سقف صفحه‌بندی).`
+            : null
+        );
+        setStatus(reconciled.status);
+        setIsStale(reconciled.isStale);
+        if (reconciled.clearCache) {
+          clearScopedCacheEntry(currentScope);
+          if (!filter?.value) {
+            saveTableMirrorToVault(table, [], vaultScope).catch(() => {});
           }
-        } catch (e: unknown) {
-          clearTimeout(timeoutHandle);
-          if (controller.signal.aborted) break;
-          const msg = e instanceof Error ? e.message : 'خطای ارتباط با سرور';
-          pageErr = { message: msg };
-        }
-
-        attempt += 1;
-        if (attempt <= MAX_RETRY_ATTEMPTS && !controller.signal.aborted) {
-          await new Promise((r) => setTimeout(r, 350 * attempt));
-        }
-      }
-
-      return { rows: null, error: pageErr };
-    };
-
-    if (fetchAllPages) {
-      const accumulated: T[] = [];
-      let page = 0;
-      while (page < maxPages && !controller.signal.aborted) {
-        const fromIdx = queryOffset + page * pageSize;
-        const toIdx = fromIdx + pageSize - 1;
-        const res = await fetchSinglePage(fromIdx, toIdx);
-        if (res.error || !res.rows) {
-          lastError = res.error;
-          resolvedRows = null;
-          break;
-        }
-        accumulated.push(...res.rows);
-        if (res.rows.length < pageSize) {
-          // True end-of-data reached
-          resolvedRows = accumulated;
-          isTruncated = false;
-          break;
-        }
-        page += 1;
-        if (page >= maxPages) {
-          // Hit ceiling while server still returned a full page — mark dataset partial/truncated
-          resolvedRows = accumulated;
-          isTruncated = true;
-        }
-      }
-    } else {
-      const res = await fetchSinglePage(queryOffset, queryOffset + pageSize - 1);
-      lastError = res.error;
-      resolvedRows = res.rows;
-      // Single-page query that filled the exact page limit may be truncated
-      isTruncated = Array.isArray(res.rows) && res.rows.length >= pageSize;
-    }
-
-    if (
-      !shouldAcceptTableResponse({
-        requestSeq: reqSeq,
-        currentSeq: requestSeqRef.current,
-        requestScopeKey,
-        activeScopeKey: activeScopeKeyRef.current,
-        aborted: controller.signal.aborted,
-        mounted: mountedRef.current,
-      })
-    ) {
-      return;
-    }
-
-    const reconciled = reconcileServerRows<T>({
-      serverRows: resolvedRows,
-      error: lastError,
-      isOffline: typeof navigator !== 'undefined' && navigator.onLine === false,
-      truncated: isTruncated,
-    });
-
-    if (reconciled.rows !== null) {
-      setLockedOfflineCount(0);
-      setTruncated(isTruncated);
-      setData(reconciled.rows);
-      setError(
-        reconciled.status === 'migration_required'
-          ? `ساختار جدول ${table} با نسخه امنیتی همخوانی ندارد. اجرای Migration الزامی است.`
-          : reconciled.status === 'unauthorized'
-          ? lastError?.message || 'دسترسی غیرمجاز'
-          : reconciled.status === 'partial'
-          ? `بخشی از رکوردهای جدول ${table} دریافت شد (بیش از سقف صفحه‌بندی).`
-          : null
-      );
-      setStatus(reconciled.status);
-      setIsStale(reconciled.isStale);
-      if (reconciled.clearCache) {
-        clearScopedCacheEntry(currentScope);
-        if (!filter?.value) {
-          saveTableMirrorToVault(table, [], vaultScope).catch(() => {});
+        } else {
+          persistLocalMirror(reconciled.rows, currentScope);
         }
       } else {
-        persistLocalMirror(reconciled.rows, currentScope);
-      }
-    } else {
-      if (!filter?.value) {
-        try {
-          const vaultRes = await loadTableMirrorFromVaultWithStatus<T>(table, vaultScope);
-          if (
-            shouldAcceptTableResponse({
-              requestSeq: reqSeq,
-              currentSeq: requestSeqRef.current,
-              requestScopeKey,
-              activeScopeKey: activeScopeKeyRef.current,
-              aborted: controller.signal.aborted,
-              mounted: mountedRef.current,
-            })
-          ) {
+        if (!filter?.value) {
+          try {
+            const vaultRes = await loadTableMirrorFromVaultWithStatus<T>(table, vaultScope);
+            if (!isActiveGeneration()) return;
+
             if (vaultRes.status === 'locked_after_reload') {
               setData([]);
               setLockedOfflineCount(vaultRes.lockedRecordCount);
@@ -452,26 +659,46 @@ export function useRealtimeTable<T extends { id: string }>(
               setStatus('locked_offline');
               setIsStale(true);
               setTruncated(false);
-              setLoading(false);
               return;
             }
             if (vaultRes.rows.length > 0) {
               setData(vaultRes.rows);
             }
+          } catch {
+            // ignore vault read errors
           }
-        } catch {
-          // ignore
         }
-      }
-      setError(lastError?.message || 'خطای اتصال به سرور');
-      setStatus(reconciled.status);
-      setIsStale(true);
-    }
 
-    if (mountedRef.current && reqSeq === requestSeqRef.current) {
-      setLoading(false);
+        if (!isActiveGeneration()) return;
+        setError(
+          reconciled.status === 'timeout'
+            ? 'زمان انتظار برای پاسخ سرور به پایان رسید. لطفاً دوباره تلاش کنید.'
+            : execRes.error?.message || 'خطای اتصال به سرور'
+        );
+        setStatus(reconciled.status);
+        setIsStale(true);
+      }
+    } finally {
+      // Guaranteed termination of `loading` ONLY for the still-active generation & scope
+      if (
+        mountedRef.current &&
+        reqSeq === requestSeqRef.current &&
+        requestScopeKey === activeScopeKeyRef.current
+      ) {
+        setLoading(false);
+      }
     }
-  }, [table, select, filter?.column, filter?.value, queryLimit, queryOffset, fetchAllPages, maxPages, persistLocalMirror]);
+  }, [
+    table,
+    select,
+    filter?.column,
+    filter?.value,
+    queryLimit,
+    queryOffset,
+    fetchAllPages,
+    maxPages,
+    persistLocalMirror,
+  ]);
 
   const refreshAndBroadcast = useCallback(async () => {
     await fetchData();
@@ -495,7 +722,7 @@ export function useRealtimeTable<T extends { id: string }>(
     };
 
     const handleScopeSwitch = () => {
-      abortRef.current?.abort();
+      parentAbortRef.current?.abort();
       requestSeqRef.current += 1;
       const nextScope = resolveCurrentScope(table, filter);
       activeScopeKeyRef.current = nextScope.scopeKey;
@@ -558,7 +785,7 @@ export function useRealtimeTable<T extends { id: string }>(
 
     return () => {
       mountedRef.current = false;
-      abortRef.current?.abort();
+      parentAbortRef.current?.abort();
       window.removeEventListener('minadental-sync-event', handleSyncEvent);
       window.removeEventListener('minadental-user-changed', handleScopeSwitch);
       window.removeEventListener('minadental-branch-changed', handleScopeSwitch);

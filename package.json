@@ -9,6 +9,8 @@
     "lint": "tsc --noEmit -p tsconfig.app.json",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "verify:assets": "node tests/verify-asset-graph.mjs",
+    "verify:rls": "node scripts/verify-staging-rls.mjs",
     "test": "node --test tests/clinic-audit.test.mjs && node tests/run-production-tests.mjs"
   },
   "dependencies": {

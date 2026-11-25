@@ -100,6 +100,7 @@ export function evaluateDashboardSourceStatuses(
     const st = sourceStatuses[k];
     return (
       st === 'error' ||
+      st === 'timeout' ||
       st === 'unauthorized' ||
       st === 'migration_required' ||
       st === 'loading' ||
@@ -120,6 +121,7 @@ export function evaluateDashboardSourceStatuses(
   const hasUnauthorized = statuses.some((s) => s === 'unauthorized');
   const hasLockedOffline = lockedOfflineTables.length > 0;
   const hasOffline = statuses.some((s) => s === 'offline');
+  const hasTimeout = statuses.some((s) => s === 'timeout');
   const hasError = statuses.some((s) => s === 'error');
   const hasPartial = truncatedSources.length > 0 && !serverSummaryValid;
   const anyReady = statuses.some((s) => s === 'ready');
@@ -129,9 +131,10 @@ export function evaluateDashboardSourceStatuses(
   else if (hasUnauthorized) overall = 'unauthorized';
   else if (hasLockedOffline) overall = 'locked_offline';
   else if (hasOffline) overall = 'offline';
+  else if (hasTimeout && !hasError) overall = 'timeout';
   else if (hasError) overall = 'error';
   else if (hasPartial) overall = 'partial';
-  else if (meta.isLoading && !anyReady) overall = 'loading';
+  else if (meta.isLoading && !anyReady && !serverSummaryValid) overall = 'loading';
   else if (!anyReady && !serverSummaryValid && statuses.every((s) => s === 'empty')) overall = 'empty';
 
   return {
@@ -165,10 +168,12 @@ export function isValidDashboardServerSummary(
   return true;
 }
 
+const RPC_SUMMARY_TIMEOUT_MS = 5000;
+
 /**
  * Authoritative server-side aggregation RPC for clinics of any size (>500 monthly records).
- * Validates returned tenant_id & branch_id strictly (fail-closed) and returns null gracefully
- * if the RPC function is not deployed yet on the target Supabase instance.
+ * Validates returned tenant_id & branch_id strictly (fail-closed) with a bounded timeout
+ * and returns null gracefully if the RPC function is not deployed or times out.
  */
 export async function fetchDashboardServerSummary(params: {
   tenantId: string;
@@ -176,23 +181,70 @@ export async function fetchDashboardServerSummary(params: {
   todayIso: string;
   monthStartIso: string;
   monthEndIso: string;
+  timeoutMs?: number;
 }): Promise<DashboardServerSummary | null> {
   if (!params.tenantId?.trim() || !params.branchId?.trim()) return null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
   try {
     const rpcFn = (rawSupabase as any).rpc;
     if (typeof rpcFn !== 'function') return null;
-    const { data, error } = await rpcFn.call(rawSupabase, 'get_clinic_dashboard_summary', {
-      p_tenant_id: params.tenantId.trim(),
-      p_branch_id: params.branchId.trim(),
-      p_today_iso: params.todayIso,
-      p_month_start: params.monthStartIso,
-      p_month_end: params.monthEndIso,
+
+    const rpcCall = Promise.resolve(
+      rpcFn.call(rawSupabase, 'get_clinic_dashboard_summary', {
+        p_tenant_id: params.tenantId.trim(),
+        p_branch_id: params.branchId.trim(),
+        p_today_iso: params.todayIso,
+        p_month_start: params.monthStartIso,
+        p_month_end: params.monthEndIso,
+      })
+    );
+
+    const timeoutGuard = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), params.timeoutMs ?? RPC_SUMMARY_TIMEOUT_MS);
     });
+
+    const outcome = await Promise.race([rpcCall, timeoutGuard]);
+    if (!outcome || typeof outcome !== 'object') return null;
+    const { data, error } = outcome as { data?: unknown; error?: unknown };
     if (error || !data) return null;
     return isValidDashboardServerSummary(data, params.tenantId, params.branchId) ? data : null;
   } catch {
     return null;
+  } finally {
+    if (timer !== null) clearTimeout(timer);
   }
+}
+
+export interface DashboardRefreshSummary {
+  ok: boolean;
+  total: number;
+  succeeded: number;
+  failed: number;
+  failedKeys: string[];
+}
+
+export async function runSettledDashboardRefresh(
+  tasks: Array<{ key: string; run: () => Promise<unknown> }>
+): Promise<DashboardRefreshSummary> {
+  const settled = await Promise.allSettled(tasks.map((t) => t.run()));
+  const failedKeys: string[] = [];
+  let succeeded = 0;
+
+  settled.forEach((res, idx) => {
+    if (res.status === 'fulfilled') {
+      succeeded += 1;
+    } else {
+      failedKeys.push(tasks[idx].key);
+    }
+  });
+
+  return {
+    ok: failedKeys.length === 0,
+    total: tasks.length,
+    succeeded,
+    failed: failedKeys.length,
+    failedKeys,
+  };
 }
 
 export function useDashboardDataSources() {
@@ -288,6 +340,7 @@ export function useDashboardDataSources() {
   const firstError =
     allHooks.find((h) => h.status === 'migration_required')?.error ||
     allHooks.find((h) => h.status === 'locked_offline')?.error ||
+    allHooks.find((h) => h.status === 'timeout')?.error ||
     allHooks.find((h) => h.status === 'partial')?.error ||
     allHooks.find((h) => h.status === 'error')?.error ||
     null;
@@ -316,24 +369,23 @@ export function useDashboardDataSources() {
     staff: staff.data,
     serverSummary,
     status,
-    refreshAll: async () => {
-      await Promise.all([
-        loadServerSummary(),
-        patients.refresh(),
-        appointments.refresh(),
-        treatments.refresh(),
-        labOrders.refresh(),
-        implants.refresh(),
-        payments.refresh(),
-        inventory.refresh(),
-        reminders.refresh(),
-        finance.refresh(),
-        installments.refresh(),
-        checks.refresh(),
-        safteh.refresh(),
-        clinicSettings.refresh(),
-        staff.refresh(),
-      ]);
-    },
+    refreshAll: async (): Promise<DashboardRefreshSummary> =>
+      runSettledDashboardRefresh([
+        { key: 'rpc_summary', run: () => loadServerSummary() },
+        { key: 'patients', run: () => patients.refresh() },
+        { key: 'appointments', run: () => appointments.refresh() },
+        { key: 'treatments', run: () => treatments.refresh() },
+        { key: 'lab_orders', run: () => labOrders.refresh() },
+        { key: 'implants', run: () => implants.refresh() },
+        { key: 'payments', run: () => payments.refresh() },
+        { key: 'inventory', run: () => inventory.refresh() },
+        { key: 'reminders', run: () => reminders.refresh() },
+        { key: 'finance_transactions', run: () => finance.refresh() },
+        { key: 'installments', run: () => installments.refresh() },
+        { key: 'checks', run: () => checks.refresh() },
+        { key: 'safteh', run: () => safteh.refresh() },
+        { key: 'clinic_settings', run: () => clinicSettings.refresh() },
+        { key: 'staff', run: () => staff.refresh() },
+      ]),
   };
 }

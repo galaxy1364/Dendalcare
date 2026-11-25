@@ -1,127 +1,285 @@
-const CACHE_NAME = 'minadental-pwa-v64.0-b64';
-const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
-  './manifest.json',
-  './favicon.svg',
-  './logo.png',
-  './icon-192.png',
-  './icon-512.png',
-  './apple-touch-icon.png',
+// MinaDental Unified Service Worker (V5 Release Recovery)
+// Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
+const BUILD_ID = 'v4.9.5-7f8ec84697';
+const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
+const CACHE_PREFIX = 'minadental-shell-';
+const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
+const NAVIGATION_TIMEOUT_MS = 4500;
+
+const PRECACHE_ASSETS = [
+  "./",
+  "./index.html",
+  "./manifest.json",
+  "./favicon.svg",
+  "./logo.png",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./apple-touch-icon.png",
+  "./assets/index-C5XSKkgQ.js",
+  "./assets/index-CaXE2HbZ.css"
 ];
 
-function broadcastLog(message, type = 'info') {
-  const logEntry = {
-    timestamp: new Date().toLocaleTimeString('fa-IR'),
-    message: `[SW ${CACHE_NAME}] ${message}`,
-    type,
-  };
-  self.clients.matchAll({ includeUncontrolled: true }).then((clients) => {
-    clients.forEach((client) => {
-      client.postMessage({ type: 'SW_CONSOLE_LOG', log: logEntry });
-    });
+const NEVER_CACHE_PATH_PATTERNS = [
+  '/rest/v1/',
+  '/auth/v1/',
+  '/realtime/v1/',
+  '/storage/v1/',
+  '/functions/v1/',
+  '/api/',
+];
+
+const BYPASS_EXTENSIONS = ['.apk', '.mobileconfig', '.idsig', '.ipa'];
+
+function isMinadentalCacheKey(key) {
+  return typeof key === 'string' && key.startsWith('minadental-');
+}
+
+function isSensitiveOrApiPath(pathname) {
+  const lower = pathname.toLowerCase();
+  if (BYPASS_EXTENSIONS.some((ext) => lower.endsWith(ext))) return true;
+  return NEVER_CACHE_PATH_PATTERNS.some((pattern) => lower.includes(pattern));
+}
+
+function isValidMimeForPath(pathname, contentType, requestMode) {
+  const ct = (contentType || '').toLowerCase();
+  const lower = pathname.toLowerCase();
+
+  if (requestMode === 'navigate' || lower.endsWith('.html') || lower.endsWith('/')) {
+    return ct.includes('text/html');
+  }
+  if (lower.endsWith('.js') || lower.endsWith('.mjs')) {
+    return ct.includes('javascript') && !ct.includes('text/html');
+  }
+  if (lower.endsWith('.css')) {
+    return ct.includes('text/css') && !ct.includes('text/html');
+  }
+  if (lower.endsWith('.json') || lower.endsWith('.webmanifest')) {
+    return ct.includes('json') && !ct.includes('text/html');
+  }
+  if (lower.endsWith('.svg')) {
+    return ct.includes('image/svg') && !ct.includes('text/html');
+  }
+  if (lower.endsWith('.png') || lower.endsWith('.webp') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.ico')) {
+    return ct.includes('image/') && !ct.includes('text/html');
+  }
+  if (lower.endsWith('.woff2') || lower.endsWith('.woff') || lower.endsWith('.ttf')) {
+    return !ct.includes('text/html');
+  }
+  return !ct.includes('text/html');
+}
+
+function isCacheableResponse(request, response, pathname) {
+  if (!response || !response.ok || response.status !== 200) return false;
+  if (response.type !== 'basic') return false;
+
+  const cacheControl = (response.headers.get('cache-control') || '').toLowerCase();
+  if (cacheControl.includes('no-store') || cacheControl.includes('private')) {
+    return false;
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  return isValidMimeForPath(pathname, contentType, request.mode);
+}
+
+function fetchWithTimeout(request, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(request, Object.assign({}, options, { signal: controller.signal })).finally(() => {
+    clearTimeout(timer);
   });
 }
 
-// Resilient install: never fail SW installation if a single asset is temporarily unreachable
+function createOfflineHtmlResponse() {
+  const html =
+    '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1.0">' +
+    '<title>مینادنتال — آفلاین</title></head>' +
+    '<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#F4F7F9;color:#14283B;font-family:Vazirmatn,Tahoma,sans-serif;text-align:center;padding:24px;">' +
+    '<div style="max-width:360px;background:#fff;border:1px solid #D8E2EA;border-radius:20px;padding:24px;">' +
+    '<h2 style="margin:0 0 8px;font-size:17px;">اتصال اینترنت برقرار نیست</h2>' +
+    '<p style="margin:0 0 16px;font-size:13px;color:#526779;line-height:1.7;">صفحه درخواستی در حافظه آفلاین موجود نیست. لطفاً اتصال شبکه را بررسی کرده و دوباره تلاش کنید.</p>' +
+    '<button onclick="location.reload()" style="background:#087C76;color:#fff;border:none;border-radius:12px;padding:12px 20px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">تلاش مجدد</button>' +
+    '</div></body></html>';
+
+  return new Response(html, {
+    status: 503,
+    statusText: 'Service Unavailable',
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
+}
+
+function notifyClients(payload) {
+  return self.clients
+    .matchAll({ includeUncontrolled: true, type: 'window' })
+    .then((clients) => {
+      clients.forEach((client) => {
+        try {
+          client.postMessage(payload);
+        } catch {
+          // ignore closed client
+        }
+      });
+    })
+    .catch(() => {});
+}
+
+// Install: precache shell assets safely.
+// CRITICAL (V5 P0-03): Do NOT call self.skipWaiting() unconditionally in install,
+// so active tabs never mix old HTML with new chunk hashes mid-session.
 self.addEventListener('install', (event) => {
-  broadcastLog('Installing ServiceWorker cache v64...');
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      Promise.allSettled(
-        ASSETS_TO_CACHE.map((url) =>
-          fetch(url, { credentials: 'include', cache: 'no-store' })
-            .then((res) => {
-              if (res && res.ok) {
-                return cache.put(url, res);
+    caches
+      .open(CACHE_NAME)
+      .then((cache) =>
+        Promise.allSettled(
+          PRECACHE_ASSETS.map(async (assetUrl) => {
+            try {
+              const req = new Request(assetUrl, { cache: 'no-store' });
+              const res = await fetch(req);
+              const parsed = new URL(req.url);
+              const mode = assetUrl === './' || assetUrl.endsWith('.html') ? 'navigate' : 'cors';
+              if (res && res.ok && res.status === 200 && res.type === 'basic') {
+                const ct = res.headers.get('content-type') || '';
+                if (isValidMimeForPath(parsed.pathname, ct, mode)) {
+                  await cache.put(assetUrl, res);
+                }
               }
-            })
-            .catch(() => {})
+            } catch {
+              // Resilient install: skip unreachable optional asset
+            }
+          })
         )
       )
-    )
+      .then(() => {
+        if (self.registration && self.registration.active) {
+          return notifyClients({ type: 'SW_UPDATE_READY', buildId: RESOLVED_BUILD_ID });
+        }
+        return undefined;
+      })
   );
-  self.skipWaiting();
 });
 
+// Activate: prune ONLY obsolete minadental-* caches (strict namespace isolation)
 self.addEventListener('activate', (event) => {
-  broadcastLog('ServiceWorker activated & claiming clients...');
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            broadcastLog(`Clearing obsolete cache: ${key}`, 'warn');
-            return caches.delete(key);
-          }
-        })
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys.map((key) => {
+            if (isMinadentalCacheKey(key) && key !== CACHE_NAME) {
+              return caches.delete(key);
+            }
+            return Promise.resolve(false);
+          })
+        )
       )
-    )
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
+// Controlled update activation via explicit client message
 self.addEventListener('message', (event) => {
-  if (event.data && (event.data.type === 'SKIP_WAITING' || event.data.type === 'FORCE_UPDATE')) {
-    broadcastLog('Received FORCE_UPDATE/SKIP_WAITING message', 'info');
+  const data = event.data;
+  if (!data || typeof data !== 'object') return;
+  if (data.type === 'SKIP_WAITING' || data.type === 'FORCE_UPDATE') {
     self.skipWaiting();
+  } else if (data.type === 'GET_BUILD_ID' && event.ports && event.ports[0]) {
+    event.ports[0].postMessage({ buildId: RESOLVED_BUILD_ID, cacheName: CACHE_NAME });
   }
 });
 
 // BackgroundSync listener for offline queue sync
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-dental-offline-queue') {
-    broadcastLog('BackgroundSync triggered for offline queue', 'info');
-    event.waitUntil(
-      self.clients.matchAll({ includeUncontrolled: true }).then((clients) => {
-        clients.forEach((client) => {
-          client.postMessage({ type: 'TRIGGER_OFFLINE_SYNC' });
-        });
-      })
-    );
+    event.waitUntil(notifyClients({ type: 'TRIGGER_OFFLINE_SYNC' }));
   }
 });
 
-// Same-origin network-first strategy with no-store for version/bundle files and clean navigation offline fallback
+async function handleNavigationRequest(request, url) {
+  try {
+    const networkResponse = await fetchWithTimeout(
+      request,
+      { cache: 'no-store' },
+      NAVIGATION_TIMEOUT_MS
+    );
+    if (isCacheableResponse(request, networkResponse, url.pathname)) {
+      const clone = networkResponse.clone();
+      caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', clone)).catch(() => {});
+    }
+    return networkResponse;
+  } catch {
+    // Sequential awaited fallback (fixes broken Promise-truthy || chain)
+    const cache = await caches.open(CACHE_NAME);
+    const exactMatch = await cache.match(request);
+    if (exactMatch) return exactMatch;
+    const indexMatch = await cache.match('./index.html');
+    if (indexMatch) return indexMatch;
+    const rootMatch = await cache.match('./');
+    if (rootMatch) return rootMatch;
+    return createOfflineHtmlResponse();
+  }
+}
+
+async function handleStaticAssetRequest(request, url) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
+  if (cached) {
+    const ct = cached.headers.get('content-type') || '';
+    if (isValidMimeForPath(url.pathname, ct, request.mode)) {
+      return cached;
+    }
+    // Evict poisoned cache entry (e.g. HTML cached under .js/.css)
+    await cache.delete(request).catch(() => {});
+  }
+
+  try {
+    const networkResponse = await fetch(request);
+    if (isCacheableResponse(request, networkResponse, url.pathname)) {
+      const clone = networkResponse.clone();
+      cache.put(request, clone).catch(() => {});
+    }
+    return networkResponse;
+  } catch {
+    return new Response('Asset unavailable offline', {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  }
+}
+
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  const { request } = event;
+  if (request.method !== 'GET') return;
+  if (request.headers && request.headers.has('authorization')) return;
 
-  const url = new URL(event.request.url);
-  // Do not intercept cross-origin requests (e.g. Supabase API) or large APK binary downloads
+  const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.endsWith('.apk') || url.pathname.endsWith('.mobileconfig')) return;
+  if (isSensitiveOrApiPath(url.pathname)) return;
 
-  const isCriticalBundle =
+  // Never cache mutable release manifests
+  if (
     url.pathname.endsWith('version.json') ||
-    url.pathname.endsWith('chunks.json') ||
-    url.pathname.endsWith('index.html') ||
-    url.pathname.endsWith('.js') ||
-    url.pathname.endsWith('.css') ||
-    url.pathname.endsWith('/');
-
-  const fetchPromise = isCriticalBundle
-    ? fetch(event.request, { cache: 'no-store' })
-    : fetch(event.request);
-
-  event.respondWith(
-    fetchPromise
-      .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache).catch(() => {});
-          });
-        }
-        return networkResponse;
-      })
-      .catch(() =>
-        caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) return cachedResponse;
-          if (event.request.mode === 'navigate') {
-            return caches.match('./index.html') || caches.match('./');
-          }
-          return new Response('Offline', { status: 503, statusText: 'Offline' });
-        })
+    url.pathname.endsWith('build-manifest.json') ||
+    url.pathname.endsWith('chunks.json')
+  ) {
+    event.respondWith(
+      fetchWithTimeout(request, { cache: 'no-store' }, NAVIGATION_TIMEOUT_MS).catch(
+        () =>
+          new Response(JSON.stringify({ offline: true }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          })
       )
-  );
+    );
+    return;
+  }
+
+  if (request.mode === 'navigate') {
+    event.respondWith(handleNavigationRequest(request, url));
+    return;
+  }
+
+  event.respondWith(handleStaticAssetRequest(request, url));
 });

@@ -1,14 +1,14 @@
-name: MinaDental V4 Release Gate CI
+name: MinaDental V5 Release Gate CI
 
 on:
   push:
-    branches: [main, 'release/**']
+    branches: [main, 'release/**', 'fix/**']
   pull_request:
     branches: [main]
 
 jobs:
-  quality-and-unit-gates:
-    name: Typecheck, Build & Production-Import Unit Tests
+  quality-build-and-unit-gates:
+    name: Typecheck, Deterministic Build, Asset-Graph HTTP/MIME & Unit Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -26,13 +26,16 @@ jobs:
       - name: TypeScript typecheck
         run: npm run typecheck
 
-      - name: Production Vite build
+      - name: Production deterministic Vite build
         run: npm run build
 
-      - name: Run audit & production-import unit tests
+      - name: Verify recursive HTTP 200 & MIME asset graph (dist + gh-pages-dist)
+        run: npm run verify:assets
+
+      - name: Run audit & V4/V5 production-import unit tests
         run: npm test
 
-      - name: Verify SQL migrations are non-empty and idempotent
+      - name: Verify SQL migrations exist and preserve SECURITY INVOKER
         run: |
           test -f supabase/migrations/20261125_tenant_branch_rls.sql
           test -f supabase/migrations/20261126_strict_rls_hardening.sql
@@ -40,27 +43,53 @@ jobs:
           grep -q "get_clinic_dashboard_summary" supabase/migrations/20261127_v4_rpc_and_accounting_dates.sql
           grep -q "SECURITY INVOKER" supabase/migrations/20261127_v4_rpc_and_accounting_dates.sql
 
-  staging-rls-and-visual-e2e:
-    name: Staging RLS & Playwright Visual Matrix (Requires Secrets)
+  playwright-e2e-and-staging-rls:
+    name: Playwright E2E (Chromium + WebKit) & Staging RLS Gate
     runs-on: ubuntu-latest
-    needs: quality-and-unit-gates
+    needs: quality-build-and-unit-gates
     if: ${{ vars.ENABLE_STAGING_GATES == 'true' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
+
       - name: Install dependencies
         run: npm ci
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Run Staging RLS Verification & Viewport Matrix (360x740, 375x812, 390x844, 430x932, 768x1024, 1366x768)
+
+      - name: Build production artifacts for preview E2E
+        run: npm run build
+
+      - name: Install Playwright browsers (Chromium & WebKit)
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run Playwright Release Gate E2E
+        run: npx playwright test
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Run Staging RLS Verification
         env:
           SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
           SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
-        run: |
-          echo "Configure staging test users & Playwright E2E runner before enabling ENABLE_STAGING_GATES."
-          exit 1
+          STAGING_MANAGER_A_EMAIL: ${{ secrets.STAGING_MANAGER_A_EMAIL }}
+          STAGING_MANAGER_A_PASSWORD: ${{ secrets.STAGING_MANAGER_A_PASSWORD }}
+          STAGING_MANAGER_B_EMAIL: ${{ secrets.STAGING_MANAGER_B_EMAIL }}
+          STAGING_MANAGER_B_PASSWORD: ${{ secrets.STAGING_MANAGER_B_PASSWORD }}
+          STAGING_SECRETARY_A_EMAIL: ${{ secrets.STAGING_SECRETARY_A_EMAIL }}
+          STAGING_SECRETARY_A_PASSWORD: ${{ secrets.STAGING_SECRETARY_A_PASSWORD }}
+          STAGING_TENANT_A_ID: ${{ secrets.STAGING_TENANT_A_ID }}
+          STAGING_TENANT_B_ID: ${{ secrets.STAGING_TENANT_B_ID }}
+          STAGING_BRANCH_A1_ID: ${{ secrets.STAGING_BRANCH_A1_ID }}
+          STAGING_BRANCH_B1_ID: ${{ secrets.STAGING_BRANCH_B1_ID }}
+        run: node scripts/verify-staging-rls.mjs

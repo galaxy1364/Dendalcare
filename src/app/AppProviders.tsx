@@ -91,6 +91,7 @@ import {
 } from '@/lib/dataVault';
 import { purgeClinicalLocalStorageCaches } from '@/services/supabase/scopedCache';
 import { disconnectAllRealtimeChannels } from '@/services/realtime/realtimeHub';
+import { appBootstrap, markShellCommitted, sanitizeLogMessage } from './bootstrapState';
 
 export interface SmartWorkflowPopupState {
   id: string;
@@ -304,17 +305,46 @@ export function AppProviders({ children }: { children: ReactNode }) {
     }
   }, [viewport.keyboardOpen]);
 
-  // Boot appearance engine, splash teardown, Supabase session check & audit boot entry
+  // Post-commit shell handshake, appearance boot, explicit Auth bootstrap state machine & SW update listener
   useEffect(() => {
     const cleanupAppearance = initAppearanceEngine();
-    const splashEl = document.getElementById('app-splash');
-    if (splashEl) {
-      splashEl.style.opacity = '0';
-      splashEl.remove();
-    }
+    // V5 P0-04: Genuine post-commit handshake (replaces premature main.tsx flag)
+    markShellCommitted();
+    appBootstrap.transition('AUTH_RESOLVING');
 
-    getVerifiedSupabaseSession().then(setVerifiedSession).catch(() => {});
+    getVerifiedSupabaseSession()
+      .then((session) => {
+        setVerifiedSession(session);
+        if (session.status === 'authenticated') {
+          appBootstrap.transition('READY');
+        } else {
+          appBootstrap.transition('DEGRADED', {
+            code: session.status === 'unauthenticated' ? 'UNAUTHENTICATED' : 'AUTH_DEGRADED',
+            message: 'نشست سرور تایید نشده است؛ دسترسی بر اساس سیاست امنیتی محدود می‌ماند.',
+          });
+        }
+      })
+      .catch((err) => {
+        appBootstrap.transition('DEGRADED', {
+          code: 'AUTH_CHECK_FAILED',
+          message: sanitizeLogMessage(err),
+        });
+      });
+
     purgeExpiredVaultMirrors().catch(() => {});
+
+    const onSwUpdateAvailable = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      const installed = getInstalledReleaseInfo();
+      setOtaUpdateInfo({
+        version: detail?.buildId || installed.version,
+        build: installed.build + 1,
+        releaseNotes: 'نسخه جدید پوسته سامانه دریافت شد و آماده فعال‌سازی کنترل‌شده است.',
+        publishedBy: 'سامانه بروزرسانی مینادنتال',
+      });
+      setUpdateAvailable(true);
+    };
+    window.addEventListener('minadental:sw-update-available', onSwUpdateAvailable);
 
     MemPalace.recordAudit({
       traceId: 'TRC-MINA-CORE-9001-A',
@@ -326,6 +356,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      window.removeEventListener('minadental:sw-update-available', onSwUpdateAvailable);
       cleanupAppearance();
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     };
