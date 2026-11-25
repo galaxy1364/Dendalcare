@@ -4,12 +4,12 @@
   "semver": "4.9.6",
   "build": 99,
   "releaseSequence": 99,
-  "buildId": "v4.9.6-e5b0cfca23",
-  "releaseId": "v4.9.6-e5b0cfca23",
-  "contentDigest": "e5b0cfca23d195d7ee2bf3cef605a4fcf12ada0de1b1a1aa0733d8970175974a",
+  "buildId": "v4.9.6-b76116a18a",
+  "releaseId": "v4.9.6-b76116a18a",
+  "contentDigest": "b76116a18ac4d2ef53ceb0cc3ffebdd59ab5e4f42a1304021d763c242519255d",
   "packageVersion": "4.9.6",
   "channel": "stable",
-  "publishedAt": "2026-11-25T20:52:12.742Z",
+  "publishedAt": "2026-11-25T21:24:33.867Z",
   "releaseNotes": "نسخه v4.9.6 (انتشار #65) — موتور به‌روزرسانی تأییدشده V7 با مانیفست رسمی، اعتبارسنجی SHA-256/امضا، هماهنگ‌کننده واحد بین‌تبی، حفظ داده‌ها در نقطه امن و بررسی واقعی پس از راه‌اندازی",
   "entryScripts": [
     "./assets/index-vhgvjYN6.js"

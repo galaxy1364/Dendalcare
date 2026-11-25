@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "releaseId": "v4.9.6-e5b0cfca23",
+  "releaseId": "v4.9.6-b76116a18a",
   "releaseSequence": 99,
   "semver": "4.9.6",
   "gitCommit": "abcdef1234567890",
@@ -8,9 +8,9 @@
   "platform": "web",
   "minNativeVersion": "4.9.0",
   "minSchemaVersion": 4,
-  "publishedAt": "2026-11-25T20:52:12.742Z",
-  "expiresAt": "2027-11-25T20:52:12.742Z",
-  "contentDigest": "e5b0cfca23d195d7ee2bf3cef605a4fcf12ada0de1b1a1aa0733d8970175974a",
+  "publishedAt": "2026-11-25T21:24:33.867Z",
+  "expiresAt": "2027-11-25T21:24:33.867Z",
+  "contentDigest": "b76116a18ac4d2ef53ceb0cc3ffebdd59ab5e4f42a1304021d763c242519255d",
   "releaseNotes": "نسخه v4.9.6 (انتشار #65) — موتور به‌روزرسانی تأییدشده V7 با مانیفست رسمی، اعتبارسنجی SHA-256/امضا، هماهنگ‌کننده واحد بین‌تبی، حفظ داده‌ها در نقطه امن و بررسی واقعی پس از راه‌اندازی",
   "entryScripts": [
     "./assets/index-vhgvjYN6.js"
@@ -21,7 +21,7 @@
   "assets": [
     {
       "path": "./index.html",
-      "sha256": "c5e5469c16c450ae8fee3b25d0d83fe86e771147b1a1422a09b75a145c40c211",
+      "sha256": "f1fece7f153705c5b7aaef26de1d30ad3e78d30a468647fead75c3ac927c4cfc",
       "size": 24866,
       "critical": true,
       "contentType": "text/html; charset=utf-8"
@@ -546,8 +546,8 @@
     },
     {
       "path": "./sw.js",
-      "sha256": "eed3b068257a36f08c5f8b3f2a65cd0224c9b8f18ff65c5c2455c3e6de8e567d",
-      "size": 21391,
+      "sha256": "78987d5fdcb3a177703e3f19036383a2b08c2e6b346403ec1096061018fdcd8e",
+      "size": 21261,
       "critical": false,
       "contentType": "application/javascript; charset=utf-8"
     }

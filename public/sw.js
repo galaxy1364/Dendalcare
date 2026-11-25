@@ -426,7 +426,10 @@ self.addEventListener('sync', (event) => {
 async function isVerifiedHtmlResponse(cache, key, hit) {
   if (!hit || hit.status !== 200) return false;
   const ct = hit.headers.get('content-type') || '';
-  if (!ct.toLowerCase().includes('text/html')) return false;
+  if (!ct.toLowerCase().includes('text/html')) {
+    await cache.delete(key).catch(() => {});
+    return false;
+  }
   const body = await hit.clone().text().catch(() => '');
   if (validateNavigationHtml(body).valid) {
     return true;
@@ -436,15 +439,13 @@ async function isVerifiedHtmlResponse(cache, key, hit) {
 }
 
 async function getVerifiedCachedShell(cache, request) {
-  const reqMatch = await cache.match(request);
-  if (await isVerifiedHtmlResponse(cache, request, reqMatch)) return reqMatch;
-
-  const indexMatch = await cache.match('./index.html');
-  if (await isVerifiedHtmlResponse(cache, './index.html', indexMatch)) return indexMatch;
-
-  const rootMatch = await cache.match('./');
-  if (await isVerifiedHtmlResponse(cache, './', rootMatch)) return rootMatch;
-
+  const candidates = [request, './index.html', './'];
+  for (const key of candidates) {
+    const hit = await cache.match(key);
+    if (await isVerifiedHtmlResponse(cache, key, hit)) {
+      return hit;
+    }
+  }
   return null;
 }
 
