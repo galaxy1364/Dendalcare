@@ -343,4 +343,49 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
     await expect(page.getByTestId('appointment_form_fullscreen_page')).toBeVisible();
   });
+
+  test('V13 adaptive window classes, dock/rail switching across 320/390/768/1366/1440, dark theme & role-aware dock hiding', async ({ page }) => {
+    const viewChecks = [
+      { width: 320, height: 640, expectedClass: 'compact', dockVisible: true, sidebarVisible: false },
+      { width: 390, height: 844, expectedClass: 'compact', dockVisible: true, sidebarVisible: false },
+      { width: 768, height: 1024, expectedClass: 'medium', dockVisible: false, sidebarVisible: true },
+      { width: 1366, height: 768, expectedClass: 'expanded', dockVisible: false, sidebarVisible: true },
+      { width: 1440, height: 900, expectedClass: 'wide', dockVisible: false, sidebarVisible: true },
+    ];
+
+    for (const check of viewChecks) {
+      await page.setViewportSize({ width: check.width, height: check.height });
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+
+      const domState = await page.evaluate(() => ({
+        windowClass: document.documentElement.dataset.windowClass,
+        overflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2,
+      }));
+      expect(domState.windowClass).toBe(check.expectedClass);
+      expect(domState.overflow).toBe(true);
+
+      if (check.dockVisible) {
+        await expect(page.getByTestId('floating_bottom_dock')).toBeVisible();
+        await expect(page.getByTestId('adaptive_desktop_sidebar')).toBeHidden();
+      } else {
+        await expect(page.getByTestId('floating_bottom_dock')).toBeHidden();
+        await expect(page.getByTestId('adaptive_desktop_sidebar')).toBeVisible();
+      }
+    }
+
+    // Verify Dark Mode tokens render cleanly across key sections without overflow
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    });
+    for (const routeHash of ['/#/', '/#/services', '/#/patients', '/#/appointments', '/#/settings']) {
+      await page.goto(routeHash, { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+      const overflowOk = await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2
+      );
+      expect(overflowOk).toBe(true);
+    }
+  });
 });

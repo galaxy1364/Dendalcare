@@ -2,10 +2,10 @@
   "schemaVersion": 2,
   "channel": "staging",
   "platform": "android",
-  "currentReleaseId": "v4.9.6-3cd00c9c6d",
+  "currentReleaseId": "v4.9.6-03065d63bc",
   "releaseSequence": 9000,
-  "manifestUrl": "./releases/v4.9.6-3cd00c9c6d/release-manifest.json",
-  "updatedAt": "2026-11-25T21:58:17.944Z",
+  "manifestUrl": "./releases/v4.9.6-03065d63bc/release-manifest.json",
+  "updatedAt": "2026-11-25T22:54:24.705Z",
   "revokedReleaseIds": [],
   "minSupportedSequence": 1,
   "storeUrl": null

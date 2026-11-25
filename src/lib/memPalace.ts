@@ -360,6 +360,24 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'اعمال ماتریس گذارهای قانونی وضعیت نوبت (scheduled/confirmed/arrived/waiting/in_progress/completed/cancelled/no_show) در منو و دکمه‌ها همراه با تست‌های واحد و E2E',
     ],
   },
+  {
+    id: 'milestone-15',
+    traceId: 'TRC-MINA-V13-UNIV-PLAT-9015-O',
+    phaseNumber: 15,
+    title: 'قرارداد پلتفرم جامع V13: ماتریس واقعی قابلیت‌ها، ناوبری نقش‌محور QBank و ژست امن RTL',
+    titleEn: 'V13 Universal Platform Contract (Phase A/B): Typed Capability Negotiation, Role-Aware Adaptive Navigation & Draft-Guarded Gestures',
+    description: 'ذخیره قرارداد V13 و ADR-003 با فهرست صادقانه پوسته‌های واقعی (اندروید WebView، PWA، لانچر ویندوز و نبود پروژه Xcode/macOS iOS)، ارتقای capabilities.ts به مذاکره تایپ‌شده قابلیت‌ها و دسته‌بندی ۴گانه عرض پنجره، فیلتر نقش‌محور FloatingDock و NavigationRail بر اساس effectiveRole و محافظت از پیش‌نویس‌های ذخیره‌نشده در ژست بازگشت RTL.',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/05',
+    checksum: 'o150v13plat',
+    deliverables: [
+      'ثبت دائمی قرارداد V13 و ADR-003 (docs/architecture/MINADENTAL-V13-UNIVERSAL-PLATFORM-CONTRACT.md و docs/adr/ADR-003-universal-platform-capabilities-and-adaptive-shell.md)',
+      'ارتقای src/platform/capabilities.ts با نتیجه تایپ‌شده { availability, reason, source }، هندشیک امن با allowlist مبدأ و نقاط شکست ۴گانه پنجره (compact/medium/expanded/wide)',
+      'ناوبری نقش‌محور FloatingDock و NavigationRail با effectiveRole (حذف/جایگزینی خودکار تب مالی برای نقش‌های غیرمجاز با حفظ هندسه کیوبانک)',
+      'محافظت از پیش‌نویس‌های ذخیره‌نشده و مودال‌های باز در src/platform/gestures.ts به همراه لغو ایمن ژست و پوشش تست‌های واحد و E2E',
+    ],
+  },
 ]);
 
 export interface ModuleBenchmarkPhase {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getAdaptiveBreakpoint, type AdaptiveWindowClass } from './capabilities';
 
 export type ViewportBreakpoint = 'mobile' | 'tablet' | 'desktop';
 
@@ -8,6 +9,7 @@ export interface ViewportMetrics {
   visualHeight: number;
   keyboardOpen: boolean;
   breakpoint: ViewportBreakpoint;
+  adaptiveClass: AdaptiveWindowClass;
   isCompactHeight: boolean;
   hasNextAppointmentRoom: boolean;
 }
@@ -20,6 +22,7 @@ function readViewportMetrics(): ViewportMetrics {
       visualHeight: 844,
       keyboardOpen: false,
       breakpoint: 'mobile',
+      adaptiveClass: 'compact',
       isCompactHeight: false,
       hasNextAppointmentRoom: true,
     };
@@ -37,6 +40,7 @@ function readViewportMetrics(): ViewportMetrics {
     visualHeight,
     keyboardOpen,
     breakpoint,
+    adaptiveClass: getAdaptiveBreakpoint(width),
     isCompactHeight: height < 660,
     hasNextAppointmentRoom: height >= 700,
   };

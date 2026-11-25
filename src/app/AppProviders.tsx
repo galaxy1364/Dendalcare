@@ -319,12 +319,13 @@ function ClinicShellProviders({
   const [zeroLossTick, setZeroLossTick] = useState(0);
   const [forceExpandReminderKey, setForceExpandReminderKey] = useState(0);
 
-  // Sync visualViewport keyboard state for zero-scroll layout adaptation
+  // Sync visualViewport keyboard state & V13 adaptive window class for zero-scroll layout adaptation
   useEffect(() => {
     if (typeof document !== 'undefined') {
       document.documentElement.dataset.keyboardOpen = viewport.keyboardOpen ? 'true' : 'false';
+      document.documentElement.dataset.windowClass = viewport.adaptiveClass;
     }
-  }, [viewport.keyboardOpen]);
+  }, [viewport.keyboardOpen, viewport.adaptiveClass]);
 
   // Post-commit shell handshake & explicit Auth bootstrap state machine
   // (Runs before parent UpdateProvider's useEffect so markShellCommitted() always precedes updateCoordinator.start())

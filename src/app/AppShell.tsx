@@ -19,7 +19,12 @@ import { useNavigation } from '@/navigation/NavigationStack';
 import { FloatingDock } from '@/navigation/FloatingDock';
 import { NavigationRail } from '@/navigation/NavigationRail';
 import { PlatformHapticAdapter } from '@/platform/haptics';
-import { beginRtlEdgeBackSwipe, shouldCompleteRtlEdgeBackSwipe, type EdgeBackTracker } from '@/platform/gestures';
+import {
+  beginRtlEdgeBackSwipe,
+  cancelRtlEdgeBackSwipe,
+  shouldCompleteRtlEdgeBackSwipe,
+  type EdgeBackTracker,
+} from '@/platform/gestures';
 import { MascotTooth } from '@/components/ui/MascotTooth';
 import { DraggableNotificationHandle } from '@/components/ui/DraggableNotificationHandle';
 import { IOSReminderPopup } from '@/components/ui/IOSReminderPopup';
@@ -31,6 +36,7 @@ import { OverlayManager } from './OverlayManager';
 export function AppShell() {
   const {
     currentUser,
+    effectiveRole,
     branchId,
     isOnline,
     onlinePeersCount,
@@ -188,6 +194,7 @@ export function AppShell() {
           notifCount={notifCount}
           mascotMood={mascotMood}
           currentUser={currentUser}
+          effectiveRole={effectiveRole}
           platformInfo={platformInfo}
           onOpenUserModal={() => setUserModalOpen(true)}
           onOpenProjectFolder={() => setProjectFolderOpen(true)}
@@ -274,7 +281,7 @@ export function AppShell() {
                       setUserModalOpen(true);
                     }}
                     aria-label="حساب کاربری و مدیریت دسترسی"
-                    title={`${currentUser.fullName || 'مدیر'} (${ROLE_LABELS[currentUser.role]})`}
+                    title={`${currentUser.fullName || 'مدیر'} (${ROLE_LABELS[effectiveRole]})`}
                     data-testid="topbar_user_avatar_button"
                   >
                     <User size={18} className="text-[#087C76] dark:text-[#2DD4BF]" />
@@ -319,7 +326,7 @@ export function AppShell() {
               edgeSwipeRef.current = null;
             }}
             onTouchCancel={() => {
-              edgeSwipeRef.current = null;
+              edgeSwipeRef.current = cancelRtlEdgeBackSwipe(edgeSwipeRef.current);
             }}
             className={`app-shell-main px-2 md:px-5 desktop-scroll ${
               activeRoute === 'dashboard' ? 'main-no-scroll-home py-1.5' : 'py-2.5 pb-6'
@@ -557,6 +564,7 @@ export function AppShell() {
             active={activeRoute}
             onChange={(id) => navigate(id)}
             onOpenServices={() => navigate('services')}
+            userRole={effectiveRole}
           />
         </div>
       </div>

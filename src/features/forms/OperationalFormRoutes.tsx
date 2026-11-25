@@ -150,7 +150,11 @@ export function PatientFormPage() {
   };
 
   return (
-    <div className="space-y-3 pb-6 animate-fade-in-up" data-testid="patient_form_fullscreen_page">
+    <div
+      className="space-y-3 pb-6 animate-fade-in-up"
+      data-testid="patient_form_fullscreen_page"
+      data-unsaved-draft={isDirty ? 'true' : undefined}
+    >
       <div className="rounded-[22px] p-4 bg-white dark:bg-[#11202E] border border-[#B7E4CE] dark:border-[#25394D] shadow-sm space-y-3">
         <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 rounded-[14px] bg-[#ECFDF5] text-[#176B52] flex items-center justify-center">
@@ -304,7 +308,11 @@ export function AppointmentFormPage() {
   };
 
   return (
-    <div className="space-y-3 pb-6 animate-fade-in-up" data-testid="appointment_form_fullscreen_page">
+    <div
+      className="space-y-3 pb-6 animate-fade-in-up"
+      data-testid="appointment_form_fullscreen_page"
+      data-unsaved-draft={isDirty ? 'true' : undefined}
+    >
       <div className="rounded-[22px] p-4 bg-white dark:bg-[#11202E] border border-[#FDE0A6] dark:border-[#25394D] shadow-sm space-y-3">
         <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 rounded-[14px] bg-[#FFFBEB] text-[#92510C] flex items-center justify-center">
@@ -500,7 +508,11 @@ export function TreatmentFormPage() {
   };
 
   return (
-    <div className="space-y-3 pb-6 animate-fade-in-up" data-testid="treatment_form_fullscreen_page">
+    <div
+      className="space-y-3 pb-6 animate-fade-in-up"
+      data-testid="treatment_form_fullscreen_page"
+      data-unsaved-draft={isDirty ? 'true' : undefined}
+    >
       <div className="rounded-[22px] p-4 bg-white dark:bg-[#11202E] border border-[#DDD6FE] dark:border-[#25394D] shadow-sm space-y-3">
         <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 rounded-[14px] bg-[#F5F3FF] text-[#5B3CC4] flex items-center justify-center">

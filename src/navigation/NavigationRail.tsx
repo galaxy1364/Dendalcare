@@ -12,10 +12,10 @@ import {
   BellRing,
   ChevronRight,
 } from 'lucide-react';
-import type { ClinicUserAccount } from '@/lib/cloudSyncEngine';
+import type { ClinicUserAccount, ClinicUserRole } from '@/lib/cloudSyncEngine';
 import { ROLE_LABELS } from '@/lib/cloudSyncEngine';
 import type { PlatformInfo } from '@/platform/capabilities';
-import { canAccessRoute } from '@/services/permissions/accessControl';
+import { canAccessRoute, type EffectiveClinicRole } from '@/services/permissions/accessControl';
 import { ModuleDuotoneIcon } from '@/design-system/icons/DentalDuotoneIcons';
 
 interface NavigationRailProps {
@@ -25,6 +25,7 @@ interface NavigationRailProps {
   canGoBack?: boolean;
   mascotMood: MascotMood;
   currentUser: ClinicUserAccount;
+  effectiveRole?: ClinicUserRole | EffectiveClinicRole;
   platformInfo: PlatformInfo;
   notifCount?: number;
   onOpenUserModal: () => void;
@@ -47,6 +48,7 @@ export function NavigationRail({
   canGoBack = false,
   mascotMood,
   currentUser,
+  effectiveRole,
   platformInfo,
   notifCount = 0,
   onOpenUserModal,
@@ -55,6 +57,7 @@ export function NavigationRail({
   onOpenGlobalSearch,
   onOpenNotifications,
 }: NavigationRailProps) {
+  const resolvedRole = effectiveRole ?? currentUser?.role;
   const handleSelect = (id: AppRouteId) => {
     PlatformHapticAdapter.selection();
     onChange(id);
@@ -159,28 +162,30 @@ export function NavigationRail({
 
       {/* Scrollable Navigation Groups */}
       <nav className="flex-1 overflow-y-auto px-2 lg:px-3 py-2 space-y-4 desktop-scroll">
-        <button
-          type="button"
-          onClick={() => handleSelect('services')}
-          data-testid="sidebar_nav_services"
-          className={`w-full flex items-center justify-center lg:justify-start gap-2.5 px-2.5 py-2 rounded-btn min-h-[44px] transition-colors ${
-            active === 'services'
-              ? 'bg-white/15 text-white'
-              : 'text-slate-200 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-teal-500/25 text-teal-200 border border-teal-400/35">
-            <ModuleDuotoneIcon id="services" size={20} primaryColor="#FFFFFF" secondaryColor="#2DD4BF" />
-          </span>
-          <span className="hidden lg:block text-xs font-bold truncate">همه خدمات و گزارش نوبت</span>
-        </button>
+        {canAccessRoute(resolvedRole, 'services') && (
+          <button
+            type="button"
+            onClick={() => handleSelect('services')}
+            data-testid="sidebar_nav_services"
+            className={`w-full flex items-center justify-center lg:justify-start gap-2.5 px-2.5 py-2 rounded-btn min-h-[44px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 ${
+              active === 'services'
+                ? 'bg-white/15 text-white'
+                : 'text-slate-200 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-teal-500/25 text-teal-200 border border-teal-400/35">
+              <ModuleDuotoneIcon id="services" size={20} primaryColor="#FFFFFF" secondaryColor="#2DD4BF" />
+            </span>
+            <span className="hidden lg:block text-xs font-bold truncate">همه خدمات و گزارش نوبت</span>
+          </button>
+        )}
 
-        {canAccessRoute(currentUser?.role, 'reports') && (
+        {canAccessRoute(resolvedRole, 'reports') && (
           <button
             type="button"
             onClick={() => handleSelect('reports')}
             data-testid="sidebar_nav_reports"
-            className={`w-full flex items-center justify-center lg:justify-start gap-2.5 px-2.5 py-2 rounded-btn min-h-[44px] transition-colors ${
+            className={`w-full flex items-center justify-center lg:justify-start gap-2.5 px-2.5 py-2 rounded-btn min-h-[44px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 ${
               active === 'reports'
                 ? 'bg-white/15 text-white'
                 : 'text-slate-200 hover:bg-white/10 hover:text-white'
@@ -194,7 +199,7 @@ export function NavigationRail({
         )}
 
         {SECTION_GROUPS.map((group) => {
-          const visibleIds = group.ids.filter((id) => canAccessRoute(currentUser?.role, id));
+          const visibleIds = group.ids.filter((id) => canAccessRoute(resolvedRole, id));
           if (visibleIds.length === 0) return null;
           return (
             <div key={group.title} className="space-y-1">
@@ -213,7 +218,7 @@ export function NavigationRail({
                     onClick={() => handleSelect(sec.id)}
                     title={sec.label}
                     data-testid={`sidebar_nav_${sec.id}`}
-                    className={`w-full flex items-center justify-center lg:justify-start gap-2.5 px-2.5 py-2 rounded-btn min-h-[44px] transition-colors ${
+                    className={`w-full flex items-center justify-center lg:justify-start gap-2.5 px-2.5 py-2 rounded-btn min-h-[44px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 ${
                       isActive
                         ? 'bg-white/15 text-white'
                         : 'text-slate-200 hover:bg-white/10 hover:text-white'
@@ -282,7 +287,7 @@ export function NavigationRail({
               {currentUser?.fullName || 'دکتر مهدی امیری'}
             </p>
             <p className="text-[11px] text-slate-300 truncate">
-              {ROLE_LABELS[currentUser?.role || 'manager']}
+              {ROLE_LABELS[resolvedRole as ClinicUserRole] || ROLE_LABELS[currentUser?.role || 'assistant']}
             </p>
           </div>
         </button>
