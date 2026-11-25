@@ -8,7 +8,13 @@ import type { SectionId } from '@/lib/sections';
  * - Persists and reorders the maximum 4 Selected Services shown on the No-Scroll Home screen.
  */
 
-export type AppRouteId = SectionId | 'services';
+export type AppRouteId =
+  | SectionId
+  | 'services'
+  | 'reports'
+  | 'patient_form'
+  | 'appointment_form'
+  | 'treatment_form';
 
 export const DEFAULT_SELECTED_HOME_SERVICES: SectionId[] = [
   'patients',

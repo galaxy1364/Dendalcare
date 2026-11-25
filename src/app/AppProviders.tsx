@@ -83,6 +83,7 @@ import {
   type VerifiedSessionState,
 } from '@/services/authentication/authService';
 import { ACTIVE_TENANT_ID } from '@/services/authentication/authService';
+import { resolveEffectiveRole } from '@/services/permissions/accessControl';
 
 export interface SmartWorkflowPopupState {
   id: string;
@@ -119,6 +120,7 @@ export interface NewUserInput {
 interface ClinicShellContextValue {
   users: ClinicUserAccount[];
   currentUser: ClinicUserAccount;
+  effectiveRole: ClinicUserRole;
   verifiedSession: VerifiedSessionState;
   authBusy: boolean;
   authFeedback: { ok: boolean; text: string } | null;
@@ -950,9 +952,20 @@ export function AppProviders({ children }: { children: ReactNode }) {
     installModalOpen,
   ]);
 
+  const effectiveRole = useMemo(
+    () =>
+      resolveEffectiveRole({
+        serverVerifiedRole: verifiedSession.serverVerifiedRole,
+        localRole: currentUser.role,
+        sessionStatus: verifiedSession.status,
+      }),
+    [verifiedSession.serverVerifiedRole, verifiedSession.status, currentUser.role]
+  );
+
   const value: ClinicShellContextValue = {
     users,
     currentUser,
+    effectiveRole,
     verifiedSession,
     authBusy,
     authFeedback,
@@ -1082,7 +1095,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <ClinicShellContext.Provider value={value}>
-      <NavigationProvider userRole={currentUser.role} onBeforeOverlayBack={onBeforeOverlayBack}>
+      <NavigationProvider userRole={effectiveRole} onBeforeOverlayBack={onBeforeOverlayBack}>
         {children}
       </NavigationProvider>
     </ClinicShellContext.Provider>

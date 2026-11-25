@@ -1,42 +1,11 @@
-import {
-  Anchor,
-  BellRing,
-  CalendarDays,
-  CalendarRange,
-  Eye,
-  FlaskConical,
-  GripVertical,
-  LayoutGrid,
-  MessageSquare,
-  Package,
-  Settings,
-  Stethoscope,
-  UserCog,
-  Users,
-  Wallet,
-} from 'lucide-react';
+import { Eye, GripVertical, LayoutGrid } from 'lucide-react';
 import { getSection, type SectionId } from '@/lib/sections';
 import { getModuleToken } from '@/design-system/tokens';
+import { ModuleDuotoneIcon } from '@/design-system/icons/DentalDuotoneIcons';
 import { QBankTile } from '@/components/ui/QBankTile';
 import { ContextMenuTrigger } from '@/components/ui/ContextMenu';
 import { PlatformHapticAdapter } from '@/platform/haptics';
 import type { AppRouteId } from '@/lib/navigationStack';
-
-const SERVICE_ICONS: Record<SectionId, typeof Users> = {
-  dashboard: LayoutGrid,
-  patients: Users,
-  appointments: CalendarDays,
-  calendar: CalendarRange,
-  treatments: Stethoscope,
-  lab: FlaskConical,
-  implants: Anchor,
-  finance: Wallet,
-  inventory: Package,
-  reminders: BellRing,
-  staff: UserCog,
-  messages: MessageSquare,
-  settings: Settings,
-};
 
 interface FavoriteModulesProps {
   selectedServices: SectionId[];
@@ -89,7 +58,6 @@ export function FavoriteModules({
         {selectedServices.slice(0, 4).map((secId, idx) => {
           const sec = getSection(secId);
           const tok = getModuleToken(secId);
-          const SIcon = SERVICE_ICONS[secId] || LayoutGrid;
           const liveVal = serviceValues[secId];
           return (
             <div
@@ -135,7 +103,14 @@ export function FavoriteModules({
                   surfaceBg={tok.surfaceTintStart}
                   surfaceBgEnd={tok.surfaceTintEnd}
                   borderColor={tok.surfaceBorder}
-                  icon={<SIcon size={17} strokeWidth={2.3} />}
+                  icon={
+                    <ModuleDuotoneIcon
+                      id={secId}
+                      size={28}
+                      primaryColor="#142E43"
+                      secondaryColor={tok.primary}
+                    />
+                  }
                   label={sec.label}
                   value={liveVal}
                   testId={`dashboard_tile_${secId}`}

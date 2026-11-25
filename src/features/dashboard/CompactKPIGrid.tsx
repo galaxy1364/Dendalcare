@@ -157,7 +157,9 @@ export function CompactKPIGrid({ metrics, onNavigate }: CompactKPIGridProps) {
         </div>
         <p className="text-[10px] font-semibold text-[#526779] dark:text-[#9FB1C1] mt-1.5 truncate tabular-nums">
           {metrics.totalOverdueFinCount > 0
-            ? `${fmt(metrics.overdueChecksCount)} چک • ${fmt(metrics.overdueInstallmentsCount)} قسط`
+            ? `${fmt(metrics.overdueChecksCount)} چک وصولی • ${fmt(metrics.overdueInstallmentsCount)} قسط`
+            : revenue.guaranteeChecksPendingAmount > 0
+            ? `جریان نقد: ${fmt(revenue.monthCashFlow)} • ضمانت: ${fmt(revenue.guaranteeChecksPendingAmount)}`
             : `جریان نقد ماه: ${fmt(revenue.monthCashFlow)} ت`}
         </p>
       </button>

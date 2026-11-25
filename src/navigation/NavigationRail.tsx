@@ -11,12 +11,12 @@ import {
   Search,
   BellRing,
   ChevronRight,
-  LayoutGrid,
 } from 'lucide-react';
 import type { ClinicUserAccount } from '@/lib/cloudSyncEngine';
 import { ROLE_LABELS } from '@/lib/cloudSyncEngine';
 import type { PlatformInfo } from '@/platform/capabilities';
 import { canAccessRoute } from '@/services/permissions/accessControl';
+import { ModuleDuotoneIcon } from '@/design-system/icons/DentalDuotoneIcons';
 
 interface NavigationRailProps {
   active: AppRouteId;
@@ -170,10 +170,28 @@ export function NavigationRail({
           }`}
         >
           <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-teal-500/25 text-teal-200 border border-teal-400/35">
-            <LayoutGrid size={18} />
+            <ModuleDuotoneIcon id="services" size={20} primaryColor="#FFFFFF" secondaryColor="#2DD4BF" />
           </span>
           <span className="hidden lg:block text-xs font-bold truncate">همه خدمات و گزارش نوبت</span>
         </button>
+
+        {canAccessRoute(currentUser?.role, 'reports') && (
+          <button
+            type="button"
+            onClick={() => handleSelect('reports')}
+            data-testid="sidebar_nav_reports"
+            className={`w-full flex items-center justify-center lg:justify-start gap-2.5 px-2.5 py-2 rounded-btn min-h-[44px] transition-colors ${
+              active === 'reports'
+                ? 'bg-white/15 text-white'
+                : 'text-slate-200 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-indigo-500/25 text-indigo-200 border border-indigo-400/35">
+              <ModuleDuotoneIcon id="reports" size={20} primaryColor="#FFFFFF" secondaryColor="#A5B4FC" />
+            </span>
+            <span className="hidden lg:block text-xs font-bold truncate">گزارش مالی و عملکرد</span>
+          </button>
+        )}
 
         {SECTION_GROUPS.map((group) => {
           const visibleIds = group.ids.filter((id) => canAccessRoute(currentUser?.role, id));

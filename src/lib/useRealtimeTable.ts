@@ -120,6 +120,12 @@ export function useRealtimeTable<T extends { id: string }>(
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
 
+  const vaultScope = {
+    tenantId: scope.tenantId,
+    branchId: scope.branchId,
+    userId: scope.userId,
+  };
+
   const persistLocalMirror = useCallback(
     (rows: T[]) => {
       if (rows.length === 0) {
@@ -128,7 +134,7 @@ export function useRealtimeTable<T extends { id: string }>(
         writeScopedNonSensitiveCache(scope, rows);
       }
       if (!filter?.value) {
-        saveTableMirrorToVault(table, rows).catch(() => {});
+        saveTableMirrorToVault(table, rows, vaultScope).catch(() => {});
       }
     },
     [table, scope.tenantId, scope.branchId, scope.userId, filter?.column, filter?.value]
@@ -143,10 +149,10 @@ export function useRealtimeTable<T extends { id: string }>(
     setLoading(true);
     setStatus((prev) => (prev === 'ready' ? 'ready' : offlineNow ? 'offline' : 'loading'));
 
-    // Hydrate from IndexedDB Vault as fallback ONLY when offline
+    // Hydrate from scoped IndexedDB Vault as fallback ONLY when offline
     if (offlineNow && !filter?.value) {
       try {
-        const vaultRows = await loadTableMirrorFromVault<T>(table);
+        const vaultRows = await loadTableMirrorFromVault<T>(table, vaultScope);
         if (mountedRef.current && !controller.signal.aborted) {
           setData(vaultRows);
           setStatus(vaultRows.length > 0 ? 'offline' : 'empty');
@@ -163,13 +169,14 @@ export function useRealtimeTable<T extends { id: string }>(
     }
 
     let attempt = 0;
+    let activeSelect = select ?? '*';
     let lastError: { message?: string; code?: string; status?: number } | null = null;
     let resolvedRows: T[] | null = null;
 
     while (attempt <= MAX_RETRY_ATTEMPTS && !controller.signal.aborted) {
       const timeoutHandle = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
       try {
-        let query = supabase.from(table).select(select ?? '*');
+        let query = supabase.from(table).select(activeSelect);
         if (filter && filter.value !== null && filter.value !== undefined) {
           query = query.eq(filter.column, filter.value);
         }
@@ -192,6 +199,22 @@ export function useRealtimeTable<T extends { id: string }>(
           status: httpStatus,
         };
         if (isUnauthorizedResponse(lastError)) break;
+        // Graceful fallback if remote Supabase hasn't applied optional migration columns yet (PostgreSQL 42703)
+        if (err?.code === '42703' && activeSelect !== '*') {
+          activeSelect = activeSelect
+            .split(',')
+            .map((c) => c.trim())
+            .filter(
+              (c) =>
+                c &&
+                c !== 'tenant_id' &&
+                c !== 'branch_id' &&
+                c !== 'payment_id' &&
+                c !== 'is_guarantee' &&
+                c !== 'installment_id'
+            )
+            .join(',');
+        }
       } catch (e: unknown) {
         clearTimeout(timeoutHandle);
         if (controller.signal.aborted) break;
@@ -221,16 +244,16 @@ export function useRealtimeTable<T extends { id: string }>(
       if (reconciled.clearCache) {
         clearScopedCacheEntry(scope);
         if (!filter?.value) {
-          saveTableMirrorToVault(table, []).catch(() => {});
+          saveTableMirrorToVault(table, [], vaultScope).catch(() => {});
         }
       } else {
         persistLocalMirror(reconciled.rows);
       }
     } else {
-      // Server temporarily unreachable — recover local mirror ONLY for resilience and mark stale
+      // Server temporarily unreachable — recover scoped local mirror ONLY for resilience and mark stale
       if (!filter?.value) {
         try {
-          const vaultRows = await loadTableMirrorFromVault<T>(table);
+          const vaultRows = await loadTableMirrorFromVault<T>(table, vaultScope);
           if (mountedRef.current && vaultRows.length > 0) {
             setData(vaultRows);
           }

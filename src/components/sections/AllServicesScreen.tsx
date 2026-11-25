@@ -12,6 +12,7 @@ import type {
 } from '@/lib/supabase';
 import { SECTIONS, type SectionId } from '@/lib/sections';
 import { getModuleToken } from '@/design-system/tokens';
+import { ModuleDuotoneIcon } from '@/design-system/icons/DentalDuotoneIcons';
 import { getCurrentJalaliMonthBounds, isDateInRange, todayGregorian } from '@/lib/jalali';
 import { loadDentalUnits } from '@/lib/clinicDefinitions';
 import { computeRealChairCapacity, isDuplicatePaymentTransaction } from '@/features/dashboard/dashboard.metrics';
@@ -518,7 +519,6 @@ export function AllServicesScreen({ onNavigate, onQuickAction }: AllServicesScre
         <div className="bento gap-2.5">
           {SECTIONS.filter((sec) => sec.id !== 'dashboard').map((sec) => {
             const tok = getModuleToken(sec.id);
-            const Icon = sec.icon;
             const isPinned = selectedHome.includes(sec.id);
             return (
               <div key={sec.id} className="relative">
@@ -528,7 +528,14 @@ export function AllServicesScreen({ onNavigate, onQuickAction }: AllServicesScre
                   surfaceBg={tok.surfaceTintStart}
                   surfaceBgEnd={tok.surfaceTintEnd}
                   borderColor={tok.surfaceBorder}
-                  icon={<Icon size={19} strokeWidth={2.3} />}
+                  icon={
+                    <ModuleDuotoneIcon
+                      id={sec.id}
+                      size={28}
+                      primaryColor="#142E43"
+                      secondaryColor={tok.primary}
+                    />
+                  }
                   label={sec.label}
                   selected={isPinned}
                   testId={`services_tile_${sec.id}`}
@@ -552,6 +559,21 @@ export function AllServicesScreen({ onNavigate, onQuickAction }: AllServicesScre
               </div>
             );
           })}
+
+          <div className="relative">
+            <QBankTile
+              color="#4F46E5"
+              darkColor="#3730A3"
+              surfaceBg="#F5F3FF"
+              surfaceBgEnd="#E0E7FF"
+              borderColor="#C7D2FE"
+              icon={<ModuleDuotoneIcon id="reports" size={28} primaryColor="#142E43" secondaryColor="#6366F1" />}
+              label="گزارش مالی و عملکرد"
+              sub="سود تعهدی، جریان نقد و چک ضمانت"
+              testId="services_tile_reports"
+              onClick={() => onNavigate('reports')}
+            />
+          </div>
         </div>
       </div>
 

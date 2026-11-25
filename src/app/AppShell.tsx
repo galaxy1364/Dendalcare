@@ -23,6 +23,7 @@ import { beginRtlEdgeBackSwipe, shouldCompleteRtlEdgeBackSwipe, type EdgeBackTra
 import { MascotTooth } from '@/components/ui/MascotTooth';
 import { DraggableNotificationHandle } from '@/components/ui/DraggableNotificationHandle';
 import { IOSReminderPopup } from '@/components/ui/IOSReminderPopup';
+import { AuroraBackground } from '@/design-system/components/AuroraBackground';
 import { useClinicShell } from './AppProviders';
 import { AppRouter } from './AppRouter';
 import { OverlayManager } from './OverlayManager';
@@ -85,6 +86,14 @@ export function AppShell() {
   const section =
     activeRoute === 'services'
       ? { ...getSection('dashboard'), id: 'services' as const, label: 'همه خدمات کلینیک' }
+      : activeRoute === 'reports'
+      ? { ...getSection('finance'), id: 'reports' as const, label: 'گزارش جامع کلینیک' }
+      : activeRoute === 'patient_form'
+      ? { ...getSection('patients'), id: 'patient_form' as const, label: 'ثبت بیمار جدید' }
+      : activeRoute === 'appointment_form'
+      ? { ...getSection('appointments'), id: 'appointment_form' as const, label: 'ثبت نوبت جدید' }
+      : activeRoute === 'treatment_form'
+      ? { ...getSection('treatments'), id: 'treatment_form' as const, label: 'ثبت طرح درمان' }
       : getSection(activeRoute);
 
   const activeBranch = CLINIC_BRANCHES.find((b) => b.id === branchId) ?? CLINIC_BRANCHES[0];
@@ -163,10 +172,7 @@ export function AppShell() {
 
   return (
     <div className={`app-shell-viewport relative ${section.themeClass}`}>
-      <div className="gemini-bg">
-        <div className="gemini-orb gemini-orb-1" />
-        <div className="gemini-orb gemini-orb-2" />
-      </div>
+      <AuroraBackground />
 
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Adaptive Tablet Rail / Desktop Sidebar */}

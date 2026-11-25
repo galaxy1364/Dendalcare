@@ -1,6 +1,6 @@
 import { SECTIONS, type SectionId, getSection } from '@/lib/sections';
 import { getModuleToken } from '@/design-system/tokens';
-import { LayoutGrid } from 'lucide-react';
+import { ModuleDuotoneIcon } from '@/design-system/icons/DentalDuotoneIcons';
 import { PlatformHapticAdapter } from '@/platform/haptics';
 import type { AppRouteId } from '@/lib/navigationStack';
 
@@ -19,15 +19,23 @@ const PRIMARY_SECTION_IDS: SectionId[] = [
   'finance',
 ];
 
+function resolveDockSection(route: AppRouteId): { sectionId: SectionId; label: string } {
+  if (route === 'services') return { sectionId: 'dashboard', label: 'خدمات' };
+  if (route === 'reports') return { sectionId: 'finance', label: 'گزارش‌ها' };
+  if (route === 'patient_form') return { sectionId: 'patients', label: 'بیمار جدید' };
+  if (route === 'appointment_form') return { sectionId: 'appointments', label: 'نوبت جدید' };
+  if (route === 'treatment_form') return { sectionId: 'treatments', label: 'درمان جدید' };
+  return { sectionId: route, label: getSection(route).label };
+}
+
 export function FloatingDock({
   active,
   onChange,
   onOpenFolders,
   moreOpen = false,
 }: FloatingDockProps) {
-  const isPrimaryActive = active !== 'services' && PRIMARY_SECTION_IDS.includes(active);
-  const resolvedSectionId: SectionId = active === 'services' ? 'dashboard' : active;
-  const activeSection = getSection(resolvedSectionId);
+  const isPrimaryActive = PRIMARY_SECTION_IDS.includes(active as SectionId);
+  const { sectionId: resolvedSectionId, label: resolvedLabel } = resolveDockSection(active);
   const activeToken = getModuleToken(resolvedSectionId);
 
   return (
@@ -41,7 +49,6 @@ export function FloatingDock({
           {PRIMARY_SECTION_IDS.map((id) => {
             const section = SECTIONS.find((s) => s.id === id) ?? getSection(id);
             const tok = getModuleToken(id);
-            const Icon = section.icon;
             const isActive = active === id;
             return (
               <button
@@ -65,7 +72,12 @@ export function FloatingDock({
                     border: isActive ? `1.5px solid ${tok.surfaceBorder}` : '1px solid transparent',
                   }}
                 >
-                  <Icon size={20} strokeWidth={isActive ? 2.4 : 2} />
+                  <ModuleDuotoneIcon
+                    id={id}
+                    size={22}
+                    primaryColor={isActive ? tok.primaryDark : '#526779'}
+                    secondaryColor={isActive ? tok.primary : '#94A3B8'}
+                  />
                 </div>
                 <span
                   className="dock-label"
@@ -104,12 +116,17 @@ export function FloatingDock({
           }}
         >
           {!isPrimaryActive ? (
-            <activeSection.icon size={20} strokeWidth={2.3} style={{ color: activeToken.primary }} />
+            <ModuleDuotoneIcon
+              id={active}
+              size={22}
+              primaryColor={activeToken.primaryDark}
+              secondaryColor={activeToken.primary}
+            />
           ) : (
-            <LayoutGrid size={20} strokeWidth={2.2} />
+            <ModuleDuotoneIcon id="services" size={22} primaryColor="#14283B" secondaryColor="#087C76" />
           )}
           <span className="text-[10px] font-bold mt-0.5 leading-none truncate max-w-[44px]">
-            {!isPrimaryActive ? activeSection.label : 'بخش‌ها'}
+            {!isPrimaryActive ? resolvedLabel : 'بخش‌ها'}
           </span>
         </button>
       </div>

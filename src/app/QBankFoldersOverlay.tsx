@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { SECTIONS, type SectionId } from '@/lib/sections';
 import { getModuleToken } from '@/design-system/tokens';
+import { ModuleDuotoneIcon } from '@/design-system/icons/DentalDuotoneIcons';
 import { toJalaliStr } from '@/lib/jalali';
 import { QBankTile } from '@/components/ui/QBankTile';
 import { MascotTooth } from '@/components/ui/MascotTooth';
@@ -470,7 +471,6 @@ export function QBankFoldersOverlay() {
                     const sec = accessibleSections.find((s) => s.id === fid);
                     if (!sec) return null;
                     const tok = getModuleToken(fid);
-                    const FIcon = sec.icon;
                     return (
                       <QBankTile
                         key={fid}
@@ -480,7 +480,14 @@ export function QBankFoldersOverlay() {
                         surfaceBg={tok.surfaceTintStart}
                         surfaceBgEnd={tok.surfaceTintEnd}
                         borderColor={tok.surfaceBorder}
-                        icon={<FIcon size={17} strokeWidth={2.3} />}
+                        icon={
+                          <ModuleDuotoneIcon
+                            id={fid}
+                            size={28}
+                            primaryColor="#142E43"
+                            secondaryColor={tok.primary}
+                          />
+                        }
                         label={sec.label}
                         selected={activeRoute === fid}
                         testId={`more_quick_tile_${fid}`}
@@ -495,7 +502,6 @@ export function QBankFoldersOverlay() {
           <div className="rounded-[20px] bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] p-3.5 shadow-sm">
             <div className="grid grid-cols-3 gap-x-2.5 gap-y-4">
               {filteredSections.map((sec) => {
-                const Icon = sec.icon;
                 const tok = getModuleToken(sec.id);
                 const isCurrent = activeRoute === sec.id;
                 return (
@@ -514,7 +520,12 @@ export function QBankFoldersOverlay() {
                         border: `1.5px solid ${isCurrent ? tok.primary : tok.surfaceBorder}`,
                       }}
                     >
-                      <Icon size={22} strokeWidth={2.2} />
+                      <ModuleDuotoneIcon
+                        id={sec.id}
+                        size={28}
+                        primaryColor={isCurrent ? '#FFFFFF' : '#142E43'}
+                        secondaryColor={isCurrent ? '#CCFBF1' : tok.primary}
+                      />
                       {isCurrent && (
                         <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#176B52] border-2 border-white" />
                       )}
@@ -580,7 +591,6 @@ export function QBankFoldersOverlay() {
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {moreSections.slice(0, 4).map((sec) => {
-                  const Icon = sec.icon;
                   const tok = getModuleToken(sec.id);
                   return (
                     <QBankTile
@@ -590,7 +600,14 @@ export function QBankFoldersOverlay() {
                       surfaceBg={tok.surfaceTintStart}
                       surfaceBgEnd={tok.surfaceTintEnd}
                       borderColor={tok.surfaceBorder}
-                      icon={<Icon size={18} strokeWidth={2.3} />}
+                      icon={
+                        <ModuleDuotoneIcon
+                          id={sec.id}
+                          size={28}
+                          primaryColor="#142E43"
+                          secondaryColor={tok.primary}
+                        />
+                      }
                       label={sec.label}
                       sub={MORE_SUBTITLES[sec.id]}
                       selected={activeRoute === sec.id}

@@ -56,9 +56,11 @@ import {
   setThemeMode,
   setFontScaleMode,
   setMotionMode,
+  setAuroraBackdropMode,
   type ThemeMode,
   type FontScaleMode,
   type MotionMode,
+  type AuroraBackdropMode,
 } from '@/lib/appearanceEngine';
 import { detectPlatformCapabilities } from '@/lib/platformEngine';
 import { HapticEngine } from '@/lib/hapticsAudio';
@@ -556,6 +558,41 @@ function ClinicSettingsTab({
                   className={`py-2 px-2 rounded-xl border text-[11px] font-extrabold min-h-[42px] transition-all ${
                     active
                       ? 'bg-violet-600 text-white border-violet-600 shadow-sm'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2" data-testid="appearance_aurora_controls">
+          <span className="text-[11px] font-extrabold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+            <Zap size={13} /> پس‌زمینه زنده (Aurora Mesh)
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                { id: 'live' as AuroraBackdropMode, label: 'زنده (سیال)' },
+                { id: 'low_power' as AuroraBackdropMode, label: 'کم‌مصرف' },
+                { id: 'static' as AuroraBackdropMode, label: 'ثابت' },
+              ] as const
+            ).map(({ id, label }) => {
+              const active = appearance.auroraMode === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  data-testid={`appearance_aurora_${id}`}
+                  onClick={() => {
+                    HapticEngine.selection();
+                    setAuroraBackdropMode(id);
+                  }}
+                  className={`py-2 px-2 rounded-xl border text-[11px] font-extrabold min-h-[42px] transition-all ${
+                    active
+                      ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
                   }`}
                 >

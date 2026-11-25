@@ -21,20 +21,20 @@ import type {
  * Strictly eliminates `select('*')` to minimize payload size and avoid leaking unnecessary PII fields.
  */
 const DASHBOARD_SELECTS = {
-  patients: 'id,first_name,last_name,phone,created_at',
-  appointments: 'id,patient_id,staff_id,title,appointment_date,appointment_time,duration_min,type,status,created_at',
-  treatments: 'id,patient_id,status,total_cost,paid_amount,created_at',
-  lab_orders: 'id,patient_id,lab_name,tooth_numbers,status,due_date,received_date,sent_date,created_at',
-  implants: 'id,patient_id,tooth_number,brand,stage,placement_date,osseointegration_date,abutment_date,crown_date,created_at',
-  payments: 'id,patient_id,treatment_id,amount,payment_date,status,created_at',
-  inventory: 'id,name,quantity,min_quantity,unit,expiry_date,reorder_quantity,created_at',
-  reminders: 'id,patient_id,title,reminder_date,status,priority,created_at',
-  finance_transactions: 'id,type,category,amount,transaction_date,patient_id,reference,description,created_at',
-  installments: 'id,patient_id,total_amount,paid_amount,monthly_amount,total_months,paid_months,next_due_date,status,created_at',
-  checks: 'id,patient_id,check_number,bank_name,amount,due_date,status,created_at',
-  safteh: 'id,patient_id,safteh_number,guarantor_name,amount,due_date,status,created_at',
-  clinic_settings: 'id,key,value,category,created_at',
-  staff: 'id,first_name,last_name,role,active,created_at',
+  patients: 'id,tenant_id,branch_id,first_name,last_name,phone,created_at',
+  appointments: 'id,tenant_id,branch_id,patient_id,staff_id,title,appointment_date,appointment_time,duration_min,type,status,created_at',
+  treatments: 'id,tenant_id,branch_id,patient_id,status,total_cost,paid_amount,discount,doctor_cost,lab_cost,material_cost,other_cost,created_at',
+  lab_orders: 'id,tenant_id,branch_id,patient_id,lab_name,tooth_numbers,status,due_date,received_date,sent_date,created_at',
+  implants: 'id,tenant_id,branch_id,patient_id,tooth_number,brand,stage,placement_date,osseointegration_date,abutment_date,crown_date,created_at',
+  payments: 'id,tenant_id,branch_id,patient_id,treatment_id,amount,payment_date,status,created_at',
+  inventory: 'id,tenant_id,branch_id,name,quantity,min_quantity,unit,expiry_date,reorder_quantity,created_at',
+  reminders: 'id,tenant_id,branch_id,patient_id,title,reminder_date,status,priority,created_at',
+  finance_transactions: 'id,tenant_id,branch_id,payment_id,type,category,amount,transaction_date,patient_id,reference,description,created_at',
+  installments: 'id,tenant_id,branch_id,patient_id,treatment_id,total_amount,paid_amount,monthly_amount,total_months,paid_months,next_due_date,status,created_at',
+  checks: 'id,tenant_id,branch_id,patient_id,treatment_id,installment_id,check_number,bank_name,amount,due_date,status,is_guarantee,type,notes,created_at',
+  safteh: 'id,tenant_id,branch_id,patient_id,safteh_number,guarantor_name,amount,due_date,status,created_at',
+  clinic_settings: 'id,tenant_id,branch_id,key,value,category,created_at',
+  staff: 'id,tenant_id,branch_id,first_name,last_name,role,active,created_at',
 } as const;
 
 export function useDashboardDataSources() {

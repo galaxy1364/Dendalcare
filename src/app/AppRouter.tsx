@@ -46,6 +46,18 @@ const Messages = lazy(() =>
 const SettingsSection = lazy(() =>
   import('@/components/sections/SettingsSection').then((m) => ({ default: m.SettingsSection }))
 );
+const ReportsPage = lazy(() =>
+  import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage }))
+);
+const PatientFormPage = lazy(() =>
+  import('@/features/forms/OperationalFormRoutes').then((m) => ({ default: m.PatientFormPage }))
+);
+const AppointmentFormPage = lazy(() =>
+  import('@/features/forms/OperationalFormRoutes').then((m) => ({ default: m.AppointmentFormPage }))
+);
+const TreatmentFormPage = lazy(() =>
+  import('@/features/forms/OperationalFormRoutes').then((m) => ({ default: m.TreatmentFormPage }))
+);
 
 function RouteSkeleton() {
   return (
@@ -62,9 +74,9 @@ function RouteSkeleton() {
 
 export function AppRouter() {
   const { activeRoute, navigate } = useNavigation();
-  const { currentUser, triggerInstall, triggerQuickAction, setRoadmapModalOpen } = useClinicShell();
+  const { effectiveRole, triggerInstall, triggerQuickAction, setRoadmapModalOpen } = useClinicShell();
 
-  if (!canAccessRoute(currentUser.role, activeRoute)) {
+  if (!canAccessRoute(effectiveRole, activeRoute)) {
     return (
       <FullScreenRoute routeId={activeRoute}>
         <div className="space-y-3 py-4">
@@ -87,14 +99,22 @@ export function AppRouter() {
         return <DashboardPage />;
       case 'services':
         return <AllServicesScreen onNavigate={(id) => navigate(id)} onQuickAction={triggerQuickAction} />;
+      case 'reports':
+        return <ReportsPage />;
       case 'patients':
         return <Patients />;
+      case 'patient_form':
+        return <PatientFormPage />;
       case 'appointments':
         return <Appointments />;
+      case 'appointment_form':
+        return <AppointmentFormPage />;
       case 'calendar':
         return <CalendarSection onNavigate={(id) => navigate(id)} />;
       case 'treatments':
         return <Treatments />;
+      case 'treatment_form':
+        return <TreatmentFormPage />;
       case 'lab':
         return <Lab />;
       case 'implants':

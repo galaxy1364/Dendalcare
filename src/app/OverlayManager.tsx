@@ -39,6 +39,7 @@ import { Badge, Button, Field, Input, Select } from '@/components/ui/Form';
 import { InstallAppModal } from '@/components/ui/InstallAppModal';
 import { NotificationDrawer } from '@/components/ui/NotificationDrawer';
 import { QBankTile } from '@/components/ui/QBankTile';
+import { DuotoneCallerIdIcon, ModuleDuotoneIcon } from '@/design-system/icons/DentalDuotoneIcons';
 import { RoadmapAuditModal } from '@/components/ui/RoadmapAuditModal';
 import { Sheet } from '@/components/ui/Sheet';
 import { useClinicShell } from './AppProviders';
@@ -508,7 +509,7 @@ export function OverlayManager() {
               surfaceBg="#F2FBF7"
               surfaceBgEnd="#DFF5EA"
               borderColor="#B7E4CE"
-              icon={<PhoneIncoming size={19} />}
+              icon={<DuotoneCallerIdIcon size={28} primaryColor="#142E43" secondaryColor="#176B52" />}
               testId="folder_caller_id_btn"
               onClick={() => {
                 setProjectFolderOpen(false);
@@ -524,7 +525,7 @@ export function OverlayManager() {
               surfaceBg="#F7F5FF"
               surfaceBgEnd="#EBE6FD"
               borderColor="#D2C8FA"
-              icon={<Download size={19} />}
+              icon={<Download size={24} />}
               testId="folder_install_pwa_btn"
               onClick={() => {
                 setProjectFolderOpen(false);
@@ -540,7 +541,7 @@ export function OverlayManager() {
               surfaceBg="#F4F7F9"
               surfaceBgEnd="#E6EDF2"
               borderColor="#CAD6E0"
-              icon={<Keyboard size={19} />}
+              icon={<ModuleDuotoneIcon id="settings" size={28} primaryColor="#142E43" secondaryColor="#087C76" />}
               testId="folder_settings_shortcut_btn"
               onClick={() => {
                 setProjectFolderOpen(false);

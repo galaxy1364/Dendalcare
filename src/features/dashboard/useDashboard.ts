@@ -11,7 +11,7 @@ import { useAppearanceSettings } from '@/design-system/themes/appearance';
 import { useViewportMetrics } from '@/platform/safeArea';
 import { PlatformHapticAdapter } from '@/platform/haptics';
 import { getActiveClinicUser } from '@/lib/cloudSyncEngine';
-import { getActiveBranchId } from '@/services/authentication/authService';
+import { ACTIVE_TENANT_ID, getActiveBranchId } from '@/services/authentication/authService';
 import { useNavigation } from '@/navigation/NavigationStack';
 import { useDashboardDataSources } from './dashboard.service';
 import { computeDashboardMetrics } from './dashboard.metrics';
@@ -63,6 +63,7 @@ export function useDashboard() {
         staff: sources.staff,
         units,
         branchId,
+        tenantId: activeUser.tenantId || ACTIVE_TENANT_ID,
         userRole: activeUser.role,
       }),
     [
@@ -82,6 +83,7 @@ export function useDashboard() {
       sources.staff,
       units,
       branchId,
+      activeUser.tenantId,
       activeUser.role,
     ]
   );

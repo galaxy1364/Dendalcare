@@ -354,7 +354,7 @@ describe('Phase 8 [TRC-MINA-QBANK-9008-H]: Authentic QBank Curved-Notch UI, Proj
     const dashSrc = read('src/features/dashboard/DashboardPage.tsx');
     const foldersSrc = read('src/app/QBankFoldersOverlay.tsx');
 
-    assert.ok(tileSrc.includes('viewBox="0 0 220 76"'), 'QBankTile must render 1/3 shorter smooth curved SVG notch silhouette');
+    assert.ok(tileSrc.includes('viewBox="0 0 220 104"'), 'QBankTile must render smooth curved SVG notch silhouette (FIX 02 96-108px geometry)');
     assert.ok(tileSrc.includes('qbank-notch-card'), 'QBankTile must apply qbank-notch-card press physics');
     assert.ok(tileSrc.includes('playTactileFeedback'), 'QBankTile must trigger tactile feedback on tap');
     assert.ok(favSrc.includes('<QBankTile'), 'FavoriteModules must use QBankTile for home module cards');
@@ -685,7 +685,7 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     const handleSrc = read('src/components/ui/DraggableNotificationHandle.tsx');
     const drawerSrc = read('src/components/ui/NotificationDrawer.tsx');
 
-    assert.ok(tileSrc.includes('compact = false') && tileSrc.includes("'72px'") && tileSrc.includes("'64px'"), 'QBankTile must reduce height by 1/3 (72px default, 64px compact)');
+    assert.ok(tileSrc.includes('compact = false') && tileSrc.includes("'96px'") && tileSrc.includes("'108px'"), 'QBankTile must enforce FIX 02 adaptive QBank height (96px compact, 108px default)');
     assert.ok(foldersSrc.includes('qbank_all_folders_menu') && foldersSrc.includes('LayoutGrid'), 'QBankFoldersOverlay must render QBank 4-square Folders Menu overlay');
     assert.ok(foldersSrc.includes('qbank_global_search_input') && foldersSrc.includes('qbank_menu_back_btn'), 'QBankFoldersOverlay must render sticky bottom Search Pill & Circular Back button');
     assert.ok(foldersSrc.includes('grid-cols-3 gap-2') && foldersSrc.includes('grid-cols-3 gap-x-2.5'), 'QBankFoldersOverlay must render 3-column quick tiles and 3-column folders icon grid');
@@ -785,7 +785,7 @@ describe('Phase 11 [TRC-MINA-IOS27-V2-9011-K]: V2 Viewport-Based No-Scroll Home,
     const foldersSrc = read('src/app/QBankFoldersOverlay.tsx');
     const railSrc = read('src/navigation/NavigationRail.tsx');
 
-    assert.ok(navSrc.includes("export type AppRouteId = SectionId | 'services'"), 'navigationStack must export AppRouteId including services');
+    assert.ok(navSrc.includes('export type AppRouteId =') && navSrc.includes("'services'") && navSrc.includes("'reports'"), 'navigationStack must export AppRouteId including services and reports');
     assert.ok(navSrc.includes('saveRouteScroll') && navSrc.includes('getRouteScroll') && navSrc.includes('pushNavRoute') && navSrc.includes('popNavRoute'), 'navigationStack must export scroll ledger & stack helpers');
     assert.ok(allServicesSrc.includes('data-testid="all_services_screen"') && allServicesSrc.includes('data-testid="services_home_customizer"'), 'AllServicesScreen must expose independent services view and Drag & Drop customizer');
     assert.ok(routerSrc.includes("case 'services':") && routerSrc.includes('AllServicesScreen'), 'AppRouter must mount AllServicesScreen as full-screen services route');
@@ -961,6 +961,112 @@ describe('Phase 12 [TRC-MINA-AUDIT-9012-L]: Master Audit Remediation (Phases 01�
   });
 });
 
+describe('Phase 13 [TRC-MINA-SECOND-AUDIT-9013-M]: Second Audit Remediation (QBank Visual Fidelity, Live Aurora, Duotone Icons, Full-Screen Forms, Accounting & Multi-Tenant RLS)', () => {
+  const root = process.cwd();
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
+  test('42. FIX 01–03 — Live Aurora Mesh Background, Exact QBank Notch Geometry (96–108px / 22px) & Custom Filled Duotone Icons', () => {
+    const auroraSrc = read('src/design-system/components/AuroraBackground.tsx');
+    const appearanceSrc = read('src/design-system/themes/appearance.ts');
+    const cssSrc = read('src/index.css');
+    const shellSrc = read('src/app/AppShell.tsx');
+    const settingsSrc = read('src/components/sections/SettingsSection.tsx');
+    const tileSrc = read('src/components/ui/QBankTile.tsx');
+    const iconsSrc = read('src/design-system/icons/DentalDuotoneIcons.tsx');
+    const favSrc = read('src/features/dashboard/FavoriteModules.tsx');
+    const servicesSrc = read('src/components/sections/AllServicesScreen.tsx');
+    const dockSrc = read('src/navigation/FloatingDock.tsx');
+    const foldersSrc = read('src/app/QBankFoldersOverlay.tsx');
 
+    // FIX 01: Aurora Mesh Background + Pause on hidden tab / Reduce Motion + Settings Control
+    assert.ok(auroraSrc.includes('export function AuroraBackground') && auroraSrc.includes('shouldPauseAuroraMotion') && auroraSrc.includes('visibilitychange'), 'AuroraBackground must pause on background tab and Reduce Motion');
+    assert.ok(appearanceSrc.includes("export type AuroraBackdropMode = 'live' | 'low_power' | 'static'") && appearanceSrc.includes('setAuroraBackdropMode'), 'appearance.ts must support live, low_power, and static Aurora modes');
+    assert.ok(cssSrc.includes('.aurora-mesh-canvas') && cssSrc.includes('@keyframes auroraDriftA') && cssSrc.includes('.aurora-paused') && cssSrc.includes('.aurora-low-power'), 'index.css must define GPU-composited Aurora mesh drift keyframes and pause/low-power states');
+    assert.ok(shellSrc.includes('<AuroraBackground />'), 'AppShell must mount AuroraBackground');
+    assert.ok(settingsSrc.includes('appearance_aurora_controls') && settingsSrc.includes('setAuroraBackdropMode'), 'SettingsSection must expose Aurora backdrop mode selector');
 
+    // FIX 02: Exact QBank Curved-Notch Geometry
+    assert.ok(tileSrc.includes('viewBox="0 0 220 104"') && tileSrc.includes("compact ? '96px' : '108px'") && tileSrc.includes('M 22,1 H 198'), 'QBankTile must enforce 22px corners, smooth curved bottom-left notch, and 96px–108px height');
+    assert.ok(cssSrc.includes('.qbank-notch-card') && cssSrc.includes('border-radius: 22px'), 'index.css must style qbank-notch-card with 22px border-radius');
+
+    // FIX 03: Custom Filled Duotone SVG Icons
+    assert.ok(iconsSrc.includes('export function ModuleDuotoneIcon') && iconsSrc.includes('DuotoneTreatmentsIcon') && iconsSrc.includes('DuotoneReportsIcon') && iconsSrc.includes('DuotoneCallerIdIcon'), 'DentalDuotoneIcons.tsx must export custom filled duotone SVGs and dispatcher');
+    for (const [name, src] of [
+      ['FavoriteModules.tsx', favSrc],
+      ['AllServicesScreen.tsx', servicesSrc],
+      ['FloatingDock.tsx', dockSrc],
+      ['QBankFoldersOverlay.tsx', foldersSrc],
+    ]) {
+      assert.ok(src.includes('ModuleDuotoneIcon'), `${name} must render custom ModuleDuotoneIcon`);
+    }
+  });
+
+  test('43. FIX 04–06 — Dedicated Full-Screen Reports & Operational Form Routes (patient_form, appointment_form, treatment_form)', () => {
+    const navSrc = read('src/lib/navigationStack.ts');
+    const deepLinkSrc = read('src/navigation/DeepLinkHandler.ts');
+    const routerSrc = read('src/app/AppRouter.tsx');
+    const shellSrc = read('src/app/AppShell.tsx');
+    const reportsSrc = read('src/features/reports/ReportsPage.tsx');
+    const formsSrc = read('src/features/forms/OperationalFormRoutes.tsx');
+    const railSrc = read('src/navigation/NavigationRail.tsx');
+
+    for (const route of ["'reports'", "'patient_form'", "'appointment_form'", "'treatment_form'"]) {
+      assert.ok(navSrc.includes(route), `navigationStack.ts must declare route ${route}`);
+      assert.ok(deepLinkSrc.includes(route), `DeepLinkHandler.ts must allow route ${route}`);
+      assert.ok(routerSrc.includes(`case ${route}:`), `AppRouter.tsx must render route ${route}`);
+      assert.ok(shellSrc.includes(route), `AppShell.tsx must map header metadata for ${route}`);
+    }
+
+    assert.ok(reportsSrc.includes('reports_fullscreen_page') && reportsSrc.includes('guaranteeChecksPendingAmount') && reportsSrc.includes('monthNetProfit') && reportsSrc.includes('monthCashFlow'), 'ReportsPage must display accrual profit, cash flow, and separated guarantee checks');
+    assert.ok(formsSrc.includes('export function PatientFormPage') && formsSrc.includes('export function AppointmentFormPage') && formsSrc.includes('export function TreatmentFormPage') && formsSrc.includes('getMutationOutcome'), 'OperationalFormRoutes must provide server-confirmed full-screen patient, appointment, and treatment forms');
+    assert.ok(railSrc.includes('sidebar_nav_reports'), 'NavigationRail must link to full-screen reports route');
+  });
+
+  test('44. FIX 07 — Accrual Profit vs Cash Flow, Guarantee Check Isolation, Deterministic payment_id Dedup & Zero-Default Capacity', () => {
+    const metricsSrc = read('src/features/dashboard/dashboard.metrics.ts');
+    const typesSrc = read('src/features/dashboard/dashboard.types.ts');
+
+    assert.ok(typesSrc.includes('monthDirectCosts') && typesSrc.includes('collectionChecksPendingAmount') && typesSrc.includes('guaranteeChecksPendingAmount') && typesSrc.includes('overdueGuaranteeChecksCount'), 'dashboard.types.ts must expose direct costs and guarantee vs collection check metrics');
+    assert.ok(metricsSrc.includes('export function isGuaranteeCheck') && metricsSrc.includes('monthDirectCosts') && metricsSrc.includes('standaloneCollectionChecksAmount'), 'dashboard.metrics.ts must isolate guarantee collateral checks and compute accrual direct costs');
+    assert.ok(!metricsSrc.includes("|| '09:00-13:00'") && !metricsSrc.includes("|| '16:00-21:00'"), 'computeRealChairCapacity must never fall back to guessed shift strings');
+    assert.ok(!metricsSrc.includes('Math.max(treatmentReceivables'), 'totalReceivables must never distort A/R with Math.max');
+
+    // Deterministic payment_id dedup runtime check: two legitimate same-day same-amount payments MUST NOT be dropped
+    const isDeterministicDup = (tx, pays) => {
+      const ref = String(tx.reference || '').trim().toUpperCase();
+      const desc = String(tx.description || '');
+      const linked = tx.payment_id ? String(tx.payment_id).trim() : '';
+      if (ref.startsWith('PAY:') || ref.startsWith('PAYMENT_')) return true;
+      return pays.some((p) => {
+        const pid = String(p.id).trim();
+        if (!pid) return false;
+        if (linked && linked === pid) return true;
+        if (ref && (ref === pid.toUpperCase() || ref === `PAY:${pid.toUpperCase()}`)) return true;
+        if (desc && (desc.includes(`[PAY_ID:${pid}]`) || desc.includes(pid))) return true;
+        return false;
+      });
+    };
+    const pays = [{ id: 'pay_101', patient_id: 'pt_1', payment_date: '2026-11-20', amount: 1500000 }];
+    assert.equal(isDeterministicDup({ payment_id: 'pay_101', reference: '', description: '' }, pays), true, 'Exact payment_id link must be deduplicated');
+    assert.equal(isDeterministicDup({ payment_id: null, reference: 'CASH_SECOND', description: 'Second same-day visit', patient_id: 'pt_1', transaction_date: '2026-11-20', amount: 1500000 }, pays), false, 'Distinct same-day same-amount transaction without payment_id must NOT be dropped');
+  });
+
+  test('45. FIX 08 — Multi-Tenant & Multi-Branch RLS Migration, Composite IndexedDB Vault Keys & Fail-Closed RBAC', () => {
+    const rlsSql = read('supabase/migrations/20261125_tenant_branch_rls.sql');
+    const vaultSrc = read('src/lib/dataVault.ts');
+    const rtTableSrc = read('src/lib/useRealtimeTable.ts');
+    const providersSrc = read('src/app/AppProviders.tsx');
+    const routerSrc = read('src/app/AppRouter.tsx');
+    const accessSrc = read('src/services/permissions/accessControl.ts');
+    const metricsSrc = read('src/features/dashboard/dashboard.metrics.ts');
+    const seedSrc = read('src/lib/seedClinicData.ts');
+
+    assert.ok(rlsSql.includes('ENABLE ROW LEVEL SECURITY') && rlsSql.includes('tenant_id') && rlsSql.includes('branch_id') && rlsSql.includes('payment_id'), 'SQL migration must enforce tenant_id, branch_id, payment_id, and RLS policies');
+    assert.ok(vaultSrc.includes('IDB_VERSION = 2') && vaultSrc.includes('export function getVaultMirrorKey') && vaultSrc.includes('scopeKey'), 'dataVault.ts must isolate IndexedDB mirrors with composite tenant::branch::user::table keys');
+    assert.ok(rtTableSrc.includes('saveTableMirrorToVault(table, rows, vaultScope)') && rtTableSrc.includes('loadTableMirrorFromVault<T>(table, vaultScope)'), 'useRealtimeTable must pass tenant/branch/user vaultScope on all Vault reads/writes');
+    assert.ok(providersSrc.includes('resolveEffectiveRole({') && providersSrc.includes('userRole={effectiveRole}') && routerSrc.includes('canAccessRoute(effectiveRole'), 'AppProviders and AppRouter must wire fail-closed effectiveRole');
+    assert.ok(accessSrc.includes("if (params.sessionStatus === 'authenticated') {") && accessSrc.includes("if (!serverRole) return 'secretary';"), 'resolveEffectiveRole must fail closed to secretary when authenticated without server role claim');
+    assert.ok(metricsSrc.includes('if (!row.branch_id) {\n    return false;\n  }'), 'matchesTenantAndBranch must strictly reject null/missing branch_id rows');
+    assert.ok(seedSrc.includes("tenant_id: row.tenant_id || 'minadental_clinic'") && seedSrc.includes("branch_id: row.branch_id || 'main'"), 'Seed clinic data must stamp explicit tenant_id and branch_id');
+  });
+});

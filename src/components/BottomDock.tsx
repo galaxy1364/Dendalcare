@@ -157,8 +157,16 @@ export function BottomDock({
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const isPrimaryActive = active !== 'services' && PRIMARY_SECTION_IDS.includes(active);
-  const resolvedSectionId: SectionId = active === 'services' ? 'dashboard' : active;
+  const resolveSectionId = (route: AppRouteId): SectionId => {
+    if (route === 'services') return 'dashboard';
+    if (route === 'reports') return 'finance';
+    if (route === 'patient_form') return 'patients';
+    if (route === 'appointment_form') return 'appointments';
+    if (route === 'treatment_form') return 'treatments';
+    return route;
+  };
+  const isPrimaryActive = PRIMARY_SECTION_IDS.includes(active as SectionId);
+  const resolvedSectionId: SectionId = resolveSectionId(active);
   const activeSection = getSection(resolvedSectionId);
   const activeToken = getModuleToken(resolvedSectionId);
   const moreSections = SECTIONS.filter((s) => !PRIMARY_SECTION_IDS.includes(s.id));
@@ -184,8 +192,8 @@ export function BottomDock({
   const handleSelect = (id: AppRouteId, focus?: Omit<GlobalFocusPayload, 'section'>) => {
     playTactileFeedback('dock');
     onChange(id);
-    if (focus && id !== 'services') {
-      emitGlobalFocus({ section: id, ...focus });
+    if (focus) {
+      emitGlobalFocus({ section: resolveSectionId(id), ...focus });
     }
     setMoreOpen(false);
     setSearchQuery('');
