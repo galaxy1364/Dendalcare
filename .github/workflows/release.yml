@@ -16,6 +16,11 @@ on:
         required: false
         default: ''
         type: string
+      bootstrap_first_release:
+        description: 'Allow initial bootstrap ONLY if live release-pointer.json does not exist yet'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: minadental-release-${{ inputs.channel || 'staging' }}
@@ -55,13 +60,14 @@ jobs:
             exit 1
           fi
 
-      - name: Compute strict monotonic release sequence against deployed pointer
+      - name: Compute strict monotonic release sequence against deployed pointer (fail-closed)
         id: seq
         env:
           MINA_BASE_SEQUENCE: '65'
           MINA_RELEASE_SEQUENCE_INPUT: ${{ inputs.release_sequence }}
+          MINA_BOOTSTRAP_FIRST_RELEASE: ${{ inputs.bootstrap_first_release }}
         run: |
-          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json
+          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --require-remote-pointer
 
       - name: Typecheck
         run: npm run typecheck

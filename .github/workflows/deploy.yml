@@ -5,6 +5,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      bootstrap_first_release:
+        description: 'Set true ONLY on initial migration from legacy GitHub Pages root to GitHub Actions'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -35,12 +41,20 @@ jobs:
       - name: Install lockfile dependencies
         run: npm ci
 
-      - name: Compute strict monotonic CI release sequence
+      - name: Secret & private-key leak scan
+        run: |
+          if grep -rnE "BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|service_role|SUPABASE_SERVICE_ROLE_KEY\s*=\s*['\"][^'\"]+['\"]" src/ public/ index.html; then
+            echo "ERROR: Potential secret or private key detected in client source!"
+            exit 1
+          fi
+
+      - name: Compute strict monotonic CI release sequence (fail-closed)
         id: seq
         env:
           MINA_BASE_SEQUENCE: '65'
+          MINA_BOOTSTRAP_FIRST_RELEASE: ${{ inputs.bootstrap_first_release || 'false' }}
         run: |
-          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json
+          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --require-remote-pointer
 
       - name: Mandatory Pre-Deploy TypeScript Typecheck
         run: npm run typecheck

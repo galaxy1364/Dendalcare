@@ -35,7 +35,10 @@ export async function computeMonotonicSequence(options = {}) {
   const baseSeq = parseStrictPositiveInt(options.baseSequence ?? 65, 'baseSequence');
   const runNumber = options.runNumber ? parseStrictPositiveInt(options.runNumber, 'GITHUB_RUN_NUMBER') : 1;
   const overrideRaw = String(options.overrideInput ?? '').trim();
+  const requireRemotePointer = Boolean(options.requireRemotePointer);
+  const bootstrapFirstRelease = Boolean(options.bootstrapFirstRelease);
   let remoteSequence = 0;
+  let remoteError = null;
 
   if (options.remotePointerUrl) {
     try {
@@ -43,14 +46,36 @@ export async function computeMonotonicSequence(options = {}) {
         headers: { 'Cache-Control': 'no-cache' },
       });
       if (res.ok) {
-        const pointer = await res.json();
-        if (typeof pointer?.releaseSequence === 'number' && Number.isSafeInteger(pointer.releaseSequence)) {
-          remoteSequence = pointer.releaseSequence;
+        const ct = String(res.headers.get('content-type') || '').toLowerCase();
+        if (ct.includes('text/html')) {
+          remoteError = `Remote pointer returned HTML instead of JSON (${options.remotePointerUrl})`;
+        } else {
+          const pointer = await res.json();
+          if (
+            typeof pointer?.releaseSequence === 'number' &&
+            Number.isSafeInteger(pointer.releaseSequence) &&
+            pointer.releaseSequence > 0
+          ) {
+            remoteSequence = pointer.releaseSequence;
+          } else {
+            remoteError = `Remote pointer missing valid positive releaseSequence (${options.remotePointerUrl})`;
+          }
         }
+      } else {
+        remoteError = `Remote pointer returned HTTP ${res.status} (${options.remotePointerUrl})`;
       }
-    } catch {
-      // Remote pointer may not exist on first deployment; handled transparently below
+    } catch (err) {
+      remoteError = `Remote pointer unreachable (${options.remotePointerUrl}): ${err instanceof Error ? err.message : String(err)}`;
     }
+  } else if (requireRemotePointer && !bootstrapFirstRelease) {
+    remoteError = 'Remote pointer URL required when --require-remote-pointer is set';
+  }
+
+  // V9 P0.5: Fail closed if remote pointer could not be verified, unless explicit first-release bootstrap is requested!
+  if (requireRemotePointer && !bootstrapFirstRelease && remoteSequence <= 0) {
+    throw new Error(
+      `Fail-closed monotonic sequence guard: cannot safely increment release sequence because remote pointer could not be read (${remoteError || 'unknown reason'}). Pass --bootstrap-first-release ONLY for initial deployment bootstrap.`
+    );
   }
 
   let candidate;
@@ -69,6 +94,7 @@ export async function computeMonotonicSequence(options = {}) {
     sequence: candidate,
     remoteSequence,
     usedOverride: Boolean(overrideRaw),
+    bootstrapped: Boolean(bootstrapFirstRelease && remoteSequence <= 0),
   };
 }
 
@@ -82,8 +108,29 @@ function assertValidMime(pathname, contentType) {
     assert.ok(ct.includes('text/css'), `Invalid CSS MIME for ${pathname}: ${ct}`);
   } else if (lowerPath.endsWith('.json') || lowerPath.endsWith('.webmanifest')) {
     assert.ok(ct.includes('json'), `Invalid JSON MIME for ${pathname}: ${ct}`);
+  } else if (lowerPath.endsWith('.woff2')) {
+    assert.ok(!ct.includes('text/html'), `HTML MIME returned for WOFF2 font ${pathname}`);
+  } else if (lowerPath.endsWith('.ttf') || lowerPath.endsWith('.woff')) {
+    assert.ok(!ct.includes('text/html'), `HTML MIME returned for font ${pathname}`);
   } else if (lowerPath.endsWith('.html') || lowerPath.endsWith('/')) {
     assert.ok(ct.includes('text/html'), `Invalid HTML MIME for ${pathname}: ${ct}`);
+  }
+}
+
+function assertValidFontMagicBytes(assetPath, buf, scopeLabel = 'release') {
+  const lower = String(assetPath || '').toLowerCase();
+  if (!lower.endsWith('.woff2') && !lower.endsWith('.woff') && !lower.endsWith('.ttf')) return;
+  assert.ok(buf.byteLength >= 1024, `[${scopeLabel}] Font file too small (${buf.byteLength} bytes): ${assetPath}`);
+  const magic = buf.subarray(0, 4).toString('hex');
+  if (lower.endsWith('.woff2')) {
+    assert.equal(magic, '774f4632', `[${scopeLabel}] Invalid WOFF2 magic bytes for ${assetPath}: ${magic}`);
+  } else if (lower.endsWith('.woff')) {
+    assert.equal(magic, '774f4646', `[${scopeLabel}] Invalid WOFF magic bytes for ${assetPath}: ${magic}`);
+  } else if (lower.endsWith('.ttf')) {
+    assert.ok(
+      magic === '00010000' || magic === '4f54544f' || magic === '74727565',
+      `[${scopeLabel}] Invalid TTF/OTF magic bytes for ${assetPath}: ${magic}`
+    );
   }
 }
 
@@ -106,11 +153,20 @@ export function verifyLocalReleaseDirectory(distDir, options = {}) {
   const semver = html.match(/<meta\s+name="minadental-semver"\s+content="([^"]+)"/i)?.[1];
   const contentDigest = html.match(/<meta\s+name="minadental-content-digest"\s+content="([^"]+)"/i)?.[1];
 
-  assert.ok(buildId && BUILD_ID_RE.test(buildId), `Invalid minadental-build-id: ${buildId}`);
+  assert.ok(buildId && buildId !== 'dev-local' && BUILD_ID_RE.test(buildId), `Invalid minadental-build-id: ${buildId}`);
   const releaseSequence = parseStrictPositiveInt(seqStr, 'minadental-release-seq');
   assert.ok(semver && /^\d+\.\d+\.\d+$/.test(semver), `Invalid minadental-semver: ${semver}`);
   assert.ok(contentDigest && SHA256_RE.test(contentDigest), `Invalid minadental-content-digest: ${contentDigest}`);
   assert.equal(buildId, `v${semver}-${contentDigest.slice(0, 10)}`, 'buildId must derive from semver + contentDigest');
+
+  // V9: Verify coherent 404.html exists in dist/ and matches dist/index.html
+  const fallback404Path = path.join(absDist, '404.html');
+  assert.ok(fs.existsSync(fallback404Path), 'dist/404.html missing');
+  assert.equal(
+    fs.readFileSync(fallback404Path, 'utf8'),
+    html,
+    'dist/404.html must match dist/index.html byte-for-byte'
+  );
 
   // Verify web, android, and ios pointers exist and are coherent
   const pointerFiles = [
@@ -165,6 +221,7 @@ export function verifyLocalReleaseDirectory(distDir, options = {}) {
       const target = path.join(baseDir, cleanRel);
       assert.ok(fs.existsSync(target), `[${scopeName}] Missing manifest asset: ${cleanRel}`);
       const buf = fs.readFileSync(target);
+      assertValidFontMagicBytes(cleanRel, buf, scopeName);
       assert.equal(buf.byteLength, asset.size, `[${scopeName}] Size mismatch for ${cleanRel}`);
       const sha = crypto.createHash('sha256').update(buf).digest('hex');
       assert.equal(sha, asset.sha256, `[${scopeName}] SHA-256 mismatch for ${cleanRel}`);
@@ -223,8 +280,13 @@ export async function verifyRemoteDeployment(baseUrl, options = {}) {
   assert.ok(!indexHtml.includes('__MINA_CONTENT_DIGEST'), 'Remote index.html contains unresolved __MINA_CONTENT_DIGEST');
 
   const htmlBuildId = indexHtml.match(/<meta\s+name="minadental-build-id"\s+content="([^"]+)"/i)?.[1];
+  const htmlSeqStr = indexHtml.match(/<meta\s+name="minadental-release-seq"\s+content="([^"]+)"/i)?.[1];
   const htmlDigest = indexHtml.match(/<meta\s+name="minadental-content-digest"\s+content="([^"]+)"/i)?.[1];
-  assert.ok(htmlBuildId && BUILD_ID_RE.test(htmlBuildId), `Remote index.html missing valid buildId: ${htmlBuildId}`);
+  assert.ok(
+    htmlBuildId && htmlBuildId !== 'dev-local' && BUILD_ID_RE.test(htmlBuildId),
+    `CRITICAL: Remote index.html missing valid buildId (got ${htmlBuildId}). Ensure GitHub Pages Source = GitHub Actions.`
+  );
+  const htmlSeq = parseStrictPositiveInt(htmlSeqStr, 'remote minadental-release-seq');
   assert.ok(htmlDigest && SHA256_RE.test(htmlDigest), `Remote index.html missing valid contentDigest: ${htmlDigest}`);
 
   if (options.expectedReleaseId) {
@@ -235,6 +297,14 @@ export async function verifyRemoteDeployment(baseUrl, options = {}) {
     );
   }
 
+  // 1b. Verify 404.html is coherent and NOT serving raw src/main.tsx or dev-local
+  const remote404Res = await fetch(new URL('404.html', normalizedBase), { cache: 'no-store' });
+  if (remote404Res.ok) {
+    const remote404Html = await remote404Res.text();
+    assert.ok(!remote404Html.includes('src/main.tsx'), 'Remote 404.html contains raw src/main.tsx');
+    assert.ok(remote404Html.includes(htmlBuildId), 'Remote 404.html buildId does not match index.html');
+  }
+
   // 2. Check web, android, and ios pointers
   for (const ptrFile of ['release-pointer.json', 'android-release-pointer.json', 'ios-release-pointer.json']) {
     const ptrUrl = new URL(ptrFile, normalizedBase).toString();
@@ -243,6 +313,7 @@ export async function verifyRemoteDeployment(baseUrl, options = {}) {
     assertValidMime(ptrFile, ptrRes.headers.get('content-type'));
     const ptr = await ptrRes.json();
     assert.equal(ptr.currentReleaseId, htmlBuildId, `Remote ${ptrFile} releaseId mismatch`);
+    assert.equal(ptr.releaseSequence, htmlSeq, `Remote ${ptrFile} releaseSequence mismatch`);
   }
 
   // 3. Fetch authoritative versioned manifest from release-pointer.json
@@ -256,7 +327,7 @@ export async function verifyRemoteDeployment(baseUrl, options = {}) {
   assert.equal(manifest.releaseId, htmlBuildId, 'Remote manifest releaseId mismatch');
   assert.equal(manifest.contentDigest, htmlDigest, 'Remote manifest contentDigest mismatch');
 
-  // 4. Verify EVERY asset listed in remote manifest (HTTP 200 + MIME + exact byte size + exact SHA-256)
+  // 4. Verify EVERY asset listed in remote manifest (HTTP 200 + MIME + magic bytes + exact byte size + exact SHA-256)
   let verifiedAssets = 0;
   for (const entry of manifest.assets) {
     const assetUrl = new URL(entry.path, manifestUrl).toString();
@@ -264,10 +335,21 @@ export async function verifyRemoteDeployment(baseUrl, options = {}) {
     assert.equal(assetRes.status, 200, `Remote asset ${assetUrl} returned HTTP ${assetRes.status}`);
     assertValidMime(new URL(assetUrl).pathname, assetRes.headers.get('content-type'));
     const rawBuf = Buffer.from(await assetRes.arrayBuffer());
+    assertValidFontMagicBytes(entry.path, rawBuf, 'remote');
     assert.equal(rawBuf.byteLength, entry.size, `Remote asset size mismatch for ${entry.path}`);
     const sha = crypto.createHash('sha256').update(rawBuf).digest('hex');
     assert.equal(sha, entry.sha256, `Remote asset SHA-256 mismatch for ${entry.path}`);
     verifiedAssets += 1;
+  }
+
+  // 5. Explicitly verify primary Vazirmatn font URLs at root deployment path
+  for (const fontRel of ['fonts/vazirmatn-arabic.woff2', 'fonts/vazirmatn.ttf']) {
+    const fontUrl = new URL(fontRel, normalizedBase).toString();
+    const fontRes = await fetch(fontUrl, { cache: 'no-store' });
+    assert.equal(fontRes.status, 200, `Remote font ${fontUrl} returned HTTP ${fontRes.status}`);
+    assertValidMime(fontRel, fontRes.headers.get('content-type'));
+    const fontBuf = Buffer.from(await fontRes.arrayBuffer());
+    assertValidFontMagicBytes(fontRel, fontBuf, 'remote-root-font');
   }
 
   return {
@@ -286,11 +368,17 @@ async function runCli() {
   if (cmd === '--compute-sequence') {
     const remoteIdx = args.indexOf('--remote-pointer');
     const remotePointerUrl = remoteIdx >= 0 ? args[remoteIdx + 1] : undefined;
+    const requireRemotePointer = args.includes('--require-remote-pointer');
+    const bootstrapFirstRelease =
+      args.includes('--bootstrap-first-release') ||
+      String(process.env.MINA_BOOTSTRAP_FIRST_RELEASE || '').toLowerCase() === 'true';
     const res = await computeMonotonicSequence({
       baseSequence: process.env.MINA_BASE_SEQUENCE || '65',
       runNumber: process.env.GITHUB_RUN_NUMBER || '1',
       overrideInput: process.env.MINA_RELEASE_SEQUENCE_INPUT || '',
       remotePointerUrl,
+      requireRemotePointer,
+      bootstrapFirstRelease,
     });
     if (process.env.GITHUB_OUTPUT) {
       fs.appendFileSync(process.env.GITHUB_OUTPUT, `value=${res.sequence}\n`);

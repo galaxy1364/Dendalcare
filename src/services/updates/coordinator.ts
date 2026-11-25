@@ -19,6 +19,7 @@ import { NativePlatformUpdateAdapter, detectNativeHostPlatform } from './adapter
 import { UpdateLedger, type StorageLike } from './ledger';
 import { fetchAuthoritativeRelease, type ManifestClientOptions } from './manifestClient';
 import {
+  DEFAULT_REQUIRE_RELEASE_SIGNATURE,
   PINNED_RELEASE_PUBLIC_KEYS,
   UPDATE_TIMING_POLICY,
   canTransitionUpdateState,
@@ -679,11 +680,16 @@ export class UpdateCoordinator {
           this.lastCheck?.outcome !== 'offline' &&
           Boolean(this.lastCheck?.etag);
 
+        const effectivePinnedKeys = this.config.pinnedKeys ?? PINNED_RELEASE_PUBLIC_KEYS;
+        const effectiveRequireSignature =
+          this.config.requireSignature ??
+          (effectivePinnedKeys.length > 0 ? true : DEFAULT_REQUIRE_RELEASE_SIGNATURE);
+
         const fetchRes = await fetchAuthoritativeRelease({
           ...this.config.manifestClient,
           pointerUrl,
-          pinnedKeys: this.config.pinnedKeys ?? PINNED_RELEASE_PUBLIC_KEYS,
-          requireSignature: this.config.requireSignature,
+          pinnedKeys: effectivePinnedKeys,
+          requireSignature: effectiveRequireSignature,
           etag: canUseEtag ? this.lastCheck?.etag ?? null : null,
           signal: this.activeAbortController.signal,
           isOnlineFn: () => this.isOnline(),

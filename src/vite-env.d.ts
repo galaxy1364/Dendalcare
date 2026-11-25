@@ -15,6 +15,19 @@ interface MinaBootMilestones {
   readyAt: number | null;
 }
 
+interface MinaBootWarningEntry {
+  code: string;
+  detail: string;
+  at: number;
+}
+
+interface MinaBootFatalRootCause {
+  code: string;
+  detail: string;
+  cid: string;
+  at: number;
+}
+
 declare global {
   const __MINA_EMBEDDED_SEMVER__: string | undefined;
   const __MINA_EMBEDDED_SEQUENCE__: number | undefined;
@@ -27,9 +40,13 @@ declare global {
     __minaAppMounted?: boolean;
     __minaBootState?: string;
     __minaBootMilestones?: MinaBootMilestones;
+    __minaBootWarnings?: MinaBootWarningEntry[];
+    __minaBootFatalRootCause?: MinaBootFatalRootCause | null;
     __minaBootWatchdogTimer?: ReturnType<typeof setTimeout> | null;
     __minaCancelBootWatchdog?: () => void;
+    __minaRecordBootWarning?: (code: string, detail?: string) => void;
     __minaShowBootRecovery?: (code: string, detail?: string) => void;
+    __minaRunScopedSafeRecovery?: () => Promise<unknown>;
     __deferredInstallPrompt?: BeforeInstallPromptEvent | null;
   }
 }

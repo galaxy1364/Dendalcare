@@ -26,6 +26,7 @@ export interface BootstrapSnapshot {
   renderedRoute: string | null;
   diagnosticCode: string | null;
   diagnosticMessage: string | null;
+  nonFatalWarnings: Array<{ code: string; detail: string; at: number }>;
 }
 
 const VALID_TRANSITIONS: Record<BootstrapStage, readonly BootstrapStage[]> = {
@@ -82,10 +83,24 @@ export function createBootstrapMachine(): BootstrapMachine {
     renderedRoute: null,
     diagnosticCode: null,
     diagnosticMessage: null,
+    nonFatalWarnings:
+      typeof window !== 'undefined' && Array.isArray(window.__minaBootWarnings)
+        ? [...window.__minaBootWarnings]
+        : [],
   };
   const listeners = new Set<(snap: BootstrapSnapshot) => void>();
 
+  const syncWarnings = () => {
+    if (typeof window !== 'undefined' && Array.isArray(window.__minaBootWarnings)) {
+      snapshot = {
+        ...snapshot,
+        nonFatalWarnings: [...window.__minaBootWarnings],
+      };
+    }
+  };
+
   const notify = () => {
+    syncWarnings();
     listeners.forEach((fn) => {
       try {
         fn(snapshot);
@@ -96,7 +111,10 @@ export function createBootstrapMachine(): BootstrapMachine {
   };
 
   return {
-    getSnapshot: () => snapshot,
+    getSnapshot: () => {
+      syncWarnings();
+      return snapshot;
+    },
     recordMilestone(milestone, route) {
       const now = Date.now();
       if (milestone === 'module_evaluated') {

@@ -329,6 +329,10 @@ function syncDeterministicReleasePlugin(): Plugin {
       }
 
       // 3. Build per-file SHA-256 + byte size inventory for authoritative release-manifest.json (Schema v2)
+      const distFontsDir = path.join(distDir, 'fonts');
+      const distFontFiles = fs.existsSync(distFontsDir)
+        ? walkFilesRelative(distFontsDir).map((rel) => `fonts/${rel}`)
+        : [];
       const criticalAssetSet = new Set([
         './index.html',
         ...entryScripts,
@@ -338,6 +342,7 @@ function syncDeterministicReleasePlugin(): Plugin {
         new Set([
           './index.html',
           ...distAssetFiles.map((f) => `./${f}`),
+          ...distFontFiles.map((f) => `./${f}`),
           './manifest.json',
           './sw.js',
         ])
@@ -393,11 +398,15 @@ function syncDeterministicReleasePlugin(): Plugin {
       const authoritativeManifest = maybeSignManifestInCi(unsignedManifest);
       const releaseManifestStr = JSON.stringify(authoritativeManifest, null, 2) + '\n';
 
+      // Emit GitHub Pages SPA 404.html from the exact same built index.html artifact
+      fs.copyFileSync(distIndexPath, path.join(distDir, '404.html'));
+
       // 4. Stage COMPLETE immutable release directory at dist/releases/<releaseId>/
-      //    so versioned manifestUrl resolves ALL relative assets cleanly and supports retention/rollback!
+      //    so versioned manifestUrl resolves ALL relative assets & fonts cleanly and supports retention/rollback!
       const versionedReleaseDir = path.join(distDir, 'releases', buildId);
       fs.mkdirSync(path.join(versionedReleaseDir, 'assets'), { recursive: true });
       fs.copyFileSync(distIndexPath, path.join(versionedReleaseDir, 'index.html'));
+      fs.copyFileSync(distIndexPath, path.join(versionedReleaseDir, '404.html'));
       if (fs.existsSync(distManifestJsonPath)) {
         fs.copyFileSync(distManifestJsonPath, path.join(versionedReleaseDir, 'manifest.json'));
       }
@@ -405,6 +414,9 @@ function syncDeterministicReleasePlugin(): Plugin {
         fs.copyFileSync(path.join(distDir, 'sw.js'), path.join(versionedReleaseDir, 'sw.js'));
       }
       copyDirectoryRecursive(assetsDir, path.join(versionedReleaseDir, 'assets'));
+      if (fs.existsSync(distFontsDir)) {
+        copyDirectoryRecursive(distFontsDir, path.join(versionedReleaseDir, 'fonts'));
+      }
       fs.writeFileSync(
         path.join(versionedReleaseDir, 'release-manifest.json'),
         releaseManifestStr,

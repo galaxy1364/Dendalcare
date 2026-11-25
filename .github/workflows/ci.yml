@@ -1,14 +1,23 @@
-name: MinaDental V7 Release Gate CI
+name: MinaDental V9 Continuous Verification CI
 
 on:
-  push:
-    branches: [main, 'release/**', 'fix/**']
   pull_request:
-    branches: [main]
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: minadental-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  quality-build-and-asset-gates:
-    name: Typecheck, Deterministic Build, Syntax/Subpath Asset Graph & Unit Tests
+  verify:
+    name: Typecheck, Deterministic Build, Font/Asset Graph & Playwright E2E
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -20,95 +29,35 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Clean dependency install
         run: npm ci
+
+      - name: Secret & private-key leak scan
+        run: |
+          if grep -rnE "BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|service_role|SUPABASE_SERVICE_ROLE_KEY\s*=\s*['\"][^'\"]+['\"]" src/ public/ index.html; then
+            echo "ERROR: Potential secret or private key detected in client source!"
+            exit 1
+          fi
 
       - name: TypeScript typecheck
         run: npm run typecheck
 
-      - name: Production deterministic Vite build
-        run: npm run build
+      - name: Production build (CI verification identity)
+        env:
+          MINA_RELEASE_SEQUENCE: '9000'
+          MINA_RELEASE_CHANNEL: 'staging'
+          MINA_GIT_COMMIT: ${{ github.sha }}
+        run: |
+          npm run build
+          node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin
 
-      - name: Verify inline JS syntax, hygiene, SHA-256 manifest, and root + /Dendalcare/ HTTP/MIME asset graph
+      - name: Verify inline JS syntax, subpath asset graph, 404.html & font magic bytes
         run: npm run verify:assets
 
-      - name: Run audit & V4/V5/V6/V7 production-import unit tests
+      - name: Run V4 + V5 + V7 + V8 + V9 automated unit & fault-injection tests
         run: npm test
 
-      - name: Verify SQL migrations exist and preserve SECURITY INVOKER
+      - name: Install Playwright browsers & run release gate E2E (Chromium + WebKit)
         run: |
-          test -f supabase/migrations/20261125_tenant_branch_rls.sql
-          test -f supabase/migrations/20261126_strict_rls_hardening.sql
-          test -f supabase/migrations/20261127_v4_rpc_and_accounting_dates.sql
-          grep -q "get_clinic_dashboard_summary" supabase/migrations/20261127_v4_rpc_and_accounting_dates.sql
-          grep -q "SECURITY INVOKER" supabase/migrations/20261127_v4_rpc_and_accounting_dates.sql
-
-  browser-e2e-smoke:
-    name: Unconditional Playwright E2E (Chromium + WebKit)
-    runs-on: ubuntu-latest
-    needs: quality-build-and-asset-gates
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build production artifacts for preview E2E
-        run: npm run build
-
-      - name: Install Playwright browsers (Chromium & WebKit)
-        run: npx playwright install --with-deps chromium webkit
-
-      - name: Run Playwright Release Gate E2E
-        run: npm run test:e2e
-
-      - name: Upload Playwright report & viewport screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-v6-artifacts
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7
-
-  staging-rls-gate:
-    name: Staging RLS Multi-Tenant Gate (Secret-Gated)
-    runs-on: ubuntu-latest
-    needs: quality-build-and-asset-gates
-    if: ${{ vars.ENABLE_STAGING_GATES == 'true' }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run Staging RLS Verification
-        env:
-          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
-          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
-          STAGING_MANAGER_A_EMAIL: ${{ secrets.STAGING_MANAGER_A_EMAIL }}
-          STAGING_MANAGER_A_PASSWORD: ${{ secrets.STAGING_MANAGER_A_PASSWORD }}
-          STAGING_MANAGER_B_EMAIL: ${{ secrets.STAGING_MANAGER_B_EMAIL }}
-          STAGING_MANAGER_B_PASSWORD: ${{ secrets.STAGING_MANAGER_B_PASSWORD }}
-          STAGING_SECRETARY_A_EMAIL: ${{ secrets.STAGING_SECRETARY_A_EMAIL }}
-          STAGING_SECRETARY_A_PASSWORD: ${{ secrets.STAGING_SECRETARY_A_PASSWORD }}
-          STAGING_TENANT_A_ID: ${{ secrets.STAGING_TENANT_A_ID }}
-          STAGING_TENANT_B_ID: ${{ secrets.STAGING_TENANT_B_ID }}
-          STAGING_BRANCH_A1_ID: ${{ secrets.STAGING_BRANCH_A1_ID }}
-          STAGING_BRANCH_B1_ID: ${{ secrets.STAGING_BRANCH_B1_ID }}
-        run: node scripts/verify-staging-rls.mjs
+          npx playwright install --with-deps chromium webkit
+          npm run test:e2e

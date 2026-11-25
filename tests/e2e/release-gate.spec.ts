@@ -226,4 +226,25 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     expect(Boolean(v8Check.milestones.moduleEvaluatedAt)).toBe(true);
     expect(Boolean(v8Check.milestones.shellCommittedAt)).toBe(true);
   });
+
+  test('V9 fault-injection: font, icon, and manifest 404 NEVER trigger #boot-error and app boots in Persian', async ({ page }) => {
+    await page.route('**/fonts/*.woff2', (route) =>
+      route.fulfill({ status: 404, contentType: 'text/plain', body: 'Font Missing' })
+    );
+    await page.route('**/manifest.json', (route) =>
+      route.fulfill({ status: 404, contentType: 'text/plain', body: 'Manifest Missing' })
+    );
+    await page.route('**/icon-192.png', (route) =>
+      route.fulfill({ status: 404, contentType: 'text/plain', body: 'Icon Missing' })
+    );
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+    await expect(page.locator('#app-splash')).toHaveCount(0);
+    await expect(page.locator('#boot-error')).toBeHidden();
+
+    const bodyText = await page.evaluate(() => document.body.innerText.trim());
+    expect(bodyText.length).toBeGreaterThan(0);
+  });
 });

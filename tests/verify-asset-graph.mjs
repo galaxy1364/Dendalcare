@@ -119,14 +119,38 @@ function assertValidMime(urlStr, contentType) {
     assert.ok(ct.includes('text/css'), `Invalid CSS MIME for ${pathname}: ${ct}`);
   } else if (pathname.endsWith('.json') || pathname.endsWith('.webmanifest')) {
     assert.ok(ct.includes('json'), `Invalid JSON MIME for ${pathname}: ${ct}`);
-  } else if (pathname.endsWith('.woff2') || pathname.endsWith('.woff') || pathname.endsWith('.ttf')) {
+  } else if (pathname.endsWith('.woff2')) {
+    assert.ok(ct.includes('font/woff2') || ct.includes('application/font-woff2'), `Invalid WOFF2 MIME for ${pathname}: ${ct}`);
     assert.ok(!ct.includes('text/html'), `Font returned HTML MIME for ${pathname}`);
+  } else if (pathname.endsWith('.woff')) {
+    assert.ok(ct.includes('font/woff') || ct.includes('application/font-woff'), `Invalid WOFF MIME for ${pathname}: ${ct}`);
+  } else if (pathname.endsWith('.ttf')) {
+    assert.ok(ct.includes('font/ttf') || ct.includes('application/x-font-ttf') || ct.includes('font/sfnt'), `Invalid TTF MIME for ${pathname}: ${ct}`);
   } else if (pathname.endsWith('.svg')) {
     assert.ok(ct.includes('image/svg'), `Invalid SVG MIME for ${pathname}: ${ct}`);
   } else if (pathname.endsWith('.png') || pathname.endsWith('.webp') || pathname.endsWith('.jpg') || pathname.endsWith('.jpeg')) {
     assert.ok(ct.includes('image/'), `Invalid image MIME for ${pathname}: ${ct}`);
   } else if (pathname.endsWith('.html') || pathname.endsWith('/')) {
     assert.ok(ct.includes('text/html'), `Invalid HTML MIME for ${pathname}: ${ct}`);
+  }
+}
+
+function assertValidFontMagicBytes(urlStr, rawBuf, label) {
+  const pathname = new URL(urlStr).pathname.toLowerCase();
+  if (!pathname.endsWith('.woff2') && !pathname.endsWith('.woff') && !pathname.endsWith('.ttf')) {
+    return;
+  }
+  assert.ok(rawBuf.byteLength >= 1024, `[${label}] Font binary too small (${rawBuf.byteLength} bytes): ${pathname}`);
+  const magic = rawBuf.subarray(0, 4).toString('hex');
+  if (pathname.endsWith('.woff2')) {
+    assert.equal(magic, '774f4632', `[${label}] Invalid WOFF2 magic bytes for ${pathname}: expected 774f4632 (wOF2), got ${magic}`);
+  } else if (pathname.endsWith('.woff')) {
+    assert.equal(magic, '774f4646', `[${label}] Invalid WOFF magic bytes for ${pathname}: expected 774f4646 (wOFF), got ${magic}`);
+  } else if (pathname.endsWith('.ttf')) {
+    assert.ok(
+      magic === '00010000' || magic === '4f54544f' || magic === '74727565',
+      `[${label}] Invalid TTF/OTF magic bytes for ${pathname}: got ${magic}`
+    );
   }
 }
 
@@ -277,6 +301,7 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
     const buildIdMatch = indexHtml.match(/<meta\s+name="minadental-build-id"\s+content="([^"]+)"/i);
     assert.ok(buildIdMatch && buildIdMatch[1], `[${label}] index.html missing stamped minadental-build-id`);
     const htmlBuildId = buildIdMatch[1];
+    assert.notEqual(htmlBuildId, 'dev-local', `[${label}] Built index.html must NOT contain dev-local buildId`);
     assert.match(htmlBuildId, BUILD_ID_PATTERN, `[${label}] Invalid BUILD_ID format: ${htmlBuildId}`);
 
     const seqMatch = indexHtml.match(/<meta\s+name="minadental-release-seq"\s+content="([^"]+)"/i);
@@ -291,6 +316,26 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
     assert.ok(digestMatch && /^[a-f0-9]{64}$/.test(digestMatch[1]), `[${label}] index.html missing valid 64-hex minadental-content-digest`);
     const htmlContentDigest = digestMatch[1];
     assert.equal(htmlBuildId, `v${htmlSemver}-${htmlContentDigest.slice(0, 10)}`, `[${label}] buildId must derive from semver + contentDigest`);
+
+    // 1b. V9: Verify 404.html exists, returns HTTP 200, and matches built index.html (coherent SPA fallback)
+    const fallback404Res = await fetch(new URL('404.html', baseUrl));
+    assert.equal(fallback404Res.status, 200, `[${label}] 404.html must exist and return HTTP 200`);
+    const fallback404Html = await fallback404Res.text();
+    assert.equal(
+      fallback404Html,
+      indexHtml,
+      `[${label}] 404.html must match built index.html byte-for-byte to prevent stale SPA fallback`
+    );
+
+    // 1c. V9: Explicitly queue core Persian fonts so magic bytes & MIME are always verified over HTTP
+    for (const fontRel of [
+      'fonts/vazirmatn-arabic.woff2',
+      'fonts/vazirmatn-latin.woff2',
+      'fonts/vazirmatn-latin-ext.woff2',
+      'fonts/vazirmatn.ttf',
+    ]) {
+      queue.push(new URL(fontRel, baseUrl).toString());
+    }
 
     // Regression guard for V6 P0 bug: window.<buildId> = buildId MUST NEVER happen
     assert.ok(
@@ -353,6 +398,7 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
       assert.equal(assetRes.status, 200, `[${label}] Manifest asset HTTP error: ${entry.path} -> ${assetRes.status}`);
       assertValidMime(assetHttpUrl, assetRes.headers.get('content-type'));
       const rawBuf = Buffer.from(await assetRes.arrayBuffer());
+      assertValidFontMagicBytes(assetHttpUrl, rawBuf, label);
       assert.equal(rawBuf.byteLength, entry.size, `[${label}] Manifest asset byte size mismatch for ${entry.path}: expected ${entry.size}, got ${rawBuf.byteLength}`);
       const actualSha = crypto.createHash('sha256').update(rawBuf).digest('hex');
       assert.equal(actualSha, entry.sha256, `[${label}] Manifest asset SHA-256 mismatch for ${entry.path}`);
@@ -477,7 +523,8 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
           }
         }
       } else {
-        await res.arrayBuffer();
+        const rawBuf = Buffer.from(await res.arrayBuffer());
+        assertValidFontMagicBytes(targetUrl, rawBuf, label);
       }
     }
 

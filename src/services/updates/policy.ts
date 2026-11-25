@@ -108,6 +108,23 @@ function loadInjectedPinnedKeys(): readonly PinnedPublicKey[] {
  */
 export const PINNED_RELEASE_PUBLIC_KEYS: readonly PinnedPublicKey[] = loadInjectedPinnedKeys();
 
+function resolveDefaultRequireSignature(): boolean {
+  const env =
+    typeof import.meta !== 'undefined'
+      ? (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+      : undefined;
+  if (env?.VITE_ALLOW_UNSIGNED_WEB_MIGRATION === 'true') return false;
+  if (env?.VITE_REQUIRE_RELEASE_SIGNATURE === 'true') return true;
+  return PINNED_RELEASE_PUBLIC_KEYS.length > 0;
+}
+
+/**
+ * V9 P1 Fail-Closed Signature Policy:
+ * Whenever pinned ECDSA public keys are bundled (or VITE_REQUIRE_RELEASE_SIGNATURE=true),
+ * unsigned manifests are rejected by default unless explicit migration opt-out is configured.
+ */
+export const DEFAULT_REQUIRE_RELEASE_SIGNATURE: boolean = resolveDefaultRequireSignature();
+
 export function computeJitteredDelayMs(
   baseMs: number,
   jitterMaxMs: number,
