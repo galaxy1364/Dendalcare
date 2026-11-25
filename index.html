@@ -17,6 +17,7 @@
   <meta name="minadental-build-id" content="__MINA_BUILD_ID_VALUE__" />
   <meta name="minadental-release-seq" content="__MINA_RELEASE_SEQ_VALUE__" />
   <meta name="minadental-semver" content="__MINA_SEMVER_VALUE__" />
+  <meta name="minadental-content-digest" content="__MINA_CONTENT_DIGEST_VALUE__" />
   <title>مینادنتال | مدیریت هوشمند کلینیک دندانپزشکی</title>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
@@ -59,7 +60,7 @@
       justify-content: center;
       gap: 14px;
       background: #F4F7F9;
-      z-index: 9999;
+      z-index: 9998;
       transition: opacity 0.25s ease;
     }
     html[data-theme="dark"] #app-splash {
@@ -86,23 +87,68 @@
       50% { transform: translateX(0%); }
       100% { transform: translateX(-140%); }
     }
+    /* V8.1 Independent Recovery Container (strictly outside #app-splash and #root) */
     #boot-error {
       display: none;
-      margin-top: 12px;
-      padding: 12px 16px;
-      border-radius: 14px;
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      bottom: max(20px, env(safe-area-inset-bottom, 20px));
+      margin: 0 auto;
+      padding: 16px;
+      border-radius: 18px;
       background: #FFF1F2;
       border: 1px solid #FECDD3;
       color: #AD293C;
       font-size: 12px;
       font-weight: 700;
       text-align: center;
-      max-width: 320px;
-      line-height: 1.7;
+      max-width: 360px;
+      line-height: 1.75;
+      z-index: 10000;
+      box-shadow: 0 18px 40px rgba(20, 40, 59, 0.18);
+    }
+    html[data-theme="dark"] #boot-error {
+      background: #2C1219;
+      border-color: #7F1D1D;
+      color: #FDA4AF;
+    }
+    #boot-error-meta {
+      margin-top: 8px;
+      padding: 6px 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.72);
+      color: #475569;
+      font-size: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      direction: ltr;
+      word-break: break-word;
+    }
+    html[data-theme="dark"] #boot-error-meta {
+      background: rgba(15, 23, 42, 0.65);
+      color: #CBD5E1;
+    }
+    .boot-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    #boot-simple-reload-btn {
+      padding: 10px 14px;
+      min-height: 44px;
+      border-radius: 12px;
+      border: 1px solid #CBD5E1;
+      background: #FFFFFF;
+      color: #14283B;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
     }
     #boot-retry-btn {
-      margin-top: 10px;
-      padding: 10px 18px;
+      padding: 10px 16px;
       min-height: 44px;
       border-radius: 12px;
       border: none;
@@ -124,25 +170,61 @@
     <div class="splash-title">مینادنتال</div>
     <div class="splash-sub">در حال راه‌اندازی سامانه کلینیک...</div>
     <div class="splash-bar"><div class="splash-fill"></div></div>
-    <div id="boot-error">
-      بارگذاری رابط کاربری کامل نشد. داده‌های ذخیره شده شما در دستگاه کاملاً محفوظ هستند.
-      <br />
+  </div>
+
+  <!-- V8.1: Independent Recovery UI Container outside both #app-splash and #root -->
+  <div id="boot-error" role="alert" aria-live="assertive" data-testid="boot_recovery_overlay">
+    <div>بارگذاری رابط کاربری کامل نشد. داده‌های ذخیره شده شما در دستگاه کاملاً محفوظ هستند.</div>
+    <div id="boot-error-meta">CODE=BOOT_PENDING</div>
+    <div class="boot-actions">
+      <button id="boot-simple-reload-btn" type="button">تلاش مجدد</button>
       <button id="boot-retry-btn" type="button">پاک‌سازی کش پوسته و بارگذاری مجدد</button>
     </div>
   </div>
-  <div id="root"></div>
-  <script type="module" src="./src/main.tsx"></script>
 
+  <div id="root"></div>
+
+  <!-- V8.1 Incident P0: Pre-React error/unhandledrejection listeners & cancellable watchdog MUST attach BEFORE entry module -->
   <script>
     (function () {
       window.__deferredInstallPrompt = null;
       window.__minaAppMounted = false;
       window.__minaBootState = 'BOOTING';
+      window.__minaBootMilestones = {
+        htmlParsedAt: Date.now(),
+        moduleEvaluatedAt: null,
+        shellCommittedAt: null,
+        authResolvedAt: null,
+        routeRenderedAt: null,
+        readyAt: null,
+      };
 
       var metaBuild = document.querySelector('meta[name="minadental-build-id"]');
       var buildId = (metaBuild && metaBuild.getAttribute('content')) || 'dev-local';
       if (buildId.indexOf('__MINA_') === 0) buildId = 'dev-local';
       window.__minaBuildId = buildId;
+
+      var metaSeq = document.querySelector('meta[name="minadental-release-seq"]');
+      var releaseSeq = (metaSeq && metaSeq.getAttribute('content')) || '0';
+      if (releaseSeq.indexOf('__MINA_') === 0) releaseSeq = '0';
+
+      var metaDigest = document.querySelector('meta[name="minadental-content-digest"]');
+      var contentDigest = (metaDigest && metaDigest.getAttribute('content')) || '';
+      if (contentDigest.indexOf('__MINA_') === 0) contentDigest = '';
+      window.__minaContentDigest = contentDigest;
+
+      function makeBootCorrelationId() {
+        return 'boot_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      }
+
+      function sanitizeBootText(raw) {
+        return String(raw || '')
+          .replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, 'Bearer [REDACTED]')
+          .replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, '[JWT_REDACTED]')
+          .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[EMAIL_REDACTED]')
+          .replace(/\b09\d{9}\b/g, '[PHONE_REDACTED]')
+          .slice(0, 140);
+      }
 
       window.addEventListener('beforeinstallprompt', function (e) {
         e.preventDefault();
@@ -165,14 +247,34 @@
         }
       } catch (e) {}
 
-      function showBootFallback() {
-        if (window.__minaAppMounted && window.__minaBootState !== 'BOOTING') return;
+      function showBootFallback(code, detail) {
+        if (window.__minaAppMounted && window.__minaBootState !== 'BOOTING' && code === 'BOOT_WATCHDOG_TIMEOUT') return;
         var el = document.getElementById('boot-error');
+        var metaEl = document.getElementById('boot-error-meta');
+        var cid = makeBootCorrelationId();
+        var safeCode = code || 'BOOT_STARTUP_FAILED';
+        var safeDetail = sanitizeBootText(detail || '');
+        if (metaEl) {
+          metaEl.textContent =
+            'CODE=' + safeCode +
+            ' | ID=' + cid +
+            ' | BUILD=' + buildId +
+            ' (#' + releaseSeq + ')' +
+            (safeDetail ? ' | ' + safeDetail : '');
+        }
         if (el) el.style.display = 'block';
+      }
+      window.__minaShowBootRecovery = showBootFallback;
+
+      var simpleReloadBtn = document.getElementById('boot-simple-reload-btn');
+      if (simpleReloadBtn) {
+        simpleReloadBtn.addEventListener('click', function () {
+          window.location.reload();
+        });
       }
 
       // Safe recovery: ONLY clear minadental-* CacheStorage & unregister SW.
-      // NEVER touch IndexedDB, localStorage patient data, or offline mutation queue.
+      // NEVER touch IndexedDB, localStorage patient data, auth tokens, or offline mutation queue.
       var retryBtn = document.getElementById('boot-retry-btn');
       if (retryBtn) {
         retryBtn.addEventListener('click', function () {
@@ -204,29 +306,48 @@
       }
 
       window.addEventListener('error', function (ev) {
-        if (!window.__minaAppMounted && ev && ev.target && (ev.target.tagName === 'SCRIPT' || ev.target.tagName === 'LINK')) {
-          showBootFallback();
+        if (window.__minaAppMounted) return;
+        if (ev && ev.target && (ev.target.tagName === 'SCRIPT' || ev.target.tagName === 'LINK')) {
+          var src = ev.target.src || ev.target.href || ev.target.tagName;
+          showBootFallback('ASSET_LOAD_ERROR', src);
+          return;
+        }
+        if (ev && (ev.message || ev.error)) {
+          showBootFallback('BOOT_RUNTIME_ERROR', ev.message || (ev.error && ev.error.message));
         }
       }, true);
 
-      window.addEventListener('unhandledrejection', function () {
+      window.addEventListener('unhandledrejection', function (ev) {
         if (!window.__minaAppMounted) {
-          showBootFallback();
+          var reason = ev && ev.reason ? (ev.reason.message || String(ev.reason)) : 'Promise rejected';
+          showBootFallback('BOOT_UNHANDLED_REJECTION', reason);
         }
       });
 
-      // Watchdog waits for genuine post-commit React handshake (set in AppProviders useEffect)
-      setTimeout(showBootFallback, 12000);
+      // Cancellable 12s watchdog (cancelled immediately by markShellCommitted() on valid React commit)
+      window.__minaBootWatchdogTimer = setTimeout(function () {
+        var ms = window.__minaBootMilestones || {};
+        var stageHint = ms.moduleEvaluatedAt ? 'module_evaluated_no_commit' : 'entry_module_not_loaded';
+        showBootFallback('BOOT_WATCHDOG_TIMEOUT', stageHint);
+      }, 12000);
+
+      window.__minaCancelBootWatchdog = function () {
+        if (window.__minaBootWatchdogTimer) {
+          clearTimeout(window.__minaBootWatchdogTimer);
+          window.__minaBootWatchdogTimer = null;
+        }
+      };
 
       // Controlled Service Worker lifecycle (zero abrupt reload loops)
       var isNativeWebView =
         window.location.protocol === 'file:' ||
         window.location.hostname === 'appassets.androidplatform.net' ||
+        (window.location.hostname === '127.0.0.1' && window.location.port === '8765') ||
         /MinaDentalAndroid/i.test(navigator.userAgent || '');
 
       if ('serviceWorker' in navigator && !isNativeWebView && window.location.protocol.indexOf('http') === 0) {
         window.addEventListener('load', function () {
-          // V7: NEVER force an abrupt reload on raw controllerchange outside UpdateCoordinator safe-point.
+          // V7/V8: NEVER force an abrupt reload on raw controllerchange outside UpdateCoordinator safe-point.
           navigator.serviceWorker.addEventListener('controllerchange', function () {
             window.dispatchEvent(
               new CustomEvent('minadental:sw-controllerchange', {
@@ -274,6 +395,8 @@
       }
     })();
   </script>
+
+  <script type="module" src="./src/main.tsx"></script>
 </body>
 
 </html>

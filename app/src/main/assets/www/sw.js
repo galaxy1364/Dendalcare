@@ -1,22 +1,23 @@
-// MinaDental Unified Service Worker (V6 Boot Hotfix)
+// MinaDental Unified Service Worker (V8 Verified Release Assurance)
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
-const BUILD_ID = "v4.9.6-da2fb3a244";
+const BUILD_ID = "v4.9.6-8dacfa16b2";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
 const NAVIGATION_TIMEOUT_MS = 4500;
+const CLIENT_LEASE_TTL_MS = 10 * 60 * 1000;
 
 const CRITICAL_PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-CMSV-C2I.js",
+  "./assets/index-C-VykRiy.js",
   "./assets/index-GiHbXGuz.css"
 ];
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-CMSV-C2I.js",
+  "./assets/index-C-VykRiy.js",
   "./assets/index-GiHbXGuz.css",
   "./manifest.json",
   "./favicon.svg",
@@ -37,6 +38,9 @@ const NEVER_CACHE_PATH_PATTERNS = [
 ];
 
 const BYPASS_EXTENSIONS = ['.apk', '.mobileconfig', '.idsig', '.ipa'];
+
+// Client-aware release leases: tabId -> { buildId, lastSeenAt }
+const activeClientLeases = new Map();
 
 function isMinadentalCacheKey(key) {
   return typeof key === 'string' && key.startsWith('minadental-');
@@ -132,6 +136,17 @@ function notifyClients(payload) {
 }
 
 async function fetchAndCacheAsset(cache, assetUrl, isCritical) {
+  // Reuse verified candidate bytes already written by UpdateCoordinator if valid in CACHE_NAME
+  const preStaged = await cache.match(assetUrl);
+  if (preStaged && preStaged.ok && preStaged.status === 200) {
+    const parsedExisting = new URL(assetUrl, self.location.href);
+    const modeExisting = assetUrl === './' || assetUrl.endsWith('.html') ? 'navigate' : 'cors';
+    const ctExisting = preStaged.headers.get('content-type') || '';
+    if (isValidMimeForPath(parsedExisting.pathname, ctExisting, modeExisting)) {
+      return;
+    }
+  }
+
   const req = new Request(assetUrl, { cache: 'no-store' });
   const res = await fetch(req);
   const parsed = new URL(req.url);
@@ -153,9 +168,34 @@ async function fetchAndCacheAsset(cache, assetUrl, isCritical) {
   await cache.put(assetUrl, res);
 }
 
+async function verifyOwnStagedInventory() {
+  const cache = await caches.open(CACHE_NAME);
+  const missing = [];
+  for (const assetUrl of CRITICAL_PRECACHE_ASSETS) {
+    const matched = await cache.match(assetUrl);
+    if (!matched || matched.status !== 200) {
+      missing.push(assetUrl);
+      continue;
+    }
+    const parsed = new URL(assetUrl, self.location.href);
+    const mode = assetUrl === './' || assetUrl.endsWith('.html') ? 'navigate' : 'cors';
+    const ct = matched.headers.get('content-type') || '';
+    if (!isValidMimeForPath(parsed.pathname, ct, mode)) {
+      missing.push(assetUrl);
+    }
+  }
+  return {
+    ok: missing.length === 0,
+    buildId: RESOLVED_BUILD_ID,
+    cacheName: CACHE_NAME,
+    verifiedCount: CRITICAL_PRECACHE_ASSETS.length - missing.length,
+    totalCritical: CRITICAL_PRECACHE_ASSETS.length,
+    missing,
+  };
+}
+
 // Install: atomically validate critical entry shell/JS/CSS assets so a broken release never activates.
-// Optional icons/secondary files remain best-effort.
-// CRITICAL (V5/V6): Do NOT call self.skipWaiting() unconditionally in install.
+// CRITICAL (V5/V6/V8): NEVER call self.skipWaiting() unconditionally in install.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -179,18 +219,42 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate: keep current cache intact; obsolete minadental-shell-* caches are pruned
-// safely ONLY when no open client depends on them (or on explicit PRUNE_OBSOLETE_CACHES after boot verify).
+// Activate: keep current & retained caches intact; pruning is strictly client-aware via PRUNE_OBSOLETE_CACHES.
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-async function pruneObsoleteMinadentalCaches(keepBuildId) {
-  const keepCacheName = CACHE_PREFIX + (keepBuildId || RESOLVED_BUILD_ID);
+async function pruneObsoleteMinadentalCaches(keepBuildIds) {
+  const now = Date.now();
+  const protectedCaches = new Set([CACHE_NAME]);
+
+  if (Array.isArray(keepBuildIds)) {
+    keepBuildIds.forEach((id) => {
+      if (typeof id === 'string' && id.trim()) {
+        protectedCaches.add(CACHE_PREFIX + id.trim());
+      }
+    });
+  } else if (typeof keepBuildIds === 'string' && keepBuildIds.trim()) {
+    protectedCaches.add(CACHE_PREFIX + keepBuildIds.trim());
+  }
+
+  // Retain every build currently leased by an open client window (within TTL)
+  const openWindows = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' }).catch(() => []);
+  const openIds = new Set(openWindows.map((c) => c.id));
+  for (const [leaseKey, lease] of activeClientLeases.entries()) {
+    if (now - lease.lastSeenAt > CLIENT_LEASE_TTL_MS && !openIds.has(leaseKey)) {
+      activeClientLeases.delete(leaseKey);
+      continue;
+    }
+    if (lease && typeof lease.buildId === 'string' && lease.buildId) {
+      protectedCaches.add(CACHE_PREFIX + lease.buildId);
+    }
+  }
+
   const keys = await caches.keys();
   await Promise.all(
     keys.map((key) => {
-      if (isMinadentalCacheKey(key) && key !== CACHE_NAME && key !== keepCacheName) {
+      if (isMinadentalCacheKey(key) && !protectedCaches.has(key)) {
         return caches.delete(key);
       }
       return Promise.resolve(false);
@@ -198,21 +262,64 @@ async function pruneObsoleteMinadentalCaches(keepBuildId) {
   );
 }
 
-// Controlled update activation & post-boot cache cleanup via UpdateCoordinator messages
+// V8 Authenticated MessageChannel & Controlled Activation Protocol
 self.addEventListener('message', (event) => {
   const data = event.data;
   if (!data || typeof data !== 'object') return;
-  if (data.type === 'SKIP_WAITING' || data.type === 'FORCE_UPDATE') {
-    if (data.targetReleaseId && data.targetReleaseId !== RESOLVED_BUILD_ID && RESOLVED_BUILD_ID !== 'dev-local') {
+
+  // Origin check when source is a WindowClient
+  if (event.source && event.source.url) {
+    try {
+      if (new URL(event.source.url).origin !== self.location.origin) return;
+    } catch {
+      return;
+    }
+  }
+
+  if (data.type === 'SKIP_WAITING') {
+    // V8: Strictly require explicit targetReleaseId matching this exact worker (zero legacy FORCE_UPDATE bypass!)
+    if (!data.targetReleaseId || typeof data.targetReleaseId !== 'string') {
+      return;
+    }
+    if (RESOLVED_BUILD_ID !== 'dev-local' && data.targetReleaseId !== RESOLVED_BUILD_ID) {
       return;
     }
     self.skipWaiting();
+  } else if (data.type === 'CLIENT_RELEASE_LEASE') {
+    const leaseKey = (event.source && event.source.id) || data.tabId || 'unknown';
+    if (typeof data.buildId === 'string' && data.buildId.trim()) {
+      activeClientLeases.set(leaseKey, {
+        buildId: data.buildId.trim(),
+        lastSeenAt: Date.now(),
+      });
+    }
   } else if (data.type === 'PRUNE_OBSOLETE_CACHES') {
-    event.waitUntil(pruneObsoleteMinadentalCaches(data.activeBuildId));
+    const retain = [
+      data.activeBuildId,
+      data.lastKnownGoodBuildId,
+      ...(Array.isArray(data.keepBuildIds) ? data.keepBuildIds : []),
+    ].filter(Boolean);
+    event.waitUntil(pruneObsoleteMinadentalCaches(retain));
+  } else if (data.type === 'VERIFY_CACHE_INVENTORY' && event.ports && event.ports[0]) {
+    event.waitUntil(
+      verifyOwnStagedInventory()
+        .then((res) => event.ports[0].postMessage(res))
+        .catch(() =>
+          event.ports[0].postMessage({
+            ok: false,
+            buildId: RESOLVED_BUILD_ID,
+            cacheName: CACHE_NAME,
+            verifiedCount: 0,
+            totalCritical: CRITICAL_PRECACHE_ASSETS.length,
+            missing: CRITICAL_PRECACHE_ASSETS,
+          })
+        )
+    );
   } else if (data.type === 'GET_BUILD_ID' && event.ports && event.ports[0]) {
     event.ports[0].postMessage({
       buildId: RESOLVED_BUILD_ID,
       cacheName: CACHE_NAME,
+      origin: self.location.origin,
       criticalAssets: CRITICAL_PRECACHE_ASSETS,
     });
   }
@@ -236,7 +343,7 @@ async function handleNavigationRequest(request, url) {
       const htmlProbe = await networkResponse.clone().text().catch(() => '');
       const metaMatch = htmlProbe.match(/<meta\s+name="minadental-build-id"\s+content="([^"]+)"/i);
       const responseBuildId = metaMatch ? metaMatch[1] : null;
-      // V7: NEVER cache a navigation HTML belonging to a DIFFERENT release into this worker's cache
+      // V7/V8: NEVER cache navigation HTML belonging to a DIFFERENT release into this worker's cache
       if (!responseBuildId || RESOLVED_BUILD_ID === 'dev-local' || responseBuildId === RESOLVED_BUILD_ID) {
         const clone = networkResponse.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', clone)).catch(() => {});
@@ -244,7 +351,6 @@ async function handleNavigationRequest(request, url) {
     }
     return networkResponse;
   } catch {
-    // Sequential awaited fallback (fixes broken Promise-truthy || chain)
     const cache = await caches.open(CACHE_NAME);
     const exactMatch = await cache.match(request);
     if (exactMatch) return exactMatch;
@@ -264,7 +370,6 @@ async function handleStaticAssetRequest(request, url) {
     if (isValidMimeForPath(url.pathname, ct, request.mode)) {
       return cached;
     }
-    // Evict poisoned cache entry (e.g. HTML cached under .js/.css)
     await cache.delete(request).catch(() => {});
   }
 
@@ -297,6 +402,8 @@ self.addEventListener('fetch', (event) => {
   if (
     url.pathname.endsWith('release-pointer.json') ||
     url.pathname.endsWith('release-manifest.json') ||
+    url.pathname.endsWith('android-release-pointer.json') ||
+    url.pathname.endsWith('ios-release-pointer.json') ||
     url.pathname.endsWith('version.json') ||
     url.pathname.endsWith('build-manifest.json') ||
     url.pathname.endsWith('chunks.json')

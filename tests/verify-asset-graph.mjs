@@ -272,6 +272,7 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
     assert.ok(!indexHtml.includes('__MINA_BUILD_ID'), `[${label}] Unresolved __MINA_BUILD_ID placeholder found in index.html`);
     assert.ok(!indexHtml.includes('__MINA_RELEASE_SEQ'), `[${label}] Unresolved __MINA_RELEASE_SEQ placeholder found in index.html`);
     assert.ok(!indexHtml.includes('__MINA_SEMVER'), `[${label}] Unresolved __MINA_SEMVER placeholder found in index.html`);
+    assert.ok(!indexHtml.includes('__MINA_CONTENT_DIGEST'), `[${label}] Unresolved __MINA_CONTENT_DIGEST placeholder found in index.html`);
 
     const buildIdMatch = indexHtml.match(/<meta\s+name="minadental-build-id"\s+content="([^"]+)"/i);
     assert.ok(buildIdMatch && buildIdMatch[1], `[${label}] index.html missing stamped minadental-build-id`);
@@ -286,6 +287,11 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
     assert.ok(semverMatch && /^\d+\.\d+\.\d+$/.test(semverMatch[1]), `[${label}] index.html missing valid minadental-semver`);
     const htmlSemver = semverMatch[1];
 
+    const digestMatch = indexHtml.match(/<meta\s+name="minadental-content-digest"\s+content="([^"]+)"/i);
+    assert.ok(digestMatch && /^[a-f0-9]{64}$/.test(digestMatch[1]), `[${label}] index.html missing valid 64-hex minadental-content-digest`);
+    const htmlContentDigest = digestMatch[1];
+    assert.equal(htmlBuildId, `v${htmlSemver}-${htmlContentDigest.slice(0, 10)}`, `[${label}] buildId must derive from semver + contentDigest`);
+
     // Regression guard for V6 P0 bug: window.<buildId> = buildId MUST NEVER happen
     assert.ok(
       indexHtml.includes('window.__minaBuildId = buildId;'),
@@ -296,7 +302,7 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
       `[${label}] Corrupted JS syntax detected: window.${htmlBuildId}`
     );
 
-    // 2. Verify coherent V7 release-pointer.json & release-manifest.json (Schema v2 + per-file SHA-256)
+    // 2. Verify coherent V8 release pointers (web, android, ios) & immutable versioned release-manifest.json
     const pointerUrl = new URL('release-pointer.json', baseUrl).toString();
     const pointerRes = await fetch(pointerUrl);
     assert.equal(pointerRes.status, 200, `[${label}] release-pointer.json must return HTTP 200`);
@@ -305,16 +311,36 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
     assert.equal(pointerJson.schemaVersion, 2, `[${label}] release-pointer.json schemaVersion must be 2`);
     assert.equal(pointerJson.currentReleaseId, htmlBuildId, `[${label}] release-pointer.json currentReleaseId must match index.html`);
     assert.equal(pointerJson.releaseSequence, htmlReleaseSeq, `[${label}] release-pointer.json releaseSequence must match index.html`);
+    assert.equal(
+      pointerJson.manifestUrl,
+      `./releases/${htmlBuildId}/release-manifest.json`,
+      `[${label}] release-pointer.json must point to immutable versioned release manifest`
+    );
+
+    for (const [platformPtr, expectedPlatform] of [
+      ['android-release-pointer.json', 'android'],
+      ['ios-release-pointer.json', 'ios'],
+    ]) {
+      const pUrl = new URL(platformPtr, baseUrl).toString();
+      const pRes = await fetch(pUrl);
+      assert.equal(pRes.status, 200, `[${label}] ${platformPtr} must return HTTP 200`);
+      assertValidMime(pUrl, pRes.headers.get('content-type'));
+      const pJson = await pRes.json();
+      assert.equal(pJson.platform, expectedPlatform, `[${label}] ${platformPtr} platform mismatch`);
+      assert.equal(pJson.currentReleaseId, htmlBuildId, `[${label}] ${platformPtr} releaseId mismatch`);
+      assert.equal(pJson.releaseSequence, htmlReleaseSeq, `[${label}] ${platformPtr} sequence mismatch`);
+    }
 
     const releaseManifestUrl = new URL(pointerJson.manifestUrl || 'release-manifest.json', pointerUrl).toString();
     const releaseManifestRes = await fetch(releaseManifestUrl);
-    assert.equal(releaseManifestRes.status, 200, `[${label}] release-manifest.json must return HTTP 200`);
+    assert.equal(releaseManifestRes.status, 200, `[${label}] immutable release-manifest.json must return HTTP 200`);
     assertValidMime(releaseManifestUrl, releaseManifestRes.headers.get('content-type'));
     const releaseManifest = await releaseManifestRes.json();
     assert.equal(releaseManifest.schemaVersion, 2, `[${label}] release-manifest.json schemaVersion must be 2`);
     assert.equal(releaseManifest.releaseId, htmlBuildId, `[${label}] release-manifest.json releaseId must match index.html`);
     assert.equal(releaseManifest.releaseSequence, htmlReleaseSeq, `[${label}] release-manifest.json releaseSequence must match index.html`);
     assert.equal(releaseManifest.semver, htmlSemver, `[${label}] release-manifest.json semver must match index.html`);
+    assert.equal(releaseManifest.contentDigest, htmlContentDigest, `[${label}] release-manifest.json contentDigest must match index.html`);
     assert.ok(Array.isArray(releaseManifest.assets) && releaseManifest.assets.length > 0, `[${label}] release-manifest.json must list hashed assets`);
     assert.ok(releaseManifest.rollbackPolicy && releaseManifest.rollbackPolicy.strategy === 'forward_release', `[${label}] release-manifest.json missing valid rollbackPolicy`);
 

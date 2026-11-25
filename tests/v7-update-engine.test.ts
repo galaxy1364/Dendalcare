@@ -198,7 +198,10 @@ async function buildRealReleaseBundle(opts: {
     '/index.html': { body: indexHtml, contentType: 'text/html; charset=utf-8' },
     [`/assets/index-${shortHash}.js`]: {
       body: opts.corruptAssetPath === jsPath
-        ? Buffer.from('console.log("TAMPERED_PAYLOAD");\n', 'utf8')
+        ? Buffer.from(
+            entryJs.toString('utf8').replace('minadental', 'TAMPERED_X'),
+            'utf8'
+          )
         : opts.htmlForJsPath === jsPath
         ? Buffer.from('<!doctype html><html><body>404 SPA fallback</body></html>', 'utf8')
         : entryJs,
@@ -705,6 +708,7 @@ export async function runAllV7UpdateEngineTests(): Promise<V7TestResult[]> {
         manifestClient: { pointerUrl: `${server.baseUrl}release-pointer.json`, maxRetries: 0 },
         getOfflineQueueCount: () => offlineQueueCount,
       });
+      coord.setAutoUpdateEnabled(false);
 
       const releaseFormGuard = coord.registerBusyGuard('patient-treatment-form', 'ثبت پرونده درمان بیمار');
       await coord.checkForUpdates('manual');
@@ -762,6 +766,9 @@ export async function runAllV7UpdateEngineTests(): Promise<V7TestResult[]> {
         getOfflineQueueCount: () => 0,
       });
 
+      // Establish verified LKG baseline on Release A before attempting upgrade to B
+      await coord.verifyPostBoot();
+
       await coord.checkForUpdates('manual');
       await coord.downloadAndVerifyCandidate();
 
@@ -782,8 +789,8 @@ export async function runAllV7UpdateEngineTests(): Promise<V7TestResult[]> {
       assert.equal(cappedSnap.error?.code, 'RELOAD_LIMIT_REACHED');
       assert.equal(reloads, 2, 'Reload cap MUST prevent a 3rd reload loop');
 
-      // Acknowledge rollback cleanly returns to ROLLED_BACK
-      const rolledSnap = coord.acknowledgeRollbackToLastKnownGood();
+      // Acknowledge rollback cleanly verifies live LKG handshake and returns to ROLLED_BACK
+      const rolledSnap = await coord.acknowledgeRollbackToLastKnownGood();
       assert.equal(rolledSnap.state, 'ROLLED_BACK');
       assert.equal(rolledSnap.pendingActivation, null);
     } finally {
@@ -870,9 +877,19 @@ export async function runAllV7UpdateEngineTests(): Promise<V7TestResult[]> {
     const server = await startReleaseHttpServer(releaseB);
     try {
       for (const nativePlatform of ['android', 'ios'] as const) {
-        const nativeAdapter = new NativePlatformUpdateAdapter(nativePlatform);
+        const unconfiguredAdapter = new NativePlatformUpdateAdapter(nativePlatform);
+        const unconfiguredCaps = unconfiguredAdapter.getCapabilities();
+        assert.equal(unconfiguredCaps.supportsInAppBinaryInstall, false, `${nativePlatform} must NOT claim in-app silent APK/IPA install`);
+        assert.equal(unconfiguredCaps.supportsStoreDeepLink, false, `${nativePlatform} must report supportsStoreDeepLink=false until store URL is configured`);
+
+        const configuredStoreUrl =
+          nativePlatform === 'android'
+            ? 'https://play.google.com/store/apps/details?id=com.minadental.app'
+            : 'https://apps.apple.com/app/id1234567890';
+        const nativeAdapter = new NativePlatformUpdateAdapter(nativePlatform, null, {
+          verifiedStoreUrl: configuredStoreUrl,
+        });
         const caps = nativeAdapter.getCapabilities();
-        assert.equal(caps.supportsInAppBinaryInstall, false, `${nativePlatform} must NOT claim in-app silent APK/IPA install`);
         assert.equal(caps.supportsStoreDeepLink, true);
 
         const coord = new UpdateCoordinator({

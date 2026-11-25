@@ -14,6 +14,9 @@ const PRESERVED_BINARY_FILES = new Set([
   'MinaDental-iOS.mobileconfig',
 ]);
 
+const MIN_NATIVE_VERSION = '4.9.0';
+const MIN_SCHEMA_VERSION = 4;
+
 function walkFilesRelative(dir: string, baseDir = dir): string[] {
   if (!fs.existsSync(dir)) return [];
   const results: string[] = [];
@@ -84,17 +87,109 @@ function getContentTypeForExt(relPath: string): string {
   return map[ext] || 'application/octet-stream';
 }
 
+function resolveBuildIdentityInputs(): {
+  semver: string;
+  releaseSequence: number;
+  isCiRelease: boolean;
+  releaseChannel: 'stable' | 'staging' | 'canary';
+  baseVersionMeta: Record<string, unknown>;
+} {
+  const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'));
+  const semver = String(pkg.version || '4.9.6');
+  const publicDir = path.resolve(__dirname, 'public');
+  const baseVersionPath = path.join(publicDir, 'version.json');
+  let baseVersionMeta: Record<string, unknown> = { releaseSequence: 65, build: 65, channel: 'stable' };
+  if (fs.existsSync(baseVersionPath)) {
+    try {
+      baseVersionMeta = JSON.parse(fs.readFileSync(baseVersionPath, 'utf8'));
+    } catch {
+      // fallback to baseline
+    }
+  }
+
+  const envSeqRaw = (process.env.MINA_RELEASE_SEQUENCE || '').trim();
+  const isCiRelease = Boolean(envSeqRaw && /^\d+$/.test(envSeqRaw) && Number(envSeqRaw) > 0);
+  const releaseSequence = isCiRelease
+    ? Number(envSeqRaw)
+    : Number(baseVersionMeta.releaseSequence || baseVersionMeta.build || 65);
+  const releaseChannel: 'stable' | 'staging' | 'canary' =
+    process.env.MINA_RELEASE_CHANNEL === 'staging' || process.env.MINA_RELEASE_CHANNEL === 'canary'
+      ? process.env.MINA_RELEASE_CHANNEL
+      : 'stable';
+
+  return { semver, releaseSequence, isCiRelease, releaseChannel, baseVersionMeta };
+}
+
+function canonicalManifestPayloadForSigning(manifest: Record<string, unknown>): string {
+  const assets = Array.isArray(manifest.assets) ? [...manifest.assets] : [];
+  assets.sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
+    String(a.path || '').localeCompare(String(b.path || ''))
+  );
+  return JSON.stringify({
+    schemaVersion: manifest.schemaVersion,
+    releaseId: manifest.releaseId,
+    releaseSequence: manifest.releaseSequence,
+    semver: manifest.semver,
+    gitCommit: manifest.gitCommit,
+    channel: manifest.channel,
+    platform: manifest.platform,
+    minNativeVersion: manifest.minNativeVersion,
+    minSchemaVersion: manifest.minSchemaVersion,
+    publishedAt: manifest.publishedAt,
+    expiresAt: manifest.expiresAt ?? null,
+    contentDigest: manifest.contentDigest ?? null,
+    releaseNotes: manifest.releaseNotes,
+    entryScripts: manifest.entryScripts,
+    entryStyles: manifest.entryStyles,
+    assets: assets.map((a: Record<string, unknown>) => ({
+      path: a.path,
+      sha256: a.sha256,
+      size: a.size,
+      critical: a.critical,
+      contentType: a.contentType,
+    })),
+    urgency: manifest.urgency,
+    revoked: manifest.revoked,
+    origin: manifest.origin,
+    rollbackPolicy: manifest.rollbackPolicy,
+    keyId: manifest.keyId ?? null,
+  });
+}
+
+function maybeSignManifestInCi(manifest: Record<string, unknown>): Record<string, unknown> {
+  const privateJwkRaw = (process.env.MINA_SIGNING_PRIVATE_KEY_JWK || '').trim();
+  const keyId = (process.env.MINA_SIGNING_KEY_ID || '').trim();
+  if (!privateJwkRaw || !keyId) {
+    return manifest;
+  }
+
+  const parsedJwk = JSON.parse(privateJwkRaw) as crypto.JsonWebKey;
+  const privateKey = crypto.createPrivateKey({ key: parsedJwk, format: 'jwk' });
+  const unsigned = { ...manifest, keyId };
+  const payload = canonicalManifestPayloadForSigning(unsigned);
+  // IEEE P1363 raw (r || s) matches Web Crypto SubtleCrypto ECDSA verify() format
+  const sigBuf = crypto.sign('sha256', Buffer.from(payload, 'utf8'), {
+    key: privateKey,
+    dsaEncoding: 'ieee-p1363',
+  });
+  return {
+    ...unsigned,
+    signature: sigBuf.toString('base64'),
+  };
+}
+
 /**
- * V7 Atomic Deterministic Release & Authoritative Manifest Plugin:
+ * V8 Atomic Deterministic Release & Authoritative Manifest Plugin:
  * 1. Strips dev-only `assets/aistudio/` artifacts BEFORE hashing, manifests, or mirroring.
- * 2. Computes one deterministic content-derived `releaseId` (`v<semver>-<10hex>`) from production assets.
- * 3. Reads CI-supplied `MINA_RELEASE_SEQUENCE` (strict monotonic integer) or baseline sequence for local builds
- *    (explicitly marking `origin: 'local_unreleased'` when not built in CI). Never derives sequence from Date.now().
- * 4. Stamps value-only placeholders (`__MINA_BUILD_ID_VALUE__`, `__MINA_RELEASE_SEQ_VALUE__`, `__MINA_SEMVER_VALUE__`)
- *    strictly into HTML meta tags and SW string literal — NEVER mutating JS identifiers.
- * 5. Computes real SHA-256 digest + byte size for EVERY production asset and emits Schema v2
- *    `release-manifest.json`, `release-pointer.json`, `version.json`, `build-manifest.json`, and `chunks.json`.
- * 6. Atomically mirrors clean dist/ -> gh-pages-dist/ preserving intact gh-pages-dist/assets/* structure.
+ * 2. Computes full 64-hex SHA-256 `contentDigest` across canonical `assets/*`, pre-stamp `index.html`,
+ *    pre-stamp `public/sw.js`, `manifest.json`, and compatibility metadata (zero self-reference).
+ * 3. Derives deterministic `releaseId` (`v<semver>-<10hex>`) from `contentDigest`.
+ * 4. Stamps value-only placeholders strictly into HTML meta tags and SW string literal — NEVER mutating JS identifiers.
+ * 5. Emits COMPLETE immutable versioned release files under `dist/releases/<releaseId>/`
+ *    (`index.html`, `assets/*`, `manifest.json`, `sw.js`, `release-manifest.json`), plus root copies and
+ *    platform-specific pointers (`release-pointer.json`, `android-release-pointer.json`, `ios-release-pointer.json`).
+ * 6. Optionally signs the manifest with ECDSA P-256 when CI signing env vars are provided (never stored in repo).
+ * 7. Atomically mirrors clean dist/ -> gh-pages-dist/ preserving intact gh-pages-dist/assets/* structure.
  */
 function syncDeterministicReleasePlugin(): Plugin {
   return {
@@ -113,49 +208,58 @@ function syncDeterministicReleasePlugin(): Plugin {
         fs.rmSync(leakedAiStudioDir, { recursive: true, force: true });
       }
 
-      const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'));
-      const semver = String(pkg.version || '4.9.6');
+      const { semver, releaseSequence, isCiRelease, releaseChannel, baseVersionMeta } =
+        resolveBuildIdentityInputs();
 
-      const baseVersionPath = path.join(publicDir, 'version.json');
-      let baseVersionMeta: Record<string, unknown> = { releaseSequence: 65, build: 65, channel: 'stable' };
-      if (fs.existsSync(baseVersionPath)) {
-        try {
-          baseVersionMeta = JSON.parse(fs.readFileSync(baseVersionPath, 'utf8'));
-        } catch {
-          // fallback
-        }
-      }
-
-      const envSeqRaw = process.env.MINA_RELEASE_SEQUENCE;
-      const isCiRelease = Boolean(envSeqRaw && /^\d+$/.test(envSeqRaw) && Number(envSeqRaw) > 0);
-      const releaseSequence = isCiRelease
-        ? Number(envSeqRaw)
-        : Number(baseVersionMeta.releaseSequence || baseVersionMeta.build || 65);
-      const releaseChannel =
-        process.env.MINA_RELEASE_CHANNEL === 'staging' || process.env.MINA_RELEASE_CHANNEL === 'canary'
-          ? process.env.MINA_RELEASE_CHANNEL
-          : 'stable';
-      const gitCommit = String(process.env.GITHUB_SHA || process.env.MINA_GIT_COMMIT || 'local-uncommitted').slice(0, 40);
+      const gitCommit = String(
+        process.env.GITHUB_SHA || process.env.MINA_GIT_COMMIT || 'local-uncommitted'
+      ).slice(0, 40);
       const publishedAt = process.env.MINA_PUBLISHED_AT || new Date().toISOString();
+      const ttlDays = Number(process.env.MINA_MANIFEST_TTL_DAYS || 365);
+      const expiresAt = Number.isFinite(ttlDays) && ttlDays > 0
+        ? new Date(Date.parse(publishedAt) + ttlDays * 24 * 60 * 60 * 1000).toISOString()
+        : undefined;
 
       const distAssetFiles = walkFilesRelative(assetsDir).map((rel) => `assets/${rel}`);
-      const hash = crypto.createHash('sha256');
-      hash.update(semver);
+      const distIndexPath = path.join(distDir, 'index.html');
+      const preStampHtml = fs.readFileSync(distIndexPath, 'utf8');
+      const swTemplatePath = path.join(publicDir, 'sw.js');
+      const preStampSw = fs.existsSync(swTemplatePath)
+        ? fs.readFileSync(swTemplatePath, 'utf8')
+        : '';
+      const distManifestJsonPath = path.join(distDir, 'manifest.json');
+      const distManifestJsonBuf = fs.existsSync(distManifestJsonPath)
+        ? fs.readFileSync(distManifestJsonPath)
+        : Buffer.alloc(0);
+
+      // Compute full 64-hex contentDigest over canonical assets + pre-stamp shell/SW/manifest + compat metadata
+      const contentHash = crypto.createHash('sha256');
+      contentHash.update(`semver:${semver}\n`);
+      contentHash.update(`channel:${releaseChannel}\n`);
+      contentHash.update(`minNative:${MIN_NATIVE_VERSION}\n`);
+      contentHash.update(`minSchema:${MIN_SCHEMA_VERSION}\n`);
+      contentHash.update('prestamp:index.html\n');
+      contentHash.update(preStampHtml, 'utf8');
+      contentHash.update('prestamp:sw.js\n');
+      contentHash.update(preStampSw, 'utf8');
+      contentHash.update('manifest.json\n');
+      contentHash.update(distManifestJsonBuf);
       for (const relAsset of distAssetFiles) {
         const abs = path.join(distDir, relAsset);
-        hash.update(relAsset);
-        hash.update(fs.readFileSync(abs));
+        contentHash.update(`asset:${relAsset}\n`);
+        contentHash.update(fs.readFileSync(abs));
       }
-      const shortHash = hash.digest('hex').slice(0, 10);
+      const contentDigest = contentHash.digest('hex');
+      const shortHash = contentDigest.slice(0, 10);
       const buildId = `v${semver}-${shortHash}`;
 
-      // 1. Stamp BUILD_ID, RELEASE_SEQ, and SEMVER safely ONLY into HTML meta attributes (never JS identifiers)
-      const distIndexPath = path.join(distDir, 'index.html');
-      let distHtml = fs.readFileSync(distIndexPath, 'utf8');
+      // 1. Stamp BUILD_ID, RELEASE_SEQ, SEMVER, and CONTENT_DIGEST strictly into HTML meta attributes
+      let distHtml = preStampHtml;
       const requiredHtmlReplacements: Array<[string, string]> = [
         ['content="__MINA_BUILD_ID_VALUE__"', `content="${escapeHtmlAttribute(buildId)}"`],
         ['content="__MINA_RELEASE_SEQ_VALUE__"', `content="${escapeHtmlAttribute(String(releaseSequence))}"`],
         ['content="__MINA_SEMVER_VALUE__"', `content="${escapeHtmlAttribute(semver)}"`],
+        ['content="__MINA_CONTENT_DIGEST_VALUE__"', `content="${escapeHtmlAttribute(contentDigest)}"`],
       ];
       for (const [placeholder, replacement] of requiredHtmlReplacements) {
         if (!distHtml.includes(placeholder)) {
@@ -166,7 +270,8 @@ function syncDeterministicReleasePlugin(): Plugin {
       if (
         distHtml.includes('__MINA_BUILD_ID') ||
         distHtml.includes('__MINA_RELEASE_SEQ') ||
-        distHtml.includes('__MINA_SEMVER')
+        distHtml.includes('__MINA_SEMVER') ||
+        distHtml.includes('__MINA_CONTENT_DIGEST')
       ) {
         throw new Error('[vite-sync] Unresolved __MINA_* placeholder remained in dist/index.html');
       }
@@ -197,9 +302,8 @@ function syncDeterministicReleasePlugin(): Plugin {
         ])
       );
 
-      const swTemplatePath = path.join(publicDir, 'sw.js');
       if (fs.existsSync(swTemplatePath)) {
-        let swSource = fs.readFileSync(swTemplatePath, 'utf8');
+        let swSource = preStampSw;
         const swBuildPlaceholder = "'__MINA_BUILD_ID_VALUE__'";
         if (!swSource.includes(swBuildPlaceholder)) {
           throw new Error("[vite-sync] Expected value-only placeholder '__MINA_BUILD_ID_VALUE__' in public/sw.js");
@@ -258,7 +362,7 @@ function syncDeterministicReleasePlugin(): Plugin {
           `نسخه v${semver} (انتشار #${releaseSequence}) — انتشار رسمی مینادنتال`
       );
 
-      const authoritativeManifest = {
+      const unsignedManifest: Record<string, unknown> = {
         schemaVersion: 2,
         releaseId: buildId,
         releaseSequence,
@@ -266,9 +370,11 @@ function syncDeterministicReleasePlugin(): Plugin {
         gitCommit,
         channel: releaseChannel,
         platform: 'web',
-        minNativeVersion: '4.9.0',
-        minSchemaVersion: 4,
+        minNativeVersion: MIN_NATIVE_VERSION,
+        minSchemaVersion: MIN_SCHEMA_VERSION,
         publishedAt,
+        ...(expiresAt ? { expiresAt } : {}),
+        contentDigest,
         releaseNotes,
         entryScripts,
         entryStyles,
@@ -284,24 +390,85 @@ function syncDeterministicReleasePlugin(): Plugin {
         },
       };
 
-      const releasePointer = {
+      const authoritativeManifest = maybeSignManifestInCi(unsignedManifest);
+      const releaseManifestStr = JSON.stringify(authoritativeManifest, null, 2) + '\n';
+
+      // 4. Stage COMPLETE immutable release directory at dist/releases/<releaseId>/
+      //    so versioned manifestUrl resolves ALL relative assets cleanly and supports retention/rollback!
+      const versionedReleaseDir = path.join(distDir, 'releases', buildId);
+      fs.mkdirSync(path.join(versionedReleaseDir, 'assets'), { recursive: true });
+      fs.copyFileSync(distIndexPath, path.join(versionedReleaseDir, 'index.html'));
+      if (fs.existsSync(distManifestJsonPath)) {
+        fs.copyFileSync(distManifestJsonPath, path.join(versionedReleaseDir, 'manifest.json'));
+      }
+      if (fs.existsSync(path.join(distDir, 'sw.js'))) {
+        fs.copyFileSync(path.join(distDir, 'sw.js'), path.join(versionedReleaseDir, 'sw.js'));
+      }
+      copyDirectoryRecursive(assetsDir, path.join(versionedReleaseDir, 'assets'));
+      fs.writeFileSync(
+        path.join(versionedReleaseDir, 'release-manifest.json'),
+        releaseManifestStr,
+        'utf8'
+      );
+
+      // Write root convenience copy + atomic release pointers (web + android + ios)
+      fs.writeFileSync(path.join(distDir, 'release-manifest.json'), releaseManifestStr, 'utf8');
+
+      const versionedManifestRelUrl = `./releases/${buildId}/release-manifest.json`;
+      const webPointer = {
         schemaVersion: 2,
         channel: releaseChannel,
         platform: 'web',
         currentReleaseId: buildId,
         releaseSequence,
-        manifestUrl: './release-manifest.json',
+        manifestUrl: versionedManifestRelUrl,
         updatedAt: publishedAt,
         revokedReleaseIds: [],
         minSupportedSequence: 1,
       };
+      fs.writeFileSync(
+        path.join(distDir, 'release-pointer.json'),
+        JSON.stringify(webPointer, null, 2) + '\n',
+        'utf8'
+      );
 
-      const releaseManifestStr = JSON.stringify(authoritativeManifest, null, 2) + '\n';
-      const releasePointerStr = JSON.stringify(releasePointer, null, 2) + '\n';
-      fs.writeFileSync(path.join(distDir, 'release-manifest.json'), releaseManifestStr, 'utf8');
-      fs.writeFileSync(path.join(distDir, 'release-pointer.json'), releasePointerStr, 'utf8');
+      const androidPointer = {
+        schemaVersion: 2,
+        channel: releaseChannel,
+        platform: 'android',
+        currentReleaseId: buildId,
+        releaseSequence,
+        manifestUrl: versionedManifestRelUrl,
+        updatedAt: publishedAt,
+        revokedReleaseIds: [],
+        minSupportedSequence: 1,
+        storeUrl: (process.env.VITE_ANDROID_PLAY_STORE_URL || '').trim() || null,
+      };
+      fs.writeFileSync(
+        path.join(distDir, 'android-release-pointer.json'),
+        JSON.stringify(androidPointer, null, 2) + '\n',
+        'utf8'
+      );
 
-      // 4. Emit coherent version.json, build-manifest.json & chunks.json from the exact same release identity
+      const iosPointer = {
+        schemaVersion: 2,
+        channel: releaseChannel,
+        platform: 'ios',
+        currentReleaseId: buildId,
+        releaseSequence,
+        manifestUrl: versionedManifestRelUrl,
+        updatedAt: publishedAt,
+        revokedReleaseIds: [],
+        minSupportedSequence: 1,
+        storeUrl: (process.env.VITE_IOS_APP_STORE_URL || '').trim() || null,
+      };
+      fs.writeFileSync(
+        path.join(distDir, 'ios-release-pointer.json'),
+        JSON.stringify(iosPointer, null, 2) + '\n',
+        'utf8'
+      );
+
+      // 5. Emit coherent version.json, build-manifest.json & chunks.json from the exact same release identity
       const versionPayload = {
         schemaVersion: 2,
         version: semver,
@@ -310,6 +477,7 @@ function syncDeterministicReleasePlugin(): Plugin {
         releaseSequence,
         buildId,
         releaseId: buildId,
+        contentDigest,
         packageVersion: semver,
         channel: releaseChannel,
         publishedAt,
@@ -325,6 +493,7 @@ function syncDeterministicReleasePlugin(): Plugin {
         buildId,
         releaseId: buildId,
         releaseSequence,
+        contentDigest,
         packageVersion: semver,
         entryScripts,
         entryStyles,
@@ -338,25 +507,33 @@ function syncDeterministicReleasePlugin(): Plugin {
       );
       fs.writeFileSync(
         path.join(distDir, 'chunks.json'),
-        JSON.stringify({ buildId, releaseSequence, files: distAssetFiles }, null, 2) + '\n',
+        JSON.stringify({ buildId, releaseSequence, contentDigest, files: distAssetFiles }, null, 2) + '\n',
         'utf8'
       );
       fs.writeFileSync(path.join(distDir, '.nojekyll'), '', 'utf8');
 
-      // 5. Atomically mirror intact dist/ -> gh-pages-dist/ (preserving gh-pages-dist/assets/*)
+      // 6. Atomically mirror intact dist/ -> gh-pages-dist/ (preserving gh-pages-dist/assets/* & releases/*)
       fs.mkdirSync(ghPagesDir, { recursive: true });
       cleanStaleGhPagesFiles(ghPagesDir);
       copyDirectoryRecursive(distDir, ghPagesDir);
 
       console.log(
-        `[vite-sync] Atomic release ${buildId} (seq #${releaseSequence}) synced to dist/ & gh-pages-dist/ (${distAssetFiles.length} intact assets, ${manifestAssets.length} hashed manifest entries)`
+        `[vite-sync] Atomic V8 release ${buildId} (seq #${releaseSequence}, digest=${contentDigest.slice(0, 12)}..., origin=${authoritativeManifest.origin}) synced to dist/ & gh-pages-dist/ (${distAssetFiles.length} assets, ${manifestAssets.length} hashed manifest entries, immutable releases/${buildId}/ staged)`
       );
     },
   };
 }
 
+const embeddedIdentity = resolveBuildIdentityInputs();
+
 export default defineConfig({
   base: './',
+  define: {
+    __MINA_EMBEDDED_SEMVER__: JSON.stringify(embeddedIdentity.semver),
+    __MINA_EMBEDDED_SEQUENCE__: JSON.stringify(embeddedIdentity.releaseSequence),
+    __MINA_EMBEDDED_CHANNEL__: JSON.stringify(embeddedIdentity.releaseChannel),
+    __MINA_EMBEDDED_SCHEMA_VERSION__: JSON.stringify(MIN_SCHEMA_VERSION),
+  },
   plugins: [react(), syncDeterministicReleasePlugin()],
   resolve: {
     alias: {

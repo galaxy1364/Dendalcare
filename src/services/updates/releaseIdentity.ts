@@ -39,6 +39,24 @@ export function compareSemver(a: string, b: string): number {
   return 0;
 }
 
+/**
+ * Checks for path traversal including percent-encoded sequences (%2e%2e, %2f, backslashes, control chars).
+ */
+export function hasUnsafePathTraversal(rawPath: string): boolean {
+  if (!rawPath || typeof rawPath !== 'string') return true;
+  if (/[\x00-\x1f\x7f\\]/.test(rawPath)) return true;
+  let decoded = rawPath;
+  try {
+    decoded = decodeURIComponent(rawPath);
+    // Double-decode check for double-encoded %252e%252e
+    const doubleDecoded = decodeURIComponent(decoded);
+    if (doubleDecoded.includes('..') || doubleDecoded.includes('\\')) return true;
+  } catch {
+    return true;
+  }
+  return decoded.includes('..') || decoded.includes('\\') || decoded.startsWith('//');
+}
+
 export function isAllowedReleaseUrl(
   rawUrl: string,
   options?: { currentOrigin?: string; extraAllowedOrigins?: readonly string[] }
@@ -47,9 +65,9 @@ export function isAllowedReleaseUrl(
   const trimmed = rawUrl.trim();
   if (!trimmed) return false;
 
-  // Relative same-origin paths (./release-pointer.json, ./assets/...) are safe if no traversal
+  // Relative same-origin paths (./release-pointer.json, ./assets/...) are safe only with zero traversal
   if (trimmed.startsWith('./') || trimmed.startsWith('/')) {
-    return !trimmed.includes('..') && !trimmed.startsWith('//');
+    return !hasUnsafePathTraversal(trimmed);
   }
 
   let parsed: URL;
@@ -58,6 +76,8 @@ export function isAllowedReleaseUrl(
   } catch {
     return false;
   }
+
+  if (hasUnsafePathTraversal(parsed.pathname)) return false;
 
   // Allow localhost / 127.0.0.1 HTTP exclusively for local preview/tests
   const isLoopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
@@ -84,7 +104,7 @@ export function isAllowedReleaseUrl(
 function validateAssetEntry(raw: unknown): ReleaseAssetEntry | null {
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Record<string, unknown>;
-  if (typeof obj.path !== 'string' || !obj.path.trim() || obj.path.includes('..')) return null;
+  if (typeof obj.path !== 'string' || !obj.path.trim() || hasUnsafePathTraversal(obj.path)) return null;
   if (typeof obj.sha256 !== 'string' || !SHA256_HEX_PATTERN.test(obj.sha256)) return null;
   if (typeof obj.size !== 'number' || !Number.isFinite(obj.size) || obj.size < 0) return null;
   return {
@@ -108,6 +128,12 @@ export function validateReleaseManifest(
   }
   if (!isValidReleaseId(obj.releaseId)) {
     return { ok: false, reason: `Invalid releaseId format: ${String(obj.releaseId)}` };
+  }
+  if (
+    obj.contentDigest !== undefined &&
+    (typeof obj.contentDigest !== 'string' || !SHA256_HEX_PATTERN.test(obj.contentDigest))
+  ) {
+    return { ok: false, reason: 'Invalid contentDigest SHA-256 hex format' };
   }
   if (
     typeof obj.releaseSequence !== 'number' ||
@@ -140,6 +166,9 @@ export function validateReleaseManifest(
   }
   if (typeof obj.publishedAt !== 'string' || Number.isNaN(Date.parse(obj.publishedAt))) {
     return { ok: false, reason: 'Invalid publishedAt ISO timestamp' };
+  }
+  if (obj.expiresAt !== undefined && (typeof obj.expiresAt !== 'string' || Number.isNaN(Date.parse(obj.expiresAt)))) {
+    return { ok: false, reason: 'Invalid expiresAt ISO timestamp' };
   }
   if (!Array.isArray(obj.assets) || obj.assets.length === 0) {
     return { ok: false, reason: 'Manifest assets list must be non-empty' };
@@ -175,6 +204,7 @@ export function validateReleaseManifest(
   const manifest: AuthoritativeReleaseManifest = {
     schemaVersion: 2,
     releaseId: obj.releaseId.trim(),
+    contentDigest: typeof obj.contentDigest === 'string' ? obj.contentDigest.toLowerCase() : undefined,
     releaseSequence: obj.releaseSequence,
     semver: obj.semver.trim(),
     gitCommit: obj.gitCommit.trim(),
@@ -183,6 +213,7 @@ export function validateReleaseManifest(
     minNativeVersion: obj.minNativeVersion.trim(),
     minSchemaVersion: obj.minSchemaVersion,
     publishedAt: obj.publishedAt,
+    expiresAt: typeof obj.expiresAt === 'string' ? obj.expiresAt : undefined,
     releaseNotes: typeof obj.releaseNotes === 'string' ? obj.releaseNotes : '',
     entryScripts,
     entryStyles,
@@ -265,12 +296,8 @@ export function validateReleasePointer(
 
 /**
  * Compares currently running release identity against a verified authoritative candidate manifest.
- * Enforces:
- * - Revocation checks
- * - Sequence conflict detection (same sequence + different digest => ERROR, never success)
- * - Downgrade & replay rejection
- * - Schema & native version compatibility
- * - Content-changed upgrade even when semver stays identical (provided sequence increased)
+ * Enforces revocation, channel matching, expiry, sequence conflict, downgrade/replay protection,
+ * schema & native compatibility, and same-semver content upgrades.
  */
 export function compareReleases(
   current: RuntimeReleaseIdentity,
@@ -282,6 +309,7 @@ export function compareReleases(
     nowMs?: number;
   }
 ): ReleaseComparisonOutcome {
+  const nowMs = options?.nowMs ?? Date.now();
   const revokedSet = new Set(options?.revokedReleaseIds ?? []);
   if (candidate.revoked || revokedSet.has(candidate.releaseId)) {
     return {
@@ -290,15 +318,44 @@ export function compareReleases(
     };
   }
 
-  // Same immutable releaseId & same sequence => idempotent no-op
+  // Channel isolation: staging/canary manifests must never overwrite a stable client or vice versa
+  if (candidate.channel !== current.channel) {
+    return {
+      kind: 'REPLAY_REJECTED',
+      detail: `Channel mismatch: running ${current.channel}, received ${candidate.channel}`,
+    };
+  }
+
+  // Expiry check (replay protection)
+  if (candidate.expiresAt) {
+    const expMs = Date.parse(candidate.expiresAt);
+    if (Number.isFinite(expMs) && nowMs > expMs) {
+      return {
+        kind: 'REPLAY_REJECTED',
+        detail: `Manifest expired at ${candidate.expiresAt}`,
+      };
+    }
+  }
+
+  // Same immutable releaseId & same sequence => idempotent no-op (also check contentDigest if both present)
   if (
     candidate.releaseId === current.releaseId &&
     candidate.releaseSequence === current.releaseSequence
   ) {
+    if (
+      candidate.contentDigest &&
+      current.contentDigest &&
+      candidate.contentDigest !== current.contentDigest
+    ) {
+      return {
+        kind: 'SEQUENCE_CONFLICT',
+        detail: `Full contentDigest mismatch on same releaseId ${candidate.releaseId}`,
+      };
+    }
     return { kind: 'SAME_ARTIFACT' };
   }
 
-  // CRITICAL V7 Rule: same sequence with DIFFERENT content digest is a release integrity error!
+  // CRITICAL V7/V8 Rule: same sequence with DIFFERENT content digest is a release integrity error!
   if (
     candidate.releaseSequence === current.releaseSequence &&
     candidate.releaseId !== current.releaseId
@@ -309,7 +366,7 @@ export function compareReleases(
     };
   }
 
-  // Replay protection: reject older sequence than highest verified sequence ever seen
+  // Replay protection: reject older sequence than active or highest verified sequence ever seen
   const highWatermark = Math.max(current.releaseSequence, options?.highestSeenSequence ?? 0);
   if (candidate.releaseSequence < current.releaseSequence) {
     return {
@@ -327,7 +384,6 @@ export function compareReleases(
   // Optional stale manifest replay window check
   if (options?.maxStaleAgeMs && options.maxStaleAgeMs > 0) {
     const publishedMs = Date.parse(candidate.publishedAt);
-    const nowMs = options.nowMs ?? Date.now();
     if (Number.isFinite(publishedMs) && nowMs - publishedMs > options.maxStaleAgeMs && candidate.releaseSequence <= highWatermark) {
       return {
         kind: 'REPLAY_REJECTED',
@@ -361,10 +417,6 @@ export function compareReleases(
   };
 }
 
-/**
- * Deterministic canonical string serialization for cryptographic manifest signing & verification.
- * Excludes `signature` so the signed payload is strictly reproducible across CI and browser WebCrypto.
- */
 export function serializeCanonicalManifestPayload(manifest: AuthoritativeReleaseManifest): string {
   const { signature: _omit, ...rest } = manifest;
   const sortKeysDeep = (val: unknown): unknown => {
@@ -403,32 +455,54 @@ function base64ToBytes(b64: string): Uint8Array {
 
 /**
  * Verifies an ECDSA P-256 SHA-256 manifest signature against pinned public verification keys.
- * - If `requireSignature` is true (custom updater / non-Play APK), missing signature fails closed.
- * - If `signature` is present even on web, it MUST verify against a non-revoked pinned key.
+ * NEVER claims `verified: true` when `requireSignature` is false, key list is empty, or manifest is unsigned.
  */
 export async function verifyManifestSignature(
   manifest: AuthoritativeReleaseManifest,
   pinnedKeys: readonly PinnedPublicKey[],
-  options?: { requireSignature?: boolean }
-): Promise<{ ok: true; verified: boolean; keyId: string | null } | { ok: false; reason: string }> {
+  options?: { requireSignature?: boolean; nowMs?: number }
+): Promise<
+  | { ok: true; verified: boolean; status: 'verified' | 'unsigned_web_origin_only'; keyId: string | null }
+  | { ok: false; status: 'invalid'; reason: string }
+> {
   const hasSignature = Boolean(manifest.signature);
   if (!hasSignature) {
     if (options?.requireSignature) {
-      return { ok: false, reason: 'Signature is required for this distribution channel but missing' };
+      return {
+        ok: false,
+        status: 'invalid',
+        reason: 'Signature is required for this distribution channel but missing',
+      };
     }
-    return { ok: true, verified: false, keyId: null };
+    return { ok: true, verified: false, status: 'unsigned_web_origin_only', keyId: null };
   }
 
   if (!manifest.keyId) {
-    return { ok: false, reason: 'Signed manifest is missing keyId' };
+    return { ok: false, status: 'invalid', reason: 'Signed manifest is missing keyId' };
   }
 
   const pinned = pinnedKeys.find((k) => k.keyId === manifest.keyId);
   if (!pinned) {
-    return { ok: false, reason: `Unknown or unpinned verification keyId: ${manifest.keyId}` };
+    return {
+      ok: false,
+      status: 'invalid',
+      reason: `Unknown or unpinned verification keyId: ${manifest.keyId}`,
+    };
   }
   if (pinned.status === 'revoked') {
-    return { ok: false, reason: `Verification keyId ${manifest.keyId} has been revoked` };
+    return {
+      ok: false,
+      status: 'invalid',
+      reason: `Verification keyId ${manifest.keyId} has been revoked`,
+    };
+  }
+  const nowMs = options?.nowMs ?? Date.now();
+  if (pinned.validUntil && !Number.isNaN(Date.parse(pinned.validUntil)) && nowMs > Date.parse(pinned.validUntil)) {
+    return {
+      ok: false,
+      status: 'invalid',
+      reason: `Verification keyId ${manifest.keyId} expired at ${pinned.validUntil}`,
+    };
   }
 
   try {
@@ -454,12 +528,17 @@ export async function verifyManifestSignature(
     );
 
     if (!valid) {
-      return { ok: false, reason: `Cryptographic signature verification failed for keyId=${manifest.keyId}` };
+      return {
+        ok: false,
+        status: 'invalid',
+        reason: `Cryptographic signature verification failed for keyId=${manifest.keyId}`,
+      };
     }
-    return { ok: true, verified: true, keyId: pinned.keyId };
+    return { ok: true, verified: true, status: 'verified', keyId: pinned.keyId };
   } catch (err) {
     return {
       ok: false,
+      status: 'invalid',
       reason: `Signature verification error: ${err instanceof Error ? err.message : String(err)}`,
     };
   }

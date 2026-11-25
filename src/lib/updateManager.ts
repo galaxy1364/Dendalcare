@@ -168,6 +168,7 @@ export async function applyAppUpdateAtomically(options?: {
     if (snap.state === 'READY_TO_ACTIVATE' || snap.state === 'WAITING_FOR_SAFE_POINT') {
       snap = await updateCoordinator.activateVerifiedCandidate({
         forceEvenIfBusy: options?.forceEvenIfBusy,
+        userConfirmedClinicalSafeOverride: options?.forceEvenIfBusy,
         allowReload: options?.reloadPage !== false,
       });
     }

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 
 /**
- * V5 P0-04 Explicit Bootstrap State Machine:
+ * V5/V8.1 Explicit Bootstrap State Machine with distinct boot milestones:
  *   BOOTING -> SHELL_READY -> AUTH_RESOLVING -> READY | DEGRADED | ERROR
  *
+ * Tracks granular milestones:
+ *   moduleEvaluatedAt -> shellCommittedAt -> authResolvedAt -> routeRenderedAt -> readyAt
  * Strictly enforces post-commit shell readiness and never bypasses Auth/RLS.
  */
 export type BootstrapStage =
@@ -16,8 +18,12 @@ export type BootstrapStage =
 
 export interface BootstrapSnapshot {
   stage: BootstrapStage;
+  moduleEvaluatedAt: number | null;
   shellCommittedAt: number | null;
   authResolvedAt: number | null;
+  routeRenderedAt: number | null;
+  readyAt: number | null;
+  renderedRoute: string | null;
   diagnosticCode: string | null;
   diagnosticMessage: string | null;
 }
@@ -54,6 +60,10 @@ export function sanitizeLogMessage(input: unknown): string {
 
 export interface BootstrapMachine {
   getSnapshot: () => BootstrapSnapshot;
+  recordMilestone: (
+    milestone: 'module_evaluated' | 'route_rendered',
+    route?: string | null
+  ) => BootstrapSnapshot;
   transition: (
     next: BootstrapStage,
     diagnostic?: { code?: string | null; message?: string | null }
@@ -64,15 +74,53 @@ export interface BootstrapMachine {
 export function createBootstrapMachine(): BootstrapMachine {
   let snapshot: BootstrapSnapshot = {
     stage: 'BOOTING',
+    moduleEvaluatedAt: null,
     shellCommittedAt: null,
     authResolvedAt: null,
+    routeRenderedAt: null,
+    readyAt: null,
+    renderedRoute: null,
     diagnosticCode: null,
     diagnosticMessage: null,
   };
   const listeners = new Set<(snap: BootstrapSnapshot) => void>();
 
+  const notify = () => {
+    listeners.forEach((fn) => {
+      try {
+        fn(snapshot);
+      } catch {
+        // ignore subscriber errors
+      }
+    });
+  };
+
   return {
     getSnapshot: () => snapshot,
+    recordMilestone(milestone, route) {
+      const now = Date.now();
+      if (milestone === 'module_evaluated') {
+        snapshot = {
+          ...snapshot,
+          moduleEvaluatedAt: snapshot.moduleEvaluatedAt ?? now,
+        };
+      } else if (milestone === 'route_rendered') {
+        snapshot = {
+          ...snapshot,
+          routeRenderedAt: snapshot.routeRenderedAt ?? now,
+          renderedRoute: route ?? snapshot.renderedRoute ?? 'dashboard',
+        };
+      }
+      if (typeof window !== 'undefined' && window.__minaBootMilestones) {
+        if (milestone === 'module_evaluated') {
+          window.__minaBootMilestones.moduleEvaluatedAt = snapshot.moduleEvaluatedAt;
+        } else if (milestone === 'route_rendered') {
+          window.__minaBootMilestones.routeRenderedAt = snapshot.routeRenderedAt;
+        }
+      }
+      notify();
+      return snapshot;
+    },
     transition(next, diagnostic) {
       if (snapshot.stage === next && !diagnostic) return snapshot;
       const allowed = VALID_TRANSITIONS[snapshot.stage];
@@ -82,13 +130,15 @@ export function createBootstrapMachine(): BootstrapMachine {
 
       const now = Date.now();
       snapshot = {
+        ...snapshot,
         stage: next,
         shellCommittedAt:
           next === 'SHELL_READY' ? snapshot.shellCommittedAt ?? now : snapshot.shellCommittedAt,
         authResolvedAt:
           next === 'READY' || next === 'DEGRADED' || next === 'ERROR'
-            ? now
+            ? snapshot.authResolvedAt ?? now
             : snapshot.authResolvedAt,
+        readyAt: next === 'READY' ? snapshot.readyAt ?? now : snapshot.readyAt,
         diagnosticCode: diagnostic?.code ?? (next === 'READY' ? null : snapshot.diagnosticCode),
         diagnosticMessage:
           diagnostic?.message !== undefined
@@ -102,16 +152,14 @@ export function createBootstrapMachine(): BootstrapMachine {
 
       if (typeof window !== 'undefined') {
         window.__minaBootState = snapshot.stage;
+        if (window.__minaBootMilestones) {
+          window.__minaBootMilestones.shellCommittedAt = snapshot.shellCommittedAt;
+          window.__minaBootMilestones.authResolvedAt = snapshot.authResolvedAt;
+          window.__minaBootMilestones.readyAt = snapshot.readyAt;
+        }
       }
 
-      listeners.forEach((fn) => {
-        try {
-          fn(snapshot);
-        } catch {
-          // ignore subscriber errors
-        }
-      });
-
+      notify();
       return snapshot;
     },
     subscribe(listener) {
@@ -125,21 +173,34 @@ export function createBootstrapMachine(): BootstrapMachine {
 
 export const appBootstrap = createBootstrapMachine();
 
+export function markModuleEvaluated(): void {
+  appBootstrap.recordMilestone('module_evaluated');
+}
+
+export function markRouteRendered(route: string): void {
+  appBootstrap.recordMilestone('route_rendered', route);
+}
+
 /**
  * Post-commit handshake invoked ONLY from root React `useEffect` after the shell commits to DOM.
- * Replaces the broken synchronous `window.__minaAppMounted = true` in `main.tsx`.
+ * Cancels the independent boot watchdog timer and removes the splash overlay cleanly.
  */
 export function markShellCommitted(): void {
   appBootstrap.transition('SHELL_READY');
   if (typeof window !== 'undefined') {
     window.__minaAppMounted = true;
     window.__minaBootState = appBootstrap.getSnapshot().stage;
+    window.__minaCancelBootWatchdog?.();
   }
   if (typeof document !== 'undefined') {
     const splashEl = document.getElementById('app-splash');
     if (splashEl) {
       splashEl.style.opacity = '0';
       splashEl.remove();
+    }
+    const errEl = document.getElementById('boot-error');
+    if (errEl && appBootstrap.getSnapshot().stage !== 'ERROR') {
+      errEl.style.display = 'none';
     }
   }
 }

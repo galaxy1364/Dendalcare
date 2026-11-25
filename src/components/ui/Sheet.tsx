@@ -1,7 +1,8 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ArrowRight, ShieldCheck, Lock } from 'lucide-react';
 import { HapticEngine, playTactileFeedback } from '@/lib/hapticsAudio';
+import { useUpdateSafePointGuard } from '@/services/updates';
 
 type SheetProps = {
   open: boolean;
@@ -22,6 +23,12 @@ export function Sheet({
   color = '#3B82F6',
   children,
 }: SheetProps) {
+  const sheetGuardId = useId();
+  useUpdateSafePointGuard(
+    `sheet_${sheetGuardId}`,
+    open,
+    `فرم باز: ${title || 'ثبت اطلاعات کلینیک'}`
+  );
   const [swipeBackX, setSwipeBackX] = useState(0);
   const swipeRef = useRef<{ active: boolean; startX: number; startY: number }>({
     active: false,

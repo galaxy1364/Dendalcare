@@ -5,7 +5,7 @@ import type {
   ReleasePlatform,
   RuntimeReleaseIdentity,
 } from '../contracts';
-import { UPDATE_TIMING_POLICY } from '../policy';
+import { DEFAULT_REMOTE_RELEASE_BASE_URL, UPDATE_TIMING_POLICY } from '../policy';
 import { isAllowedReleaseUrl } from '../releaseIdentity';
 import type {
   ActivateUpdateResult,
@@ -34,6 +34,18 @@ interface WindowWithNativeBridge extends Window {
       minaNativeUpdate?: { postMessage: (msg: unknown) => void };
     };
   };
+}
+
+function readEnvVar(name: string): string | null {
+  try {
+    const val =
+      typeof import.meta !== 'undefined'
+        ? (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.[name]
+        : undefined;
+    return val && val.trim() ? val.trim() : null;
+  } catch {
+    return null;
+  }
 }
 
 export function detectNativeHostPlatform(): ReleasePlatform | null {
@@ -80,22 +92,50 @@ function readAndroidBridgeInfo(): NativeAndroidBridgeInfo | null {
 }
 
 /**
- * Honest Native Platform Adapter (Android Bundled WebView / Play Store & iOS App Store/TestFlight).
+ * Honest Native Platform Adapter (V8 — Android Bundled WebView / Play Store & iOS App Store/TestFlight).
  *
  * CRITICAL REALITY RULES:
- * 1. Bundled Android WebView (`127.0.0.1:8765` / `appassets.androidplatform.net`) CANNOT upgrade
- *    its APK by clearing WebView cache — doing so NEVER mutates installed ledger.
- * 2. No silent APK/IPA install is claimed or attempted; respects Google Play policies
- *    (zero REQUEST_INSTALL_PACKAGES, zero dynamic executable loading) and Apple Guideline 2.5.2.
- * 3. Directs user to official store / verified distribution channel (`NATIVE_STORE_REQUIRED`).
+ * 1. Bundled native hosts query an EXPLICIT REMOTE HTTPS platform pointer
+ *    (`android-release-pointer.json` / `ios-release-pointer.json`), NEVER only local `./release-pointer.json`.
+ * 2. NEVER invents unverified Play Store / App Store listing URLs; when no verified store listing URL
+ *    is configured, reports `storeUrl: null` and `supportsStoreDeepLink: false` honestly.
+ * 3. Zero `REQUEST_INSTALL_PACKAGES`, zero DCL, zero silent APK/IPA install (Google Play & Apple 2.5.2 compliant).
  */
 export class NativePlatformUpdateAdapter implements PlatformUpdateAdapter {
   private readonly platform: ReleasePlatform;
   private readonly overrideBridgeInfo?: NativeAndroidBridgeInfo | null;
+  private readonly remoteBaseUrl: string;
+  private readonly verifiedStoreUrl: string | null;
 
-  constructor(platform: ReleasePlatform, overrideBridgeInfo?: NativeAndroidBridgeInfo | null) {
+  constructor(
+    platform: ReleasePlatform,
+    overrideBridgeInfo?: NativeAndroidBridgeInfo | null,
+    options?: { remoteBaseUrl?: string; verifiedStoreUrl?: string | null }
+  ) {
     this.platform = platform;
     this.overrideBridgeInfo = overrideBridgeInfo;
+    this.remoteBaseUrl = (options?.remoteBaseUrl || DEFAULT_REMOTE_RELEASE_BASE_URL).replace(
+      /\/?$/,
+      '/'
+    );
+    this.verifiedStoreUrl =
+      options?.verifiedStoreUrl !== undefined
+        ? options.verifiedStoreUrl
+        : platform === 'android'
+        ? readEnvVar('VITE_ANDROID_VERIFIED_STORE_URL') || readEnvVar('VITE_ANDROID_PLAY_STORE_URL')
+        : platform === 'ios'
+        ? readEnvVar('VITE_IOS_VERIFIED_STORE_URL') || readEnvVar('VITE_IOS_APP_STORE_URL')
+        : null;
+  }
+
+  public getDefaultPointerUrl(): string {
+    if (this.platform === 'android') {
+      return `${this.remoteBaseUrl}android-release-pointer.json`;
+    }
+    if (this.platform === 'ios') {
+      return `${this.remoteBaseUrl}ios-release-pointer.json`;
+    }
+    return `${this.remoteBaseUrl}release-pointer.json`;
   }
 
   private getBridgeInfo(): NativeAndroidBridgeInfo | null {
@@ -105,36 +145,43 @@ export class NativePlatformUpdateAdapter implements PlatformUpdateAdapter {
 
   public getCapabilities(): PlatformUpdateCapabilities {
     const bridge = this.getBridgeInfo();
+    const remotePointerUrl = this.getDefaultPointerUrl();
 
     if (this.platform === 'android') {
+      const hasVerifiedStore = Boolean(this.verifiedStoreUrl && isAllowedReleaseUrl(this.verifiedStoreUrl));
       return {
         platform: 'android',
         supportsWebSwUpdates: false,
         supportsInAppBinaryInstall: Boolean(bridge?.playInAppUpdateAvailable),
-        supportsStoreDeepLink: true,
+        supportsStoreDeepLink: hasVerifiedStore,
         isBundledWebView: bridge?.bundledWebView ?? true,
         nativeVersionName: bridge?.versionName ?? CURRENT_APP_VERSION,
         nativeVersionCode: bridge?.versionCode ?? CURRENT_APP_BUILD,
         packageName: bridge?.packageName ?? 'com.aistudio.auditpro.kxmfzq',
-        storeUrl: `https://play.google.com/store/apps/details?id=${bridge?.packageName ?? 'com.aistudio.auditpro.kxmfzq'}`,
-        honestLimitationFa:
-          'بسته داخلی APK اندروید با پاک‌سازی کش WebView ارتقا نمی‌یابد. ارتقای نسخه بومی فقط از طریق فروشگاه Google Play (Play Core) یا نصب تأییدشده توسط کاربر از بسته رسمی امضاشده انجام می‌شود.',
+        storeUrl: hasVerifiedStore ? this.verifiedStoreUrl : null,
+        remotePointerUrl,
+        honestLimitationFa: hasVerifiedStore
+          ? 'بسته داخلی APK اندروید با پاک‌سازی کش WebView ارتقا نمی‌یابد. ارتقا فقط از طریق کانال رسمی تأییدشده فروشگاه انجام می‌شود.'
+          : 'بسته داخلی APK اندروید از طریق کش WebView ارتقا نمی‌یابد و شناسه فروشگاه Google Play هنوز ثبت نشده است؛ برای دریافت نسخه جدید، APK رسمی امضاشده را نصب کنید.',
       };
     }
 
     if (this.platform === 'ios') {
+      const hasVerifiedStore = Boolean(this.verifiedStoreUrl && isAllowedReleaseUrl(this.verifiedStoreUrl));
       return {
         platform: 'ios',
         supportsWebSwUpdates: false,
         supportsInAppBinaryInstall: false,
-        supportsStoreDeepLink: true,
+        supportsStoreDeepLink: hasVerifiedStore,
         isBundledWebView: true,
         nativeVersionName: CURRENT_APP_VERSION,
         nativeVersionCode: CURRENT_APP_BUILD,
         packageName: 'ir.minadental.app',
-        storeUrl: 'https://apps.apple.com/',
-        honestLimitationFa:
-          'طبق قوانین App Store (بند 2.5.2)، ارتقای نسخه بومی iOS/iPadOS فقط از طریق App Store یا TestFlight انجام می‌شود و نصب خاموش IPA پشتیبانی نمی‌شود.',
+        storeUrl: hasVerifiedStore ? this.verifiedStoreUrl : null,
+        remotePointerUrl,
+        honestLimitationFa: hasVerifiedStore
+          ? 'طبق قوانین App Store (بند 2.5.2)، ارتقای نسخه بومی iOS/iPadOS فقط از طریق App Store یا TestFlight انجام می‌شود.'
+          : 'طبق قوانین App Store (بند 2.5.2)، نصب خاموش IPA مجاز نیست و لینک اختصاصی App Store/TestFlight هنوز پیکربندی نشده است.',
       };
     }
 
@@ -148,6 +195,7 @@ export class NativePlatformUpdateAdapter implements PlatformUpdateAdapter {
       nativeVersionCode: CURRENT_APP_BUILD,
       packageName: null,
       storeUrl: null,
+      remotePointerUrl,
       honestLimitationFa:
         'این پلتفرم کانال نصب بومی امضاشده فعال ندارد و وضعیت نصب هرگز به‌صورت نمایشی تغییر داده نمی‌شود.',
     };
@@ -167,11 +215,11 @@ export class NativePlatformUpdateAdapter implements PlatformUpdateAdapter {
   }
 
   public async stageAndVerify(): Promise<StageUpdateResult> {
-    // Native bundled binaries cannot stage web SW assets to replace APK/IPA binaries
     return {
       ok: false,
       verifiedAssetsCount: 0,
       waitingWorkerBuildId: null,
+      workerVerified: false,
       errorCode: 'NATIVE_UPDATE_REQUIRED',
       detail: 'Native binary update must be installed via official store or signed platform installer',
     };

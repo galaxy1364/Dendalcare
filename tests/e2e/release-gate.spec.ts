@@ -178,34 +178,52 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     expect(bodyText.length).toBeGreaterThan(0);
   });
 
-  test('V7 authoritative release-pointer.json & release-manifest.json match runtime build without fake install mutation', async ({ page }) => {
+  test('V7/V8 authoritative pointers, immutable manifest, boot milestones & independent #boot-error container verified', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
 
-    const v7Check = await page.evaluate(async () => {
+    const v8Check = await page.evaluate(async () => {
       const pointerRes = await fetch('./release-pointer.json', { cache: 'no-store' });
       const pointer = await pointerRes.json();
+      const androidPtrRes = await fetch('./android-release-pointer.json', { cache: 'no-store' });
+      const iosPtrRes = await fetch('./ios-release-pointer.json', { cache: 'no-store' });
       const manifestRes = await fetch(pointer.manifestUrl || './release-manifest.json', { cache: 'no-store' });
       const manifest = await manifestRes.json();
-      const installedLedgerRaw = localStorage.getItem('minadental_v7_installed_release');
+      const bootErrEl = document.getElementById('boot-error');
+      const insideSplash = Boolean(bootErrEl && bootErrEl.closest('#app-splash'));
       return {
         pointerStatus: pointerRes.status,
+        androidPtrStatus: androidPtrRes.status,
+        iosPtrStatus: iosPtrRes.status,
         manifestStatus: manifestRes.status,
         runtimeBuildId: window.__minaBuildId,
+        runtimeDigest: window.__minaContentDigest,
         pointerReleaseId: pointer.currentReleaseId,
         manifestReleaseId: manifest.releaseId,
+        manifestDigest: manifest.contentDigest,
         manifestSchema: manifest.schemaVersion,
         assetCount: Array.isArray(manifest.assets) ? manifest.assets.length : 0,
-        installedLedgerRaw,
+        watchdogCleared: window.__minaBootWatchdogTimer == null,
+        milestones: window.__minaBootMilestones || {},
+        bootErrorExists: Boolean(bootErrEl),
+        bootErrorInsideSplash: insideSplash,
       };
     });
 
-    expect(v7Check.pointerStatus).toBe(200);
-    expect(v7Check.manifestStatus).toBe(200);
-    expect(v7Check.manifestSchema).toBe(2);
-    expect(v7Check.pointerReleaseId).toBe(v7Check.runtimeBuildId);
-    expect(v7Check.manifestReleaseId).toBe(v7Check.runtimeBuildId);
-    expect(v7Check.assetCount).toBeGreaterThan(0);
+    expect(v8Check.pointerStatus).toBe(200);
+    expect(v8Check.androidPtrStatus).toBe(200);
+    expect(v8Check.iosPtrStatus).toBe(200);
+    expect(v8Check.manifestStatus).toBe(200);
+    expect(v8Check.manifestSchema).toBe(2);
+    expect(v8Check.pointerReleaseId).toBe(v8Check.runtimeBuildId);
+    expect(v8Check.manifestReleaseId).toBe(v8Check.runtimeBuildId);
+    expect(v8Check.manifestDigest).toBe(v8Check.runtimeDigest);
+    expect(v8Check.assetCount).toBeGreaterThan(0);
+    expect(v8Check.watchdogCleared).toBe(true);
+    expect(v8Check.bootErrorExists).toBe(true);
+    expect(v8Check.bootErrorInsideSplash).toBe(false);
+    expect(Boolean(v8Check.milestones.moduleEvaluatedAt)).toBe(true);
+    expect(Boolean(v8Check.milestones.shellCommittedAt)).toBe(true);
   });
 });

@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#087C76" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0A141E" media="(prefers-color-scheme: dark)" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="مینادنتال" />
+  <meta name="application-name" content="مینادنتال" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="description" content="مینادنتال — پلتفرم یکپارچه مدیریت کلینیک دندانپزشکی با طراحی سیستماتیک، تقویم شمسی و گزارش‌گیری دقیق مالی" />
+  <meta name="minadental-build-id" content="v4.9.6-e18fc3352b" />
+  <meta name="minadental-release-seq" content="65" />
+  <meta name="minadental-semver" content="4.9.6" />
+  <meta name="minadental-content-digest" content="e18fc3352b6a463ea2b2686f2de9e8d25eb6c312208cc636ad5d54b9aa95018e" />
+  <title>مینادنتال | مدیریت هوشمند کلینیک دندانپزشکی</title>
+
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon-BZotrQQN.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192-CqpOMAYj.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon-kF0Qnlx1.png" />
+  <link rel="manifest" href="./assets/manifest-B4Cn3fX3.json" crossorigin="use-credentials" />
+
+  <!-- Self-hosted Vazirmatn Persian font preloads for instant offline-ready RTL rendering -->
+  <link rel="preload" href="./fonts/vazirmatn-arabic.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./fonts/vazirmatn-latin.woff2" as="font" type="font/woff2" crossorigin />
+
+  <style>html,body,#root{color:#14283b;-webkit-tap-highlight-color:transparent;-webkit-font-smoothing:antialiased;background-color:#f4f7f9;width:100%;min-height:100%;margin:0;padding:0;font-family:Vazirmatn,SF Pro Display,IRANSansX,system-ui,-apple-system,sans-serif}@media (prefers-color-scheme:dark){html:not([data-theme=light]),html:not([data-theme=light]) body,html:not([data-theme=light]) #root{color:#f1f5f9;background-color:#0a141e}}html[data-theme=dark],html[data-theme=dark] body,html[data-theme=dark] #root{color:#f1f5f9;background-color:#0a141e}#app-splash{z-index:9998;background:#f4f7f9;flex-direction:column;justify-content:center;align-items:center;gap:14px;transition:opacity .25s;display:flex;position:fixed;inset:0}html[data-theme=dark] #app-splash{background:#0a141e}.splash-logo{background:#fff;border:1px solid #d8e2ea;border-radius:22px;width:78px;height:78px;overflow:hidden;box-shadow:0 12px 32px #087c762e}.splash-logo img{-o-object-fit:cover;object-fit:cover;width:100%;height:100%}.splash-title{color:#14283b;font-size:20px;font-weight:800}html[data-theme=dark] .splash-title{color:#f1f5f9}.splash-sub{color:#526779;font-size:12px;font-weight:600}html[data-theme=dark] .splash-sub{color:#9fb1c1}.splash-bar{background:#d8e2ea;border-radius:99px;width:152px;height:4px;overflow:hidden}.splash-fill{background:#087c76;border-radius:99px;width:42%;height:100%;animation:1.1s ease-in-out infinite splashSlide}@keyframes splashSlide{0%{transform:translate(120%)}50%{transform:translate(0%)}to{transform:translate(-140%)}}#boot-error{left:16px;right:16px;bottom:max(20px, env(safe-area-inset-bottom,20px));color:#ad293c;text-align:center;z-index:10000;background:#fff1f2;border:1px solid #fecdd3;border-radius:18px;max-width:360px;margin:0 auto;padding:16px;font-size:12px;font-weight:700;line-height:1.75;display:none;position:fixed;box-shadow:0 18px 40px #14283b2e}html[data-theme=dark] #boot-error{color:#fda4af;background:#2c1219;border-color:#7f1d1d}#boot-error-meta{color:#475569;word-break:break-word;direction:ltr;background:#ffffffb8;border-radius:10px;margin-top:8px;padding:6px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px}html[data-theme=dark] #boot-error-meta{color:#cbd5e1;background:#0f172aa6}.boot-actions{flex-wrap:wrap;justify-content:center;gap:8px;margin-top:12px;display:flex}#boot-simple-reload-btn{color:#14283b;cursor:pointer;background:#fff;border:1px solid #cbd5e1;border-radius:12px;min-height:44px;padding:10px 14px;font-family:inherit;font-size:12px;font-weight:700}#boot-retry-btn{color:#fff;cursor:pointer;background:#087c76;border:none;border-radius:12px;min-height:44px;padding:10px 16px;font-family:inherit;font-size:12px;font-weight:700}</style>
+  <script type="module" crossorigin src="./assets/index-B2hHeHW1.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/jsx-dev-runtime-BZeDG80o.js">
+  <link rel="modulepreload" crossorigin href="./assets/anchor-C2OgeD3S.js">
+  <link rel="modulepreload" crossorigin href="./assets/bell-ring-BnJv2wVW.js">
+  <link rel="modulepreload" crossorigin href="./assets/calendar-days-CLaANteH.js">
+  <link rel="modulepreload" crossorigin href="./assets/flask-conical-Cpfn9vTF.js">
+  <link rel="modulepreload" crossorigin href="./assets/message-square-D_X9c2WP.js">
+  <link rel="modulepreload" crossorigin href="./assets/package-DJUqTYhE.js">
+  <link rel="modulepreload" crossorigin href="./assets/stethoscope-R9zyOsU8.js">
+  <link rel="modulepreload" crossorigin href="./assets/user-cog-C9yBuavf.js">
+  <link rel="modulepreload" crossorigin href="./assets/users-DKAdVsGH.js">
+  <link rel="modulepreload" crossorigin href="./assets/wallet-C4mOLApf.js">
+  <link rel="modulepreload" crossorigin href="./assets/doctorShareEngine-_9oxTWz2.js">
+  <link rel="modulepreload" crossorigin href="./assets/appearance-qZaM8eTV.js">
+  <link rel="modulepreload" crossorigin href="./assets/updates-C-At0qad.js">
+  <link rel="stylesheet" crossorigin href="./assets/index-GiHbXGuz.css">
+</head>
+
+<body>
+  <div id="app-splash" aria-label="در حال راه‌اندازی مینادنتال">
+    <div class="splash-logo">
+      <img src="./assets/icon-192-CqpOMAYj.png" alt="مینادنتال" />
+    </div>
+    <div class="splash-title">مینادنتال</div>
+    <div class="splash-sub">در حال راه‌اندازی سامانه کلینیک...</div>
+    <div class="splash-bar"><div class="splash-fill"></div></div>
+  </div>
+
+  <!-- V8.1: Independent Recovery UI Container outside both #app-splash and #root -->
+  <div id="boot-error" role="alert" aria-live="assertive" data-testid="boot_recovery_overlay">
+    <div>بارگذاری رابط کاربری کامل نشد. داده‌های ذخیره شده شما در دستگاه کاملاً محفوظ هستند.</div>
+    <div id="boot-error-meta">CODE=BOOT_PENDING</div>
+    <div class="boot-actions">
+      <button id="boot-simple-reload-btn" type="button">تلاش مجدد</button>
+      <button id="boot-retry-btn" type="button">پاک‌سازی کش پوسته و بارگذاری مجدد</button>
+    </div>
+  </div>
+
+  <div id="root"></div>
+
+  <!-- V8.1 Incident P0: Pre-React error/unhandledrejection listeners & cancellable watchdog MUST attach BEFORE entry module -->
+  <script>
+    (function () {
+      window.__deferredInstallPrompt = null;
+      window.__minaAppMounted = false;
+      window.__minaBootState = 'BOOTING';
+      window.__minaBootMilestones = {
+        htmlParsedAt: Date.now(),
+        moduleEvaluatedAt: null,
+        shellCommittedAt: null,
+        authResolvedAt: null,
+        routeRenderedAt: null,
+        readyAt: null,
+      };
+
+      var metaBuild = document.querySelector('meta[name="minadental-build-id"]');
+      var buildId = (metaBuild && metaBuild.getAttribute('content')) || 'dev-local';
+      if (buildId.indexOf('__MINA_') === 0) buildId = 'dev-local';
+      window.__minaBuildId = buildId;
+
+      var metaSeq = document.querySelector('meta[name="minadental-release-seq"]');
+      var releaseSeq = (metaSeq && metaSeq.getAttribute('content')) || '0';
+      if (releaseSeq.indexOf('__MINA_') === 0) releaseSeq = '0';
+
+      var metaDigest = document.querySelector('meta[name="minadental-content-digest"]');
+      var contentDigest = (metaDigest && metaDigest.getAttribute('content')) || '';
+      if (contentDigest.indexOf('__MINA_') === 0) contentDigest = '';
+      window.__minaContentDigest = contentDigest;
+
+      function makeBootCorrelationId() {
+        return 'boot_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      }
+
+      function sanitizeBootText(raw) {
+        return String(raw || '')
+          .replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, 'Bearer [REDACTED]')
+          .replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, '[JWT_REDACTED]')
+          .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[EMAIL_REDACTED]')
+          .replace(/\b09\d{9}\b/g, '[PHONE_REDACTED]')
+          .slice(0, 140);
+      }
+
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__deferredInstallPrompt = e;
+      });
+      window.addEventListener('appinstalled', function () {
+        window.__deferredInstallPrompt = null;
+        window.dispatchEvent(new CustomEvent('minadental:installed'));
+      });
+
+      // Pre-hydrate theme mode before first paint to prevent light/dark flash
+      try {
+        var savedMode = localStorage.getItem('minadental_theme_mode');
+        if (savedMode === 'dark' || savedMode === 'light') {
+          document.documentElement.setAttribute('data-theme', savedMode);
+          if (savedMode === 'dark') document.documentElement.classList.add('dark');
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+
+      function showBootFallback(code, detail) {
+        if (window.__minaAppMounted && window.__minaBootState !== 'BOOTING' && code === 'BOOT_WATCHDOG_TIMEOUT') return;
+        var el = document.getElementById('boot-error');
+        var metaEl = document.getElementById('boot-error-meta');
+        var cid = makeBootCorrelationId();
+        var safeCode = code || 'BOOT_STARTUP_FAILED';
+        var safeDetail = sanitizeBootText(detail || '');
+        if (metaEl) {
+          metaEl.textContent =
+            'CODE=' + safeCode +
+            ' | ID=' + cid +
+            ' | BUILD=' + buildId +
+            ' (#' + releaseSeq + ')' +
+            (safeDetail ? ' | ' + safeDetail : '');
+        }
+        if (el) el.style.display = 'block';
+      }
+      window.__minaShowBootRecovery = showBootFallback;
+
+      var simpleReloadBtn = document.getElementById('boot-simple-reload-btn');
+      if (simpleReloadBtn) {
+        simpleReloadBtn.addEventListener('click', function () {
+          window.location.reload();
+        });
+      }
+
+      // Safe recovery: ONLY clear minadental-* CacheStorage & unregister SW.
+      // NEVER touch IndexedDB, localStorage patient data, auth tokens, or offline mutation queue.
+      var retryBtn = document.getElementById('boot-retry-btn');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', function () {
+          var cleanupTasks = [];
+          try {
+            if ('serviceWorker' in navigator) {
+              cleanupTasks.push(
+                navigator.serviceWorker.getRegistrations().then(function (regs) {
+                  return Promise.all(regs.map(function (r) { return r.unregister(); }));
+                })
+              );
+            }
+            if ('caches' in window) {
+              cleanupTasks.push(
+                caches.keys().then(function (keys) {
+                  return Promise.all(
+                    keys
+                      .filter(function (k) { return k.indexOf('minadental-') === 0; })
+                      .map(function (k) { return caches.delete(k); })
+                  );
+                })
+              );
+            }
+          } catch (e) {}
+          Promise.allSettled(cleanupTasks).finally(function () {
+            window.location.reload();
+          });
+        });
+      }
+
+      window.addEventListener('error', function (ev) {
+        if (window.__minaAppMounted) return;
+        if (ev && ev.target && (ev.target.tagName === 'SCRIPT' || ev.target.tagName === 'LINK')) {
+          var src = ev.target.src || ev.target.href || ev.target.tagName;
+          showBootFallback('ASSET_LOAD_ERROR', src);
+          return;
+        }
+        if (ev && (ev.message || ev.error)) {
+          showBootFallback('BOOT_RUNTIME_ERROR', ev.message || (ev.error && ev.error.message));
+        }
+      }, true);
+
+      window.addEventListener('unhandledrejection', function (ev) {
+        if (!window.__minaAppMounted) {
+          var reason = ev && ev.reason ? (ev.reason.message || String(ev.reason)) : 'Promise rejected';
+          showBootFallback('BOOT_UNHANDLED_REJECTION', reason);
+        }
+      });
+
+      // Cancellable 12s watchdog (cancelled immediately by markShellCommitted() on valid React commit)
+      window.__minaBootWatchdogTimer = setTimeout(function () {
+        var ms = window.__minaBootMilestones || {};
+        var stageHint = ms.moduleEvaluatedAt ? 'module_evaluated_no_commit' : 'entry_module_not_loaded';
+        showBootFallback('BOOT_WATCHDOG_TIMEOUT', stageHint);
+      }, 12000);
+
+      window.__minaCancelBootWatchdog = function () {
+        if (window.__minaBootWatchdogTimer) {
+          clearTimeout(window.__minaBootWatchdogTimer);
+          window.__minaBootWatchdogTimer = null;
+        }
+      };
+
+      // Controlled Service Worker lifecycle (zero abrupt reload loops)
+      var isNativeWebView =
+        window.location.protocol === 'file:' ||
+        window.location.hostname === 'appassets.androidplatform.net' ||
+        (window.location.hostname === '127.0.0.1' && window.location.port === '8765') ||
+        /MinaDentalAndroid/i.test(navigator.userAgent || '');
+
+      if ('serviceWorker' in navigator && !isNativeWebView && window.location.protocol.indexOf('http') === 0) {
+        window.addEventListener('load', function () {
+          // V7/V8: NEVER force an abrupt reload on raw controllerchange outside UpdateCoordinator safe-point.
+          navigator.serviceWorker.addEventListener('controllerchange', function () {
+            window.dispatchEvent(
+              new CustomEvent('minadental:sw-controllerchange', {
+                detail: { buildId: buildId },
+              })
+            );
+          });
+
+          navigator.serviceWorker.addEventListener('message', function (event) {
+            if (event && event.data && event.data.type === 'SW_UPDATE_READY') {
+              window.dispatchEvent(
+                new CustomEvent('minadental:sw-update-available', {
+                  detail: { buildId: event.data.buildId || buildId },
+                })
+              );
+            }
+          });
+
+          navigator.serviceWorker
+            .register('./sw.js', { updateViaCache: 'none' })
+            .then(function (reg) {
+              if (reg.waiting) {
+                window.dispatchEvent(
+                  new CustomEvent('minadental:sw-update-available', {
+                    detail: { buildId: buildId, registration: reg },
+                  })
+                );
+              }
+              reg.addEventListener('updatefound', function () {
+                var installing = reg.installing;
+                if (!installing) return;
+                installing.addEventListener('statechange', function () {
+                  if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                    window.dispatchEvent(
+                      new CustomEvent('minadental:sw-update-available', {
+                        detail: { buildId: buildId, registration: reg },
+                      })
+                    );
+                  }
+                });
+              });
+            })
+            .catch(function () {});
+        });
+      }
+    })();
+  </script>
+
+</body>
+
+</html>

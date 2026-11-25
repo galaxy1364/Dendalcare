@@ -795,10 +795,18 @@ function ClinicSettingsTab({
           </div>
         )}
 
-        {/* Candidate Release Notes */}
+        {/* Candidate Release Notes & Trust Model */}
         {updateSnap.candidate?.manifest.releaseNotes && (
-          <div className="p-2.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-[11px] text-indigo-950 font-semibold">
-            یادداشت نسخه آماده: {updateSnap.candidate.manifest.releaseNotes}
+          <div className="p-2.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-[11px] text-indigo-950 font-semibold space-y-1">
+            <div>یادداشت نسخه آماده: {updateSnap.candidate.manifest.releaseNotes}</div>
+            <div className="text-[10px] font-mono text-indigo-700">
+              وضعیت امضا:{' '}
+              {updateSnap.candidate.signatureStatus === 'verified'
+                ? 'امضای دیجیتال ECDSA تأیید شد'
+                : updateSnap.candidate.signatureStatus === 'unsigned_web_origin_only'
+                ? 'تأیید مبدأ HTTPS + SHA-256 (بدون کلید امضای پین‌شده)'
+                : 'نامعتبر'}
+            </div>
           </div>
         )}
 
@@ -822,12 +830,15 @@ function ClinicSettingsTab({
           {updateSnap.state === 'NATIVE_STORE_REQUIRED' ? (
             <button
               type="button"
+              disabled={!updateSnap.capabilities.supportsStoreDeepLink}
               onClick={() => updateCoordinator.openNativeStoreAction()}
               data-testid="native_store_update_btn"
-              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm active:scale-95 transition-all"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm active:scale-95 transition-all disabled:opacity-50"
             >
               <Download size={14} />
-              به‌روزرسانی از فروشگاه رسمی
+              {updateSnap.capabilities.supportsStoreDeepLink
+                ? 'به‌روزرسانی از فروشگاه رسمی'
+                : 'نشانی فروشگاه رسمی تنظیم نشده است'}
             </button>
           ) : loadActiveUser().role === 'manager' ? (
             <button
@@ -867,10 +878,24 @@ function ClinicSettingsTab({
             {updateSnap.state === 'ROLLBACK_PENDING' && (
               <button
                 type="button"
-                onClick={() => updateCoordinator.acknowledgeRollbackToLastKnownGood()}
+                data-testid="acknowledge_rollback_btn"
+                onClick={async () => {
+                  const res = await updateCoordinator.acknowledgeRollbackToLastKnownGood();
+                  if (res.state === 'ROLLED_BACK') {
+                    setUpdateMessage({
+                      type: 'info',
+                      text: `بازگشت به نسخه سالم تأییدشده (${res.installed.releaseId}) با موفقیت ثبت شد.`,
+                    });
+                  } else if (res.error?.messageFa) {
+                    setUpdateMessage({
+                      type: 'error',
+                      text: res.error.messageFa,
+                    });
+                  }
+                }}
                 className="mt-1 px-2.5 py-1 rounded-lg bg-rose-700 text-white text-[11px] font-bold"
               >
-                تأیید ادامه کار با نسخه سالم قبلی
+                تأیید و راستی‌آزمایی ادامه کار با نسخه سالم قبلی
               </button>
             )}
           </div>

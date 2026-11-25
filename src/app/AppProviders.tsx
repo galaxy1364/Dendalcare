@@ -289,6 +289,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [zeroLossTick, setZeroLossTick] = useState(0);
   const [forceExpandReminderKey, setForceExpandReminderKey] = useState(0);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastToastedInstalledReleaseIdRef = useRef<string | null>(null);
 
   const showSyncToast = useCallback((msg: string, ms = 3200) => {
     setLiveSyncToast(msg);
@@ -331,10 +332,15 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
     purgeExpiredVaultMirrors().catch(() => {});
 
-    // V7 Single UpdateCoordinator: starts strictly AFTER post-commit shell handshake
+    // V7/V8 Single UpdateCoordinator: starts strictly AFTER post-commit shell handshake
     const unsubUpdate = updateCoordinator.subscribe((snap) => {
       setUpdateSnapshot(snap);
-      if (snap.state === 'INSTALLED') {
+      if (
+        snap.state === 'INSTALLED' &&
+        snap.installed.releaseId &&
+        lastToastedInstalledReleaseIdRef.current !== snap.installed.releaseId
+      ) {
+        lastToastedInstalledReleaseIdRef.current = snap.installed.releaseId;
         HapticEngine.success();
         showSyncToast(
           `نسخه v${snap.installed.semver} (${snap.installed.releaseId}) پس از تأیید بوت با موفقیت فعال شد`,

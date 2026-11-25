@@ -10,6 +10,8 @@ export interface StageUpdateResult {
   ok: boolean;
   verifiedAssetsCount: number;
   waitingWorkerBuildId: string | null;
+  workerVerified?: boolean;
+  stagingStrategy?: 'service_worker' | 'browser_navigation';
   errorCode?: UpdateErrorCode;
   detail?: string;
 }
@@ -25,12 +27,15 @@ export interface BootHandshakeResult {
   verified: boolean;
   runtimeBuildId: string;
   workerBuildId: string | null;
+  routeRendered?: boolean;
+  embeddedMatch?: boolean;
   reason?: string;
 }
 
 export interface PlatformUpdateAdapter {
   getCapabilities(): PlatformUpdateCapabilities;
   getCurrentRuntimeIdentity(): RuntimeReleaseIdentity;
+  getDefaultPointerUrl?(): string;
   stageAndVerify(input: {
     manifest: AuthoritativeReleaseManifest;
     baseUrl: string;
@@ -41,8 +46,21 @@ export interface PlatformUpdateAdapter {
     targetReleaseId: string;
     returnUrl: string;
     allowReload: boolean;
+    beforeReload?: () => void;
   }): Promise<ActivateUpdateResult>;
-  verifyPostBootHandshake(expectedReleaseId: string): Promise<BootHandshakeResult>;
-  cleanupObsoleteCaches(activeReleaseId: string): Promise<void>;
+  verifyPostBootHandshake(
+    expectedReleaseId: string,
+    options?: {
+      expectedContentDigest?: string | null;
+      expectedSemver?: string | null;
+      requireWorkerMatch?: boolean;
+      requireRouteRendered?: boolean;
+    }
+  ): Promise<BootHandshakeResult>;
+  cleanupObsoleteCaches(
+    activeReleaseId: string,
+    options?: { lastKnownGoodReleaseId?: string | null }
+  ): Promise<void>;
+  reportClientReleaseLease?(tabId: string, buildId: string): void;
   openStoreAction?(manifest: AuthoritativeReleaseManifest): void;
 }

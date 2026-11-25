@@ -1,0 +1,350 @@
+#!/usr/bin/env node
+/**
+ * MinaDental V8 CI Release Assurance Gate
+ *
+ * Provides deterministic, shell-injection-safe release pipeline gates:
+ * 1. --compute-sequence: Strictly parses integer release sequence and checks remote pointer monotonicity.
+ * 2. --verify-local <distDir> [--require-ci-origin]: Verifies built dist/ HTML, meta tags, pointers,
+ *    complete immutable releases/<releaseId>/ directory, and SHA-256 + byte sizes of every asset.
+ * 3. --compare <distDirA> <distDirB>: Double-build determinism proof (identical releaseId, contentDigest, assets).
+ * 4. --verify-remote <baseUrl> [--expected-release-id <id>]: Real live HTTP(S) post-deploy health gate
+ *    checking index.html (no raw src/main.tsx!), pointers, versioned manifest, sw.js, MIME types, sizes, and SHA-256.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import assert from 'node:assert/strict';
+
+const BUILD_ID_RE = /^v\d+\.\d+\.\d+-[0-9a-f]{10}$/;
+const SHA256_RE = /^[a-f0-9]{64}$/;
+
+export function parseStrictPositiveInt(raw, label = 'MINA_RELEASE_SEQUENCE') {
+  const trimmed = String(raw ?? '').trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(`${label} must be a strict positive integer, got: ${JSON.stringify(trimmed)}`);
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`${label} must be a safe positive integer, got: ${parsed}`);
+  }
+  return parsed;
+}
+
+export async function computeMonotonicSequence(options = {}) {
+  const baseSeq = parseStrictPositiveInt(options.baseSequence ?? 65, 'baseSequence');
+  const runNumber = options.runNumber ? parseStrictPositiveInt(options.runNumber, 'GITHUB_RUN_NUMBER') : 1;
+  const overrideRaw = String(options.overrideInput ?? '').trim();
+  let remoteSequence = 0;
+
+  if (options.remotePointerUrl) {
+    try {
+      const res = await fetch(options.remotePointerUrl, {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (res.ok) {
+        const pointer = await res.json();
+        if (typeof pointer?.releaseSequence === 'number' && Number.isSafeInteger(pointer.releaseSequence)) {
+          remoteSequence = pointer.releaseSequence;
+        }
+      }
+    } catch {
+      // Remote pointer may not exist on first deployment; handled transparently below
+    }
+  }
+
+  let candidate;
+  if (overrideRaw) {
+    candidate = parseStrictPositiveInt(overrideRaw, 'release_sequence');
+    if (remoteSequence > 0 && candidate <= remoteSequence) {
+      throw new Error(
+        `Non-monotonic release_sequence override rejected: requested #${candidate} <= deployed #${remoteSequence}`
+      );
+    }
+  } else {
+    candidate = Math.max(baseSeq + runNumber, remoteSequence + 1);
+  }
+
+  return {
+    sequence: candidate,
+    remoteSequence,
+    usedOverride: Boolean(overrideRaw),
+  };
+}
+
+function assertValidMime(pathname, contentType) {
+  const lowerPath = String(pathname || '').toLowerCase();
+  const ct = String(contentType || '').toLowerCase();
+  if (lowerPath.endsWith('.js') || lowerPath.endsWith('.mjs')) {
+    assert.ok(ct.includes('javascript'), `Invalid JS MIME for ${pathname}: ${ct}`);
+    assert.ok(!ct.includes('text/html'), `HTML MIME returned for JS asset ${pathname}`);
+  } else if (lowerPath.endsWith('.css')) {
+    assert.ok(ct.includes('text/css'), `Invalid CSS MIME for ${pathname}: ${ct}`);
+  } else if (lowerPath.endsWith('.json') || lowerPath.endsWith('.webmanifest')) {
+    assert.ok(ct.includes('json'), `Invalid JSON MIME for ${pathname}: ${ct}`);
+  } else if (lowerPath.endsWith('.html') || lowerPath.endsWith('/')) {
+    assert.ok(ct.includes('text/html'), `Invalid HTML MIME for ${pathname}: ${ct}`);
+  }
+}
+
+export function verifyLocalReleaseDirectory(distDir, options = {}) {
+  const absDist = path.resolve(distDir);
+  assert.ok(fs.existsSync(absDist), `Release directory missing: ${absDist}`);
+
+  const indexPath = path.join(absDist, 'index.html');
+  assert.ok(fs.existsSync(indexPath), 'dist/index.html missing');
+  const html = fs.readFileSync(indexPath, 'utf8');
+
+  assert.ok(!html.includes('src/main.tsx'), 'Built index.html must NEVER reference raw src/main.tsx');
+  assert.ok(!html.includes('__MINA_BUILD_ID'), 'Unresolved __MINA_BUILD_ID in dist/index.html');
+  assert.ok(!html.includes('__MINA_RELEASE_SEQ'), 'Unresolved __MINA_RELEASE_SEQ in dist/index.html');
+  assert.ok(!html.includes('__MINA_SEMVER'), 'Unresolved __MINA_SEMVER in dist/index.html');
+  assert.ok(!html.includes('__MINA_CONTENT_DIGEST'), 'Unresolved __MINA_CONTENT_DIGEST in dist/index.html');
+
+  const buildId = html.match(/<meta\s+name="minadental-build-id"\s+content="([^"]+)"/i)?.[1];
+  const seqStr = html.match(/<meta\s+name="minadental-release-seq"\s+content="([^"]+)"/i)?.[1];
+  const semver = html.match(/<meta\s+name="minadental-semver"\s+content="([^"]+)"/i)?.[1];
+  const contentDigest = html.match(/<meta\s+name="minadental-content-digest"\s+content="([^"]+)"/i)?.[1];
+
+  assert.ok(buildId && BUILD_ID_RE.test(buildId), `Invalid minadental-build-id: ${buildId}`);
+  const releaseSequence = parseStrictPositiveInt(seqStr, 'minadental-release-seq');
+  assert.ok(semver && /^\d+\.\d+\.\d+$/.test(semver), `Invalid minadental-semver: ${semver}`);
+  assert.ok(contentDigest && SHA256_RE.test(contentDigest), `Invalid minadental-content-digest: ${contentDigest}`);
+  assert.equal(buildId, `v${semver}-${contentDigest.slice(0, 10)}`, 'buildId must derive from semver + contentDigest');
+
+  // Verify web, android, and ios pointers exist and are coherent
+  const pointerFiles = [
+    ['release-pointer.json', 'web'],
+    ['android-release-pointer.json', 'android'],
+    ['ios-release-pointer.json', 'ios'],
+  ];
+
+  let webPointer = null;
+  for (const [fileName, expectedPlatform] of pointerFiles) {
+    const ptrPath = path.join(absDist, fileName);
+    assert.ok(fs.existsSync(ptrPath), `Missing platform pointer: ${fileName}`);
+    const ptr = JSON.parse(fs.readFileSync(ptrPath, 'utf8'));
+    assert.equal(ptr.schemaVersion, 2, `${fileName} schemaVersion must be 2`);
+    assert.equal(ptr.platform, expectedPlatform, `${fileName} platform mismatch`);
+    assert.equal(ptr.currentReleaseId, buildId, `${fileName} currentReleaseId mismatch`);
+    assert.equal(ptr.releaseSequence, releaseSequence, `${fileName} releaseSequence mismatch`);
+    assert.equal(
+      ptr.manifestUrl,
+      `./releases/${buildId}/release-manifest.json`,
+      `${fileName} must point to immutable versioned release manifest`
+    );
+    if (fileName === 'release-pointer.json') webPointer = ptr;
+  }
+
+  // Verify COMPLETE immutable release directory dist/releases/<releaseId>/
+  const relDir = path.join(absDist, 'releases', buildId);
+  const relManifestPath = path.join(relDir, 'release-manifest.json');
+  assert.ok(fs.existsSync(relManifestPath), `Immutable release manifest missing: ${relManifestPath}`);
+  const manifest = JSON.parse(fs.readFileSync(relManifestPath, 'utf8'));
+  assert.equal(manifest.schemaVersion, 2);
+  assert.equal(manifest.releaseId, buildId);
+  assert.equal(manifest.releaseSequence, releaseSequence);
+  assert.equal(manifest.semver, semver);
+  assert.equal(manifest.contentDigest, contentDigest);
+  if (options.requireCiOrigin) {
+    assert.equal(
+      manifest.origin,
+      'ci_pipeline',
+      `CI release gate forbids origin=${manifest.origin} (must set MINA_RELEASE_SEQUENCE)`
+    );
+  }
+  assert.ok(Array.isArray(manifest.assets) && manifest.assets.length > 0, 'Manifest assets list empty');
+
+  // Verify EVERY manifest asset exists and matches exact byte size + SHA-256 in BOTH root dist/ AND immutable releases/<id>/
+  for (const asset of manifest.assets) {
+    const cleanRel = String(asset.path || '').replace(/^\.\//, '');
+    for (const [scopeName, baseDir] of [
+      ['dist', absDist],
+      [`releases/${buildId}`, relDir],
+    ]) {
+      const target = path.join(baseDir, cleanRel);
+      assert.ok(fs.existsSync(target), `[${scopeName}] Missing manifest asset: ${cleanRel}`);
+      const buf = fs.readFileSync(target);
+      assert.equal(buf.byteLength, asset.size, `[${scopeName}] Size mismatch for ${cleanRel}`);
+      const sha = crypto.createHash('sha256').update(buf).digest('hex');
+      assert.equal(sha, asset.sha256, `[${scopeName}] SHA-256 mismatch for ${cleanRel}`);
+    }
+  }
+
+  // Verify root release-manifest.json matches immutable versioned manifest byte-for-byte
+  const rootManifestPath = path.join(absDist, 'release-manifest.json');
+  assert.ok(fs.existsSync(rootManifestPath), 'Root release-manifest.json missing');
+  assert.equal(
+    fs.readFileSync(rootManifestPath, 'utf8'),
+    fs.readFileSync(relManifestPath, 'utf8'),
+    'Root release-manifest.json must match immutable versioned manifest'
+  );
+
+  return {
+    releaseId: buildId,
+    releaseSequence,
+    semver,
+    contentDigest,
+    origin: manifest.origin,
+    assetCount: manifest.assets.length,
+    manifestUrl: webPointer.manifestUrl,
+  };
+}
+
+export function compareReleaseDeterminism(dirA, dirB) {
+  const a = verifyLocalReleaseDirectory(dirA);
+  const b = verifyLocalReleaseDirectory(dirB);
+  assert.equal(a.releaseId, b.releaseId, `Non-deterministic releaseId: ${a.releaseId} vs ${b.releaseId}`);
+  assert.equal(
+    a.contentDigest,
+    b.contentDigest,
+    `Non-deterministic contentDigest: ${a.contentDigest} vs ${b.contentDigest}`
+  );
+
+  const mA = JSON.parse(fs.readFileSync(path.join(path.resolve(dirA), 'release-manifest.json'), 'utf8'));
+  const mB = JSON.parse(fs.readFileSync(path.join(path.resolve(dirB), 'release-manifest.json'), 'utf8'));
+  assert.deepEqual(mA.assets, mB.assets, 'Asset inventory or hashes differed across double build');
+  return a;
+}
+
+export async function verifyRemoteDeployment(baseUrl, options = {}) {
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+
+  // 1. Check root index.html (catches GitHub Pages branch-root raw TSX deployment incident!)
+  const indexRes = await fetch(normalizedBase, { cache: 'no-store' });
+  assert.equal(indexRes.status, 200, `Remote root HTML returned HTTP ${indexRes.status}`);
+  assertValidMime('/index.html', indexRes.headers.get('content-type'));
+  const indexHtml = await indexRes.text();
+  assert.ok(
+    !indexHtml.includes('src/main.tsx'),
+    'CRITICAL: Remote deployment is serving dev index.html with raw src/main.tsx! Set GitHub Pages source to GitHub Actions.'
+  );
+  assert.ok(!indexHtml.includes('__MINA_BUILD_ID'), 'Remote index.html contains unresolved __MINA_BUILD_ID');
+  assert.ok(!indexHtml.includes('__MINA_CONTENT_DIGEST'), 'Remote index.html contains unresolved __MINA_CONTENT_DIGEST');
+
+  const htmlBuildId = indexHtml.match(/<meta\s+name="minadental-build-id"\s+content="([^"]+)"/i)?.[1];
+  const htmlDigest = indexHtml.match(/<meta\s+name="minadental-content-digest"\s+content="([^"]+)"/i)?.[1];
+  assert.ok(htmlBuildId && BUILD_ID_RE.test(htmlBuildId), `Remote index.html missing valid buildId: ${htmlBuildId}`);
+  assert.ok(htmlDigest && SHA256_RE.test(htmlDigest), `Remote index.html missing valid contentDigest: ${htmlDigest}`);
+
+  if (options.expectedReleaseId) {
+    assert.equal(
+      htmlBuildId,
+      options.expectedReleaseId,
+      `Remote deployed buildId ${htmlBuildId} does not match expected ${options.expectedReleaseId}`
+    );
+  }
+
+  // 2. Check web, android, and ios pointers
+  for (const ptrFile of ['release-pointer.json', 'android-release-pointer.json', 'ios-release-pointer.json']) {
+    const ptrUrl = new URL(ptrFile, normalizedBase).toString();
+    const ptrRes = await fetch(ptrUrl, { cache: 'no-store' });
+    assert.equal(ptrRes.status, 200, `Remote ${ptrFile} returned HTTP ${ptrRes.status}`);
+    assertValidMime(ptrFile, ptrRes.headers.get('content-type'));
+    const ptr = await ptrRes.json();
+    assert.equal(ptr.currentReleaseId, htmlBuildId, `Remote ${ptrFile} releaseId mismatch`);
+  }
+
+  // 3. Fetch authoritative versioned manifest from release-pointer.json
+  const webPtrRes = await fetch(new URL('release-pointer.json', normalizedBase), { cache: 'no-store' });
+  const webPtr = await webPtrRes.json();
+  const manifestUrl = new URL(webPtr.manifestUrl, normalizedBase).toString();
+  const manifestRes = await fetch(manifestUrl, { cache: 'no-store' });
+  assert.equal(manifestRes.status, 200, `Remote versioned manifest returned HTTP ${manifestRes.status}`);
+  assertValidMime(manifestUrl, manifestRes.headers.get('content-type'));
+  const manifest = await manifestRes.json();
+  assert.equal(manifest.releaseId, htmlBuildId, 'Remote manifest releaseId mismatch');
+  assert.equal(manifest.contentDigest, htmlDigest, 'Remote manifest contentDigest mismatch');
+
+  // 4. Verify EVERY asset listed in remote manifest (HTTP 200 + MIME + exact byte size + exact SHA-256)
+  let verifiedAssets = 0;
+  for (const entry of manifest.assets) {
+    const assetUrl = new URL(entry.path, manifestUrl).toString();
+    const assetRes = await fetch(assetUrl, { cache: 'no-store' });
+    assert.equal(assetRes.status, 200, `Remote asset ${assetUrl} returned HTTP ${assetRes.status}`);
+    assertValidMime(new URL(assetUrl).pathname, assetRes.headers.get('content-type'));
+    const rawBuf = Buffer.from(await assetRes.arrayBuffer());
+    assert.equal(rawBuf.byteLength, entry.size, `Remote asset size mismatch for ${entry.path}`);
+    const sha = crypto.createHash('sha256').update(rawBuf).digest('hex');
+    assert.equal(sha, entry.sha256, `Remote asset SHA-256 mismatch for ${entry.path}`);
+    verifiedAssets += 1;
+  }
+
+  return {
+    baseUrl: normalizedBase,
+    releaseId: htmlBuildId,
+    releaseSequence: manifest.releaseSequence,
+    contentDigest: htmlDigest,
+    verifiedAssets,
+  };
+}
+
+async function runCli() {
+  const args = process.argv.slice(2);
+  const cmd = args[0];
+
+  if (cmd === '--compute-sequence') {
+    const remoteIdx = args.indexOf('--remote-pointer');
+    const remotePointerUrl = remoteIdx >= 0 ? args[remoteIdx + 1] : undefined;
+    const res = await computeMonotonicSequence({
+      baseSequence: process.env.MINA_BASE_SEQUENCE || '65',
+      runNumber: process.env.GITHUB_RUN_NUMBER || '1',
+      overrideInput: process.env.MINA_RELEASE_SEQUENCE_INPUT || '',
+      remotePointerUrl,
+    });
+    if (process.env.GITHUB_OUTPUT) {
+      fs.appendFileSync(process.env.GITHUB_OUTPUT, `value=${res.sequence}\n`);
+      fs.appendFileSync(process.env.GITHUB_OUTPUT, `remote_sequence=${res.remoteSequence}\n`);
+    }
+    console.log(JSON.stringify(res));
+    return;
+  }
+
+  if (cmd === '--verify-local') {
+    const targetDir = args[1] || 'dist';
+    const requireCiOrigin = args.includes('--require-ci-origin');
+    const res = verifyLocalReleaseDirectory(targetDir, { requireCiOrigin });
+    console.log(
+      `✔ [ci-release-gate] Local release verified: ${res.releaseId} (seq=#${res.releaseSequence}, origin=${res.origin}, ${res.assetCount} dual-verified assets)`
+    );
+    return;
+  }
+
+  if (cmd === '--compare') {
+    const dirA = args[1];
+    const dirB = args[2];
+    assert.ok(dirA && dirB, 'Usage: --compare <dirA> <dirB>');
+    const res = compareReleaseDeterminism(dirA, dirB);
+    console.log(
+      `✔ [ci-release-gate] Double-build determinism verified: ${res.releaseId} (digest=${res.contentDigest})`
+    );
+    return;
+  }
+
+  if (cmd === '--verify-remote') {
+    const remoteUrl = args[1];
+    assert.ok(remoteUrl, 'Usage: --verify-remote <baseUrl> [--expected-release-id <id>]');
+    const expIdx = args.indexOf('--expected-release-id');
+    const expectedReleaseId = expIdx >= 0 ? args[expIdx + 1] : undefined;
+    const res = await verifyRemoteDeployment(remoteUrl, { expectedReleaseId });
+    console.log(
+      `✔ [ci-release-gate] Remote HTTP health gate passed: ${res.baseUrl} -> ${res.releaseId} (#${res.releaseSequence}, ${res.verifiedAssets} SHA-256 verified assets)`
+    );
+    return;
+  }
+
+  console.error(
+    'Usage: node scripts/ci-release-gate.mjs [--compute-sequence | --verify-local <dir> | --compare <dirA> <dirB> | --verify-remote <url>]'
+  );
+  process.exit(1);
+}
+
+const isDirectExecution =
+  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+
+if (isDirectExecution) {
+  runCli().catch((err) => {
+    console.error('✖ [ci-release-gate] FAILED:', err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

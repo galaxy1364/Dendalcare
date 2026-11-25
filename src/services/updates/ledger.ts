@@ -22,6 +22,13 @@ export interface StorageLike {
   removeItem(key: string): void;
 }
 
+export interface LeaderLeaseRecord {
+  tabId: string;
+  fencingToken: number;
+  expiresAt: number;
+  scope: string;
+}
+
 function getDefaultStorage(): StorageLike | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -35,11 +42,12 @@ function getDefaultStorage(): StorageLike | null {
  * Strictly separated persistent ledger for update discovery, candidate staging,
  * pending activation journal, and boot-verified installed release.
  *
- * CRITICAL INVARIANTS:
+ * CRITICAL INVARIANTS (V7 + V8):
  * 1. Checking for updates updates ONLY `lastCheck` — NEVER `installed.verifiedAt` and NEVER fires `release-upgraded`.
  * 2. Staging a candidate updates ONLY `candidate`.
- * 3. `pendingActivation` is written BEFORE activation and cleared ONLY after post-boot verification or terminal recovery.
- * 4. `installed` is updated ONLY after genuine boot verification proves the target release is actually running.
+ * 3. `pendingActivation` is written BEFORE activation & reload and is NEVER cleared blindly on dismiss.
+ * 4. `installed` and `lastKnownGoodReleaseId` are updated ONLY after genuine post-boot attestation proves health.
+ * 5. Cross-tab fallback lease uses monotonic fencing tokens, readback verification, renewal, and expiry.
  */
 export class UpdateLedger {
   private readonly storage: StorageLike | null;
@@ -149,31 +157,63 @@ export class UpdateLedger {
       return stored;
     }
 
-    // Runtime identity on disk/DOM is authoritative over stale localStorage metadata
-    const fresh: InstalledReleaseRecord = {
+    // Runtime identity on disk/JS is authoritative over stale localStorage metadata.
+    // V8: Do NOT fabricate lastKnownGoodReleaseId on an unverified first boot!
+    return {
       releaseId: runtime.releaseId,
+      contentDigest: runtime.contentDigest ?? null,
       releaseSequence: runtime.releaseSequence,
       semver: runtime.semver,
       channel: runtime.channel,
       platform: runtime.platform,
-      verifiedAt: stored?.releaseId === runtime.releaseId ? stored.verifiedAt : null,
+      verifiedAt: null,
       runtimeBuildId: runtime.releaseId,
-      workerBuildId: stored?.releaseId === runtime.releaseId ? stored.workerBuildId : null,
-      releaseNotes:
-        stored?.releaseId === runtime.releaseId
-          ? stored.releaseNotes
-          : 'نسخه رسمی کلینیک مینادنتال',
-      lastKnownGoodReleaseId: stored?.lastKnownGoodReleaseId || runtime.releaseId,
-      lastKnownGoodSequence: stored?.lastKnownGoodSequence || runtime.releaseSequence,
+      workerBuildId: null,
+      releaseNotes: 'نسخه رسمی کلینیک مینادنتال',
+      lastKnownGoodReleaseId: stored?.lastKnownGoodReleaseId ?? null,
+      lastKnownGoodSequence: stored?.lastKnownGoodSequence ?? null,
     };
-    return fresh;
   }
 
   /**
-   * Commits a release as INSTALLED **ONLY** after real post-boot runtime + worker identity verification.
+   * Records an attested healthy first-install baseline as last-known-good
+   * ONLY AFTER shell commit + route render + identity check pass (never before!).
+   */
+  public commitVerifiedBaseline(input: {
+    runtime: RuntimeReleaseIdentity;
+    workerBuildId: string | null;
+  }): InstalledReleaseRecord {
+    const existing = this.readJson<InstalledReleaseRecord>(KEY_INSTALLED_RELEASE);
+    if (existing && existing.releaseId === input.runtime.releaseId && existing.lastKnownGoodReleaseId) {
+      return existing;
+    }
+    const record: InstalledReleaseRecord = {
+      releaseId: input.runtime.releaseId,
+      contentDigest: input.runtime.contentDigest ?? null,
+      releaseSequence: input.runtime.releaseSequence,
+      semver: input.runtime.semver,
+      channel: input.runtime.channel,
+      platform: input.runtime.platform,
+      verifiedAt: existing?.releaseId === input.runtime.releaseId ? existing.verifiedAt : null,
+      runtimeBuildId: input.runtime.releaseId,
+      workerBuildId: input.workerBuildId,
+      releaseNotes: 'نسخه پایه تأییدشده کلینیک مینادنتال',
+      lastKnownGoodReleaseId: input.runtime.releaseId,
+      lastKnownGoodSequence: input.runtime.releaseSequence,
+    };
+    this.writeJson(KEY_INSTALLED_RELEASE, record);
+    if (input.runtime.origin === 'ci_pipeline' && input.runtime.releaseSequence > 0) {
+      this.recordHighestVerifiedSequence(input.runtime.releaseSequence);
+    }
+    return record;
+  }
+
+  /**
+   * Commits a release as INSTALLED **ONLY** after real post-boot runtime + worker + route attestation.
    */
   public commitVerifiedInstalledRelease(input: {
     releaseId: string;
+    contentDigest?: string | null;
     releaseSequence: number;
     semver: string;
     channel: InstalledReleaseRecord['channel'];
@@ -186,6 +226,7 @@ export class UpdateLedger {
     const verifiedAt = input.verifiedAt ?? new Date().toISOString();
     const record: InstalledReleaseRecord = {
       releaseId: input.releaseId,
+      contentDigest: input.contentDigest ?? null,
       releaseSequence: input.releaseSequence,
       semver: input.semver,
       channel: input.channel,
@@ -211,23 +252,65 @@ export class UpdateLedger {
   }
 
   /**
-   * Cross-tab leader election lease fallback when Web Locks API is unavailable.
+   * Cross-tab leader election lease fallback with monotonic fencing token, expiry & readback collision check.
    */
-  public tryAcquireLeaderLease(tabId: string, leaseMs: number, nowMs = Date.now()): boolean {
-    if (!this.storage) return true;
-    const current = this.readJson<{ tabId: string; expiresAt: number }>(KEY_LEADER_LEASE);
+  public tryAcquireLeaderLeaseWithFence(
+    tabId: string,
+    leaseMs: number,
+    scope = 'global',
+    nowMs = Date.now()
+  ): { acquired: boolean; fencingToken: number } {
+    if (!this.storage) return { acquired: true, fencingToken: 1 };
+    const key = `${KEY_LEADER_LEASE}_${scope}`;
+    const current = this.readJson<LeaderLeaseRecord>(key);
     if (current && current.tabId !== tabId && current.expiresAt > nowMs) {
+      return { acquired: false, fencingToken: current.fencingToken };
+    }
+    const nextToken = (current?.fencingToken ?? 0) + 1;
+    const candidate: LeaderLeaseRecord = {
+      tabId,
+      fencingToken: nextToken,
+      expiresAt: nowMs + leaseMs,
+      scope,
+    };
+    this.writeJson(key, candidate);
+    // Readback collision check: confirm our exact tabId + fencingToken won the write
+    const verified = this.readJson<LeaderLeaseRecord>(key);
+    const won = Boolean(verified && verified.tabId === tabId && verified.fencingToken === nextToken);
+    return { acquired: won, fencingToken: nextToken };
+  }
+
+  public renewLeaderLease(
+    tabId: string,
+    fencingToken: number,
+    leaseMs: number,
+    scope = 'global',
+    nowMs = Date.now()
+  ): boolean {
+    if (!this.storage) return true;
+    const key = `${KEY_LEADER_LEASE}_${scope}`;
+    const current = this.readJson<LeaderLeaseRecord>(key);
+    if (!current || current.tabId !== tabId || current.fencingToken !== fencingToken) {
       return false;
     }
-    this.writeJson(KEY_LEADER_LEASE, { tabId, expiresAt: nowMs + leaseMs });
+    this.writeJson(key, { ...current, expiresAt: nowMs + leaseMs });
     return true;
   }
 
-  public releaseLeaderLease(tabId: string): void {
+  public tryAcquireLeaderLease(tabId: string, leaseMs: number, nowMs = Date.now()): boolean {
+    return this.tryAcquireLeaderLeaseWithFence(tabId, leaseMs, 'global', nowMs).acquired;
+  }
+
+  public releaseLeaderLease(tabId: string, scope = 'global', fencingToken?: number): void {
     if (!this.storage) return;
-    const current = this.readJson<{ tabId: string; expiresAt: number }>(KEY_LEADER_LEASE);
-    if (current && current.tabId === tabId) {
-      this.removeKey(KEY_LEADER_LEASE);
+    const key = `${KEY_LEADER_LEASE}_${scope}`;
+    const current = this.readJson<LeaderLeaseRecord>(key);
+    if (
+      current &&
+      current.tabId === tabId &&
+      (fencingToken === undefined || current.fencingToken === fencingToken)
+    ) {
+      this.removeKey(key);
     }
   }
 }

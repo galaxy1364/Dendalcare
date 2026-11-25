@@ -10,6 +10,7 @@ import { clearRouteDraft, getRouteDraft, saveRouteDraft, useNavigation } from '@
 import { useClinicShell } from '@/app/AppProviders';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui/Form';
 import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
+import { useUpdateSafePointGuard } from '@/services/updates';
 
 /**
  * Shared inline confirmation bar preventing accidental loss of unsaved clinical drafts.
@@ -89,6 +90,11 @@ export function PatientFormPage() {
 
   const isDirty = Boolean(
     firstName.trim() || lastName.trim() || phone.trim() || nationalId.trim() || fileNo.trim() || notes.trim()
+  );
+  useUpdateSafePointGuard(
+    'patient_form_dirty',
+    isDirty || saving,
+    'فرم ثبت پرونده بیمار جدید دارای تغییرات ذخیره‌نشده است'
   );
 
   useEffect(() => {
@@ -229,6 +235,11 @@ export function AppointmentFormPage() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   const isDirty = Boolean(patientId || notes.trim() || title.trim() !== 'ویزیت و معاینه تخصصی');
+  useUpdateSafePointGuard(
+    'appointment_form_dirty',
+    isDirty || saving,
+    'فرم ثبت نوبت جدید دارای تغییرات ذخیره‌نشده است'
+  );
 
   useEffect(() => {
     saveRouteDraft('appointment_form', { patientId, title, date, time, duration, type, notes });
@@ -396,6 +407,11 @@ export function TreatmentFormPage() {
 
   const isDirty = Boolean(
     patientId || diagnosis.trim() || treatmentPlan.trim() || toothNumbers.trim() || totalCost.trim()
+  );
+  useUpdateSafePointGuard(
+    'treatment_form_dirty',
+    isDirty || saving,
+    'فرم ثبت طرح درمان جدید دارای تغییرات ذخیره‌نشده است'
   );
 
   useEffect(() => {

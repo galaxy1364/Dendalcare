@@ -1,1 +1,0 @@
-import{T as e,w as t}from"./index-CMSV-C2I.js";function n(e){t(e)}function r(t,n){return e(t,e=>{n({...e,section:e.section})})}export{r as n,n as t};

@@ -6,6 +6,7 @@ import { canAccessRoute } from '@/services/permissions/accessControl';
 import { useNavigation } from '@/navigation/NavigationStack';
 import { useClinicShell } from './AppProviders';
 import { lazyWithRetry } from './lazyWithRetry';
+import { markRouteRendered } from './bootstrapState';
 
 // Lazy-loaded full-screen pages with bounded retry & version-mismatch recovery (V5 P0-04)
 const DashboardPage = lazyWithRetry(
@@ -128,6 +129,13 @@ function RouteSkeleton({ onGoHome }: { onGoHome: () => void }) {
   );
 }
 
+function RouteCommitMarker({ route }: { route: string }) {
+  useEffect(() => {
+    markRouteRendered(route);
+  }, [route]);
+  return null;
+}
+
 export function AppRouter() {
   const { activeRoute, navigate } = useNavigation();
   const { effectiveRole, setRoadmapModalOpen, setInstallModalOpen } = useClinicShell();
@@ -209,6 +217,7 @@ export function AppRouter() {
       onGoHome={() => navigate('dashboard')}
     >
       <Suspense fallback={<RouteSkeleton onGoHome={() => navigate('dashboard')} />}>
+        <RouteCommitMarker route={activeRoute} />
         {renderRoute()}
       </Suspense>
     </ErrorBoundary>

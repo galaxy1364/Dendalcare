@@ -119,21 +119,29 @@ export async function verifySaltedSecret(
   return hashed === storedHash;
 }
 
+const AUTH_SESSION_TIMEOUT_MS = 6_000;
+
 export async function getVerifiedSupabaseSession(): Promise<VerifiedSessionState> {
   const branchId = getActiveBranchId();
+  const unauthenticatedFallback: VerifiedSessionState = {
+    status: 'unauthenticated',
+    supabaseUserId: null,
+    supabaseEmail: null,
+    serverVerifiedRole: null,
+    tenantId: ACTIVE_TENANT_ID,
+    branchId,
+  };
+  let timer: ReturnType<typeof setTimeout> | null = null;
   try {
-    const { data, error } = await rawSupabase.auth.getSession();
-    if (error || !data?.session?.user) {
-      return {
-        status: 'unauthenticated',
-        supabaseUserId: null,
-        supabaseEmail: null,
-        serverVerifiedRole: null,
-        tenantId: ACTIVE_TENANT_ID,
-        branchId,
-      };
+    const sessionPromise = rawSupabase.auth.getSession();
+    const timeoutPromise = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), AUTH_SESSION_TIMEOUT_MS);
+    });
+    const result = await Promise.race([sessionPromise, timeoutPromise]);
+    if (!result || result.error || !result.data?.session?.user) {
+      return unauthenticatedFallback;
     }
-    const user = data.session.user;
+    const user = result.data.session.user;
     // Security: ONLY trust server-signed app_metadata (NEVER client-writable user_metadata)
     const roleClaim = (user.app_metadata?.clinic_role as string | undefined) || null;
 
@@ -146,14 +154,9 @@ export async function getVerifiedSupabaseSession(): Promise<VerifiedSessionState
       branchId,
     };
   } catch {
-    return {
-      status: 'unauthenticated',
-      supabaseUserId: null,
-      supabaseEmail: null,
-      serverVerifiedRole: null,
-      tenantId: ACTIVE_TENANT_ID,
-      branchId,
-    };
+    return unauthenticatedFallback;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

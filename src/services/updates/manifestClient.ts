@@ -3,12 +3,14 @@ import type {
   PinnedPublicKey,
   ReleaseAssetEntry,
   ReleasePointer,
+  SignatureVerificationStatus,
   UpdateErrorCode,
   UpdateProgress,
 } from './contracts';
 import { UPDATE_TIMING_POLICY, computeJitteredDelayMs } from './policy';
 import {
   computeSha256Hex,
+  hasUnsafePathTraversal,
   isAllowedReleaseUrl,
   validateReleaseManifest,
   validateReleasePointer,
@@ -24,6 +26,7 @@ export interface ManifestFetchResult {
   pointer: ReleasePointer | null;
   manifest: AuthoritativeReleaseManifest | null;
   signatureVerified: boolean;
+  signatureStatus: SignatureVerificationStatus;
 }
 
 export interface ManifestFetchFailure {
@@ -52,6 +55,14 @@ export interface ManifestClientOptions {
   isOnlineFn?: () => boolean;
 }
 
+export interface VerifiedAssetPayload {
+  asset: ReleaseAssetEntry;
+  resolvedUrl: string;
+  contentType: string;
+  buffer: ArrayBuffer;
+  sha256: string;
+}
+
 function defaultDelay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -61,6 +72,14 @@ function resolveAgainstBase(ref: string, baseUrl: string): string {
     return new URL(ref, baseUrl).toString();
   } catch {
     return ref;
+  }
+}
+
+function isSameOriginUrl(urlA: string, urlB: string): boolean {
+  try {
+    return new URL(urlA).origin === new URL(urlB).origin;
+  } catch {
+    return false;
   }
 }
 
@@ -94,37 +113,41 @@ function isValidMimeForAssetPath(assetPath: string, contentType: string): boolea
   return !ct.includes('text/html');
 }
 
-async function fetchWithIndependentTimeout(
-  fetchFn: typeof fetch,
-  url: string,
-  init: RequestInit,
+/**
+ * Runs an async fetch + body-consumption operation under a SINGLE independent deadline
+ * so stalled headers, stalled body streams, OR stalled digest ops can NEVER hang forever!
+ */
+async function runWithDeadline<T>(
   timeoutMs: number,
-  parentSignal?: AbortSignal
-): Promise<{ response?: Response; timedOut?: boolean; aborted?: boolean; networkError?: unknown }> {
-  if (parentSignal?.aborted) return { aborted: true };
+  parentSignal: AbortSignal | undefined,
+  fn: (attemptSignal: AbortSignal) => Promise<T>
+): Promise<{ ok: true; value: T } | { ok: false; timedOut?: boolean; aborted?: boolean; error?: unknown }> {
+  if (parentSignal?.aborted) return { ok: false, aborted: true };
+
   const attemptController = new AbortController();
   let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
 
   const onParentAbort = () => attemptController.abort();
   parentSignal?.addEventListener('abort', onParentAbort, { once: true });
 
-  const timer = setTimeout(() => {
-    timedOut = true;
-    attemptController.abort();
-  }, timeoutMs);
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      attemptController.abort();
+      reject(new Error(`Operation timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
 
   try {
-    const response = await fetchFn(url, {
-      ...init,
-      signal: attemptController.signal,
-    });
-    return { response };
+    const value = await Promise.race([fn(attemptController.signal), timeoutPromise]);
+    return { ok: true, value };
   } catch (err) {
-    if (parentSignal?.aborted) return { aborted: true };
-    if (timedOut) return { timedOut: true };
-    return { networkError: err };
+    if (parentSignal?.aborted) return { ok: false, aborted: true };
+    if (timedOut) return { ok: false, timedOut: true };
+    return { ok: false, error: err };
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
     parentSignal?.removeEventListener('abort', onParentAbort);
   }
 }
@@ -139,9 +162,11 @@ async function fetchJsonWithRetry(input: {
   delayFn: (ms: number) => Promise<void>;
   randomFn: () => number;
   signal?: AbortSignal;
+  currentOrigin?: string;
+  extraAllowedOrigins?: readonly string[];
 }): Promise<
   | { ok: true; notModified: true; status: 304; etag: string | null }
-  | { ok: true; notModified: false; status: number; etag: string | null; data: unknown }
+  | { ok: true; notModified: false; status: number; etag: string | null; data: unknown; finalUrl: string }
   | { ok: false; errorCode: UpdateErrorCode; status: number | null; detail: string }
 > {
   let lastCode: UpdateErrorCode = 'HTTP_ERROR';
@@ -157,64 +182,99 @@ async function fetchJsonWithRetry(input: {
       headers['If-None-Match'] = input.etag;
     }
 
-    const resWrap = await fetchWithIndependentTimeout(
-      input.fetchFn,
-      input.url,
-      { method: 'GET', cache: 'no-store', headers },
-      input.timeoutMs,
-      input.signal
-    );
+    const wrapped = await runWithDeadline(input.timeoutMs, input.signal, async (attemptSignal) => {
+      const res = await input.fetchFn(input.url, {
+        method: 'GET',
+        cache: 'no-store',
+        headers,
+        signal: attemptSignal,
+      });
 
-    if (resWrap.aborted) {
-      return { ok: false, errorCode: 'TIMEOUT', status: null, detail: 'Request cancelled by caller' };
-    }
+      // Reject cross-origin redirects outside allowlist
+      const finalUrl = res.url || input.url;
+      if (
+        res.redirected &&
+        !isAllowedReleaseUrl(finalUrl, {
+          currentOrigin: input.currentOrigin,
+          extraAllowedOrigins: input.extraAllowedOrigins,
+        })
+      ) {
+        return { kind: 'redirect_blocked' as const, finalUrl };
+      }
 
-    if (resWrap.timedOut) {
-      lastCode = 'TIMEOUT';
-      lastStatus = null;
-      lastDetail = `Request timed out after ${input.timeoutMs}ms`;
-    } else if (resWrap.networkError) {
-      lastCode = 'HTTP_ERROR';
-      lastStatus = null;
-      lastDetail =
-        resWrap.networkError instanceof Error
-          ? resWrap.networkError.message
-          : String(resWrap.networkError);
-    } else if (resWrap.response) {
-      const res = resWrap.response;
       const responseEtag = res.headers.get('etag');
       if (res.status === 304) {
-        return { ok: true, notModified: true, status: 304, etag: responseEtag ?? input.etag ?? null };
+        return { kind: 'not_modified' as const, etag: responseEtag ?? input.etag ?? null };
       }
       if (res.status >= 200 && res.status < 300) {
         const ct = (res.headers.get('content-type') || '').toLowerCase();
         if (ct.includes('text/html')) {
-          return {
-            ok: false,
-            errorCode: 'SCHEMA_INVALID',
-            status: res.status,
-            detail: `Expected JSON manifest but received text/html from ${input.url}`,
-          };
+          return { kind: 'html_response' as const, status: res.status };
         }
-        try {
-          const data = await res.json();
-          return { ok: true, notModified: false, status: res.status, etag: responseEtag, data };
-        } catch (parseErr) {
-          return {
-            ok: false,
-            errorCode: 'SCHEMA_INVALID',
-            status: res.status,
-            detail: `Malformed JSON from ${input.url}: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
-          };
-        }
+        const data = await res.json();
+        return { kind: 'json' as const, status: res.status, etag: responseEtag, data, finalUrl };
       }
+      return { kind: 'http_error' as const, status: res.status };
+    });
 
-      lastStatus = res.status;
+    if (!wrapped.ok) {
+      if (wrapped.aborted) {
+        return { ok: false, errorCode: 'TIMEOUT', status: null, detail: 'Request cancelled by caller' };
+      }
+      if (wrapped.timedOut) {
+        lastCode = 'TIMEOUT';
+        lastStatus = null;
+        lastDetail = `Request timed out after ${input.timeoutMs}ms`;
+      } else {
+        const err = wrapped.error;
+        if (err instanceof SyntaxError) {
+          return {
+            ok: false,
+            errorCode: 'SCHEMA_INVALID',
+            status: 200,
+            detail: `Malformed JSON from ${input.url}: ${err.message}`,
+          };
+        }
+        lastCode = 'HTTP_ERROR';
+        lastStatus = null;
+        lastDetail = err instanceof Error ? err.message : String(err);
+      }
+    } else {
+      const v = wrapped.value;
+      if (v.kind === 'redirect_blocked') {
+        return {
+          ok: false,
+          errorCode: 'ORIGIN_NOT_ALLOWED',
+          status: null,
+          detail: `Cross-origin redirect blocked: ${v.finalUrl}`,
+        };
+      }
+      if (v.kind === 'not_modified') {
+        return { ok: true, notModified: true, status: 304, etag: v.etag };
+      }
+      if (v.kind === 'html_response') {
+        return {
+          ok: false,
+          errorCode: 'SCHEMA_INVALID',
+          status: v.status,
+          detail: `Expected JSON manifest but received text/html from ${input.url}`,
+        };
+      }
+      if (v.kind === 'json') {
+        return {
+          ok: true,
+          notModified: false,
+          status: v.status,
+          etag: v.etag,
+          data: v.data,
+          finalUrl: v.finalUrl,
+        };
+      }
+      lastStatus = v.status;
       lastCode = 'HTTP_ERROR';
-      lastDetail = `HTTP ${res.status} from ${input.url}`;
-      // Do not retry deterministic 4xx (except 429)
-      if (res.status >= 400 && res.status < 500 && res.status !== 429) {
-        return { ok: false, errorCode: 'HTTP_ERROR', status: res.status, detail: lastDetail };
+      lastDetail = `HTTP ${v.status} from ${input.url}`;
+      if (v.status >= 400 && v.status < 500 && v.status !== 429) {
+        return { ok: false, errorCode: 'HTTP_ERROR', status: v.status, detail: lastDetail };
       }
     }
 
@@ -233,10 +293,8 @@ async function fetchJsonWithRetry(input: {
 
 /**
  * Fetches the authoritative release pointer and manifest over HTTPS (or localhost in preview/tests)
- * with ETag support, 304 handling, bounded retries, independent timeout, strict schema validation,
- * and cryptographic signature verification.
- *
- * CRITICAL: Offline or 5xx/timeout errors NEVER become UP_TO_DATE!
+ * with ETag support, 304 handling, bounded retries, independent deadline covering body reads,
+ * cross-origin redirect rejection, strict schema validation, and cryptographic signature verification.
  */
 export async function fetchAuthoritativeRelease(
   options?: ManifestClientOptions & { etag?: string | null; signal?: AbortSignal }
@@ -288,6 +346,8 @@ export async function fetchAuthoritativeRelease(
     delayFn,
     randomFn,
     signal: options?.signal,
+    currentOrigin: options?.currentOrigin,
+    extraAllowedOrigins: options?.extraAllowedOrigins,
   });
 
   if (!pointerRes.ok) {
@@ -310,6 +370,7 @@ export async function fetchAuthoritativeRelease(
       pointer: null,
       manifest: null,
       signatureVerified: false,
+      signatureStatus: 'unsigned_web_origin_only',
     };
   }
 
@@ -360,6 +421,8 @@ export async function fetchAuthoritativeRelease(
     delayFn,
     randomFn,
     signal: options?.signal,
+    currentOrigin: options?.currentOrigin,
+    extraAllowedOrigins: options?.extraAllowedOrigins,
   });
 
   if (!manifestRes.ok) {
@@ -409,7 +472,7 @@ export async function fetchAuthoritativeRelease(
     };
   }
 
-  // Cryptographic signature verification
+  // Cryptographic signature verification (never claims verified when unsigned)
   const sigCheck = await verifyManifestSignature(manifest, options?.pinnedKeys ?? [], {
     requireSignature: options?.requireSignature,
   });
@@ -432,15 +495,16 @@ export async function fetchAuthoritativeRelease(
     pointer,
     manifest,
     signatureVerified: sigCheck.verified,
+    signatureStatus: sigCheck.status,
   };
 }
 
 /**
- * Verifies every required asset listed in the authoritative manifest:
- * - Real HTTP 200 status (no 404/partial deploy)
- * - Valid MIME (rejects unexpected text/html returned for .js/.css)
- * - Real SHA-256 content digest against manifest.assets[].sha256
- * - Real byte-based download progress (or determinate=false if sizes are missing/zero)
+ * Verifies every required asset listed in the authoritative manifest with V8 guarantees:
+ * - Bounded concurrency (default 3) & overall stage deadline + per-asset deadline covering BOTH headers & body reads + SHA-256!
+ * - Rejects cross-origin redirects, path traversal, invalid MIME (e.g. HTML for JS), byte-size mismatches, and SHA-256 mismatches.
+ * - Enforces per-asset & total byte limits.
+ * - Streams each verified `ArrayBuffer` directly to `onVerifiedAsset` so the exact hashed bytes are cached (eliminating TOCTOU!).
  */
 export async function verifyReleaseAssets(input: {
   manifest: AuthoritativeReleaseManifest;
@@ -448,14 +512,29 @@ export async function verifyReleaseAssets(input: {
   verifyAllAssets?: boolean;
   fetchFn?: typeof fetch;
   timeoutMs?: number;
+  totalDeadlineMs?: number;
+  maxConcurrency?: number;
+  maxSingleAssetBytes?: number;
+  maxTotalReleaseBytes?: number;
   signal?: AbortSignal;
   onProgress?: (progress: UpdateProgress) => void;
+  onVerifiedAsset?: (payload: VerifiedAssetPayload) => Promise<void> | void;
 }): Promise<
   | { ok: true; verifiedCount: number; totalBytes: number }
   | { ok: false; errorCode: UpdateErrorCode; detail: string; failedAssetPath: string }
 > {
   const fetchFn = input.fetchFn ?? globalThis.fetch.bind(globalThis);
   const timeoutMs = input.timeoutMs ?? UPDATE_TIMING_POLICY.ASSET_TIMEOUT_MS;
+  const totalDeadlineMs = input.totalDeadlineMs ?? UPDATE_TIMING_POLICY.STAGE_TOTAL_DEADLINE_MS;
+  const maxConcurrency = Math.max(
+    1,
+    Math.min(6, input.maxConcurrency ?? UPDATE_TIMING_POLICY.MAX_CONCURRENT_ASSET_DOWNLOADS)
+  );
+  const maxSingleAssetBytes =
+    input.maxSingleAssetBytes ?? UPDATE_TIMING_POLICY.MAX_SINGLE_ASSET_BYTES;
+  const maxTotalReleaseBytes =
+    input.maxTotalReleaseBytes ?? UPDATE_TIMING_POLICY.MAX_TOTAL_RELEASE_BYTES;
+
   const targetAssets: ReleaseAssetEntry[] = input.verifyAllAssets
     ? input.manifest.assets
     : input.manifest.assets.filter((a) => a.critical || a.path.endsWith('.js') || a.path.endsWith('.css'));
@@ -465,102 +544,256 @@ export async function verifyReleaseAssets(input: {
     ? assetsToCheck.reduce((sum, a) => sum + a.size, 0)
     : null;
 
+  if (knownTotalBytes !== null && knownTotalBytes > maxTotalReleaseBytes) {
+    return {
+      ok: false,
+      errorCode: 'SIZE_MISMATCH',
+      detail: `Declared release total (${knownTotalBytes} bytes) exceeds policy limit (${maxTotalReleaseBytes})`,
+      failedAssetPath: 'release-manifest.json',
+    };
+  }
+
+  const stageController = new AbortController();
+  let stageTimedOut = false;
+  const onParentAbort = () => stageController.abort();
+  input.signal?.addEventListener('abort', onParentAbort, { once: true });
+  const stageTimer = setTimeout(() => {
+    stageTimedOut = true;
+    stageController.abort();
+  }, totalDeadlineMs);
+
   let loadedBytes = 0;
   let completedAssets = 0;
+  let nextIndex = 0;
+  const failureBox: {
+    current: {
+      errorCode: UpdateErrorCode;
+      detail: string;
+      failedAssetPath: string;
+    } | null;
+  } = { current: null };
 
-  for (const asset of assetsToCheck) {
-    const assetUrl = resolveAgainstBase(asset.path, input.baseUrl);
+  const reportProgress = (phase: 'download' | 'verify') => {
     input.onProgress?.({
-      phase: 'download',
+      phase,
       determinate: knownTotalBytes !== null && knownTotalBytes > 0,
       percent:
         knownTotalBytes && knownTotalBytes > 0
-          ? Math.min(99, Math.round((loadedBytes / knownTotalBytes) * 100))
+          ? Math.min(phase === 'verify' ? 100 : 99, Math.round((loadedBytes / knownTotalBytes) * 100))
           : null,
       bytesLoaded: knownTotalBytes !== null ? loadedBytes : null,
       bytesTotal: knownTotalBytes,
       completedAssets,
       totalAssets: assetsToCheck.length,
-      label: `دریافت و بررسی فایل‌های نسخه ${input.manifest.semver} (${completedAssets + 1}/${assetsToCheck.length})...`,
+      label:
+        phase === 'download'
+          ? `دریافت و بررسی فایل‌های نسخه ${input.manifest.semver} (${Math.min(completedAssets + 1, assetsToCheck.length)}/${assetsToCheck.length})...`
+          : `تأیید یکپارچگی SHA-256 (${completedAssets}/${assetsToCheck.length})...`,
+    });
+  };
+
+  const verifySingleAsset = async (asset: ReleaseAssetEntry) => {
+    if (failureBox.current || stageController.signal.aborted) return;
+    if (hasUnsafePathTraversal(asset.path)) {
+      failureBox.current = {
+        errorCode: 'ORIGIN_NOT_ALLOWED',
+        detail: `Unsafe asset path traversal rejected: ${asset.path}`,
+        failedAssetPath: asset.path,
+      };
+      stageController.abort();
+      return;
+    }
+    if (asset.size > maxSingleAssetBytes) {
+      failureBox.current = {
+        errorCode: 'SIZE_MISMATCH',
+        detail: `Declared size for ${asset.path} (${asset.size}) exceeds max single asset limit`,
+        failedAssetPath: asset.path,
+      };
+      stageController.abort();
+      return;
+    }
+
+    const assetUrl = resolveAgainstBase(asset.path, input.baseUrl);
+    if (!isAllowedReleaseUrl(assetUrl) || !isSameOriginUrl(assetUrl, input.baseUrl)) {
+      failureBox.current = {
+        errorCode: 'ORIGIN_NOT_ALLOWED',
+        detail: `Asset URL outside release origin: ${assetUrl}`,
+        failedAssetPath: asset.path,
+      };
+      stageController.abort();
+      return;
+    }
+
+    reportProgress('download');
+
+    // Single deadline wrapping fetch() + response.arrayBuffer() + SHA-256 digest!
+    const wrapped = await runWithDeadline(timeoutMs, stageController.signal, async (attemptSignal) => {
+      const res = await fetchFn(assetUrl, {
+        method: 'GET',
+        cache: 'no-store',
+        signal: attemptSignal,
+      });
+
+      const finalUrl = res.url || assetUrl;
+      if (res.redirected && (!isAllowedReleaseUrl(finalUrl) || !isSameOriginUrl(finalUrl, input.baseUrl))) {
+        return { kind: 'redirect_blocked' as const, finalUrl };
+      }
+
+      if (res.status !== 200) {
+        return { kind: 'http_error' as const, status: res.status };
+      }
+
+      const ct = res.headers.get('content-type') || '';
+      if (!isValidMimeForAssetPath(asset.path, ct)) {
+        return { kind: 'mime_invalid' as const, ct };
+      }
+
+      const buffer = await res.arrayBuffer();
+      if (buffer.byteLength > maxSingleAssetBytes) {
+        return { kind: 'size_limit' as const, actual: buffer.byteLength };
+      }
+      if (asset.size > 0 && buffer.byteLength !== asset.size) {
+        return { kind: 'size_mismatch' as const, expected: asset.size, actual: buffer.byteLength };
+      }
+
+      const actualSha = await computeSha256Hex(buffer);
+      if (actualSha !== asset.sha256.toLowerCase()) {
+        return { kind: 'digest_mismatch' as const, expected: asset.sha256, actual: actualSha };
+      }
+
+      return { kind: 'ok' as const, buffer, contentType: ct, sha256: actualSha, finalUrl };
     });
 
-    const resWrap = await fetchWithIndependentTimeout(
-      fetchFn,
-      assetUrl,
-      { method: 'GET', cache: 'no-store' },
-      timeoutMs,
-      input.signal
-    );
+    if (failureBox.current) return;
 
-    if (resWrap.aborted) {
+    if (!wrapped.ok) {
+      failureBox.current = {
+        errorCode: wrapped.timedOut || stageTimedOut ? 'TIMEOUT' : 'ASSET_VERIFICATION_FAILED',
+        detail: wrapped.timedOut
+          ? `Asset fetch/body read timed out after ${timeoutMs}ms: ${asset.path}`
+          : `Failed to fetch or verify asset ${asset.path}: ${
+              wrapped.error instanceof Error ? wrapped.error.message : String(wrapped.error ?? 'aborted')
+            }`,
+        failedAssetPath: asset.path,
+      };
+      stageController.abort();
+      return;
+    }
+
+    const resVal = wrapped.value;
+    if (resVal.kind !== 'ok') {
+      const failureMap = {
+        redirect_blocked: {
+          code: 'ORIGIN_NOT_ALLOWED' as UpdateErrorCode,
+          detail: `Cross-origin asset redirect rejected for ${asset.path}`,
+        },
+        http_error: {
+          code: 'ASSET_VERIFICATION_FAILED' as UpdateErrorCode,
+          detail: `Asset ${asset.path} returned HTTP ${'status' in resVal ? resVal.status : 'error'}`,
+        },
+        mime_invalid: {
+          code: 'ASSET_VERIFICATION_FAILED' as UpdateErrorCode,
+          detail: `Invalid MIME "${'ct' in resVal ? resVal.ct : ''}" returned for asset ${asset.path}`,
+        },
+        size_limit: {
+          code: 'SIZE_MISMATCH' as UpdateErrorCode,
+          detail: `Asset ${asset.path} exceeded max single asset limit`,
+        },
+        size_mismatch: {
+          code: 'SIZE_MISMATCH' as UpdateErrorCode,
+          detail: `Byte length mismatch for ${asset.path}: expected ${'expected' in resVal ? resVal.expected : '?'}, got ${'actual' in resVal ? resVal.actual : '?'}`,
+        },
+        digest_mismatch: {
+          code: 'DIGEST_MISMATCH' as UpdateErrorCode,
+          detail: `SHA-256 mismatch for ${asset.path}: expected ${'expected' in resVal ? resVal.expected : '?'}, got ${'actual' in resVal ? resVal.actual : '?'}`,
+        },
+      }[resVal.kind];
+
+      failureBox.current = {
+        errorCode: failureMap.code,
+        detail: failureMap.detail,
+        failedAssetPath: asset.path,
+      };
+      stageController.abort();
+      return;
+    }
+
+    if (loadedBytes + resVal.buffer.byteLength > maxTotalReleaseBytes) {
+      failureBox.current = {
+        errorCode: 'SIZE_MISMATCH',
+        detail: `Cumulative downloaded bytes exceeded release ceiling (${maxTotalReleaseBytes})`,
+        failedAssetPath: asset.path,
+      };
+      stageController.abort();
+      return;
+    }
+
+    // Bind exact verified bytes into candidate cache (eliminating TOCTOU)
+    if (input.onVerifiedAsset) {
+      try {
+        await input.onVerifiedAsset({
+          asset,
+          resolvedUrl: resVal.finalUrl,
+          contentType: resVal.contentType,
+          buffer: resVal.buffer,
+          sha256: resVal.sha256,
+        });
+      } catch (cacheErr) {
+        const errName = cacheErr instanceof Error ? cacheErr.name : '';
+        const errMsg = cacheErr instanceof Error ? cacheErr.message : String(cacheErr);
+        const isQuota =
+          errName === 'QuotaExceededError' || /quota/i.test(errMsg);
+        failureBox.current = {
+          errorCode: isQuota ? 'STORAGE_QUOTA_EXCEEDED' : 'ASSET_VERIFICATION_FAILED',
+          detail: `Failed to persist verified asset ${asset.path} into candidate cache: ${errMsg}`,
+          failedAssetPath: asset.path,
+        };
+        stageController.abort();
+        return;
+      }
+    }
+
+    loadedBytes += resVal.buffer.byteLength;
+    completedAssets += 1;
+    reportProgress('verify');
+  };
+
+  try {
+    const workerCount = Math.min(maxConcurrency, assetsToCheck.length);
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (!failureBox.current && !stageController.signal.aborted) {
+        const idx = nextIndex;
+        nextIndex += 1;
+        if (idx >= assetsToCheck.length) break;
+        await verifySingleAsset(assetsToCheck[idx]);
+      }
+    });
+    await Promise.all(workers);
+
+    if (failureBox.current) {
+      return {
+        ok: false,
+        errorCode: failureBox.current.errorCode,
+        detail: failureBox.current.detail,
+        failedAssetPath: failureBox.current.failedAssetPath,
+      };
+    }
+    if (stageTimedOut) {
       return {
         ok: false,
         errorCode: 'TIMEOUT',
-        detail: 'Asset verification aborted',
-        failedAssetPath: asset.path,
-      };
-    }
-    if (resWrap.timedOut || resWrap.networkError || !resWrap.response) {
-      return {
-        ok: false,
-        errorCode: resWrap.timedOut ? 'TIMEOUT' : 'ASSET_VERIFICATION_FAILED',
-        detail: `Failed to fetch asset ${asset.path}`,
-        failedAssetPath: asset.path,
+        detail: `Overall asset staging exceeded deadline (${totalDeadlineMs}ms)`,
+        failedAssetPath: 'stage-deadline',
       };
     }
 
-    const res = resWrap.response;
-    if (res.status !== 200) {
-      return {
-        ok: false,
-        errorCode: 'ASSET_VERIFICATION_FAILED',
-        detail: `Asset ${asset.path} returned HTTP ${res.status}`,
-        failedAssetPath: asset.path,
-      };
-    }
-
-    const ct = res.headers.get('content-type') || '';
-    if (!isValidMimeForAssetPath(asset.path, ct)) {
-      return {
-        ok: false,
-        errorCode: 'ASSET_VERIFICATION_FAILED',
-        detail: `Invalid MIME "${ct}" returned for asset ${asset.path}`,
-        failedAssetPath: asset.path,
-      };
-    }
-
-    const buffer = await res.arrayBuffer();
-    const actualSha = await computeSha256Hex(buffer);
-    if (actualSha !== asset.sha256.toLowerCase()) {
-      return {
-        ok: false,
-        errorCode: 'DIGEST_MISMATCH',
-        detail: `SHA-256 mismatch for ${asset.path}: expected ${asset.sha256}, got ${actualSha}`,
-        failedAssetPath: asset.path,
-      };
-    }
-
-    loadedBytes += buffer.byteLength;
-    completedAssets += 1;
-
-    input.onProgress?.({
-      phase: 'verify',
-      determinate: knownTotalBytes !== null && knownTotalBytes > 0,
-      percent:
-        knownTotalBytes && knownTotalBytes > 0
-          ? Math.min(100, Math.round((loadedBytes / knownTotalBytes) * 100))
-          : null,
-      bytesLoaded: knownTotalBytes !== null ? loadedBytes : null,
-      bytesTotal: knownTotalBytes,
-      completedAssets,
-      totalAssets: assetsToCheck.length,
-      label: `تأیید یکپارچگی SHA-256 (${completedAssets}/${assetsToCheck.length})...`,
-    });
+    return {
+      ok: true,
+      verifiedCount: completedAssets,
+      totalBytes: loadedBytes,
+    };
+  } finally {
+    clearTimeout(stageTimer);
+    input.signal?.removeEventListener('abort', onParentAbort);
   }
-
-  return {
-    ok: true,
-    verifiedCount: completedAssets,
-    totalBytes: loadedBytes,
-  };
 }

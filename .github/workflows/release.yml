@@ -1,4 +1,4 @@
-name: MinaDental V7 Verified Release Pipeline
+name: MinaDental V8 Verified Release Pipeline
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ on:
           - staging
           - stable
       release_sequence:
-        description: 'Monotonic release sequence override (optional; defaults to 65 + github.run_number)'
+        description: 'Optional strict integer monotonic release sequence override'
         required: false
         default: ''
         type: string
@@ -28,12 +28,13 @@ permissions:
 
 jobs:
   build-verify-and-package:
-    name: Deterministic Build, Secret Scan, SBOM & SHA-256 Asset Graph Gate
+    name: Deterministic Double-Build, Secret Scan, SBOM & SHA-256 Gate
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.meta.outputs.release_id }}
       release_sequence: ${{ steps.meta.outputs.release_sequence }}
       semver: ${{ steps.meta.outputs.semver }}
+      content_digest: ${{ steps.meta.outputs.content_digest }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -54,53 +55,81 @@ jobs:
             exit 1
           fi
 
-      - name: Compute CI monotonic release sequence
+      - name: Compute strict monotonic release sequence against deployed pointer
         id: seq
+        env:
+          MINA_BASE_SEQUENCE: '65'
+          MINA_RELEASE_SEQUENCE_INPUT: ${{ inputs.release_sequence }}
         run: |
-          BASE_SEQ=65
-          INPUT_SEQ="${{ inputs.release_sequence }}"
-          if [ -n "$INPUT_SEQ" ]; then
-            SEQ="$INPUT_SEQ"
-          else
-            SEQ=$((BASE_SEQ + GITHUB_RUN_NUMBER))
-          fi
-          echo "value=$SEQ" >> "$GITHUB_OUTPUT"
-          echo "MINA_RELEASE_SEQUENCE=$SEQ"
+          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json
 
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Deterministic production build with CI release identity
+      - name: Deterministic production build #1
         env:
           MINA_RELEASE_SEQUENCE: ${{ steps.seq.outputs.value }}
           MINA_RELEASE_CHANNEL: ${{ inputs.channel }}
           MINA_GIT_COMMIT: ${{ github.sha }}
-        run: npm run build
-
-      - name: Stage immutable versioned release directory BEFORE pointer update
-        id: meta
+          MINA_PUBLISHED_AT: '2026-01-01T00:00:00.000Z'
+          MINA_SIGNING_PRIVATE_KEY_JWK: ${{ secrets.MINA_SIGNING_PRIVATE_KEY_JWK }}
+          MINA_SIGNING_KEY_ID: ${{ secrets.MINA_SIGNING_KEY_ID }}
+          VITE_PINNED_RELEASE_KEYS_JSON: ${{ vars.VITE_PINNED_RELEASE_KEYS_JSON }}
+          VITE_ANDROID_PLAY_STORE_URL: ${{ vars.VITE_ANDROID_PLAY_STORE_URL }}
+          VITE_IOS_APP_STORE_URL: ${{ vars.VITE_IOS_APP_STORE_URL }}
         run: |
+          npm run build
+          rm -rf .determinism-build-1
+          cp -r dist .determinism-build-1
+
+      - name: Deterministic production build #2 & byte-level comparison
+        env:
+          MINA_RELEASE_SEQUENCE: ${{ steps.seq.outputs.value }}
+          MINA_RELEASE_CHANNEL: ${{ inputs.channel }}
+          MINA_GIT_COMMIT: ${{ github.sha }}
+          MINA_PUBLISHED_AT: '2026-01-01T00:00:00.000Z'
+          MINA_SIGNING_PRIVATE_KEY_JWK: ${{ secrets.MINA_SIGNING_PRIVATE_KEY_JWK }}
+          MINA_SIGNING_KEY_ID: ${{ secrets.MINA_SIGNING_KEY_ID }}
+          VITE_PINNED_RELEASE_KEYS_JSON: ${{ vars.VITE_PINNED_RELEASE_KEYS_JSON }}
+          VITE_ANDROID_PLAY_STORE_URL: ${{ vars.VITE_ANDROID_PLAY_STORE_URL }}
+          VITE_IOS_APP_STORE_URL: ${{ vars.VITE_IOS_APP_STORE_URL }}
+        run: |
+          npm run build
+          node scripts/ci-release-gate.mjs --compare .determinism-build-1 dist
+          rm -rf .determinism-build-1
+
+      - name: Final stamped CI release build & metadata export
+        id: meta
+        env:
+          MINA_RELEASE_SEQUENCE: ${{ steps.seq.outputs.value }}
+          MINA_RELEASE_CHANNEL: ${{ inputs.channel }}
+          MINA_GIT_COMMIT: ${{ github.sha }}
+          MINA_SIGNING_PRIVATE_KEY_JWK: ${{ secrets.MINA_SIGNING_PRIVATE_KEY_JWK }}
+          MINA_SIGNING_KEY_ID: ${{ secrets.MINA_SIGNING_KEY_ID }}
+          VITE_PINNED_RELEASE_KEYS_JSON: ${{ vars.VITE_PINNED_RELEASE_KEYS_JSON }}
+          VITE_ANDROID_PLAY_STORE_URL: ${{ vars.VITE_ANDROID_PLAY_STORE_URL }}
+          VITE_IOS_APP_STORE_URL: ${{ vars.VITE_IOS_APP_STORE_URL }}
+        run: |
+          npm run build
+          node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin
           node -e '
             const fs = require("node:fs");
-            const path = require("node:path");
             const manifest = JSON.parse(fs.readFileSync("dist/release-manifest.json", "utf8"));
-            const relDir = path.join("dist", "releases", manifest.releaseId);
-            fs.mkdirSync(relDir, { recursive: true });
-            fs.copyFileSync("dist/release-manifest.json", path.join(relDir, "release-manifest.json"));
-            const out = process.env.GITHUB_OUTPUT;
-            fs.appendFileSync(out, `release_id=${manifest.releaseId}\n`);
-            fs.appendFileSync(out, `release_sequence=${manifest.releaseSequence}\n`);
-            fs.appendFileSync(out, `semver=${manifest.semver}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_id=${manifest.releaseId}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_sequence=${manifest.releaseSequence}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `semver=${manifest.semver}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `content_digest=${manifest.contentDigest}\n`);
           '
 
-      - name: Generate dependency SBOM & audit report
+      - name: Dependency audit & CycloneDX SBOM
         run: |
-          npm sbom --sbom-format=cyclonedx > dist/sbom.cdx.json || npm ls --all --json > dist/sbom-fallback.json
+          npm audit --omit=dev --audit-level=high
+          npm sbom --sbom-format=cyclonedx > dist/sbom.cdx.json
 
-      - name: Verify inline JS syntax, asset graph, and SHA-256 manifest integrity
+      - name: Verify inline JS syntax, subpath asset graph, and SHA-256 manifest integrity
         run: npm run verify:assets
 
-      - name: Run Audit + V4 + V5 + V7 Verified Update Engine tests
+      - name: Run Audit + V4 + V5 + V7 + V8 Release Assurance tests
         run: npm test
 
       - name: Install Playwright browsers & run release gate E2E
@@ -118,34 +147,32 @@ jobs:
           retention-days: 30
 
   staging-promotion-and-health-gate:
-    name: Staging Deployment & Health Verification
+    name: Staging Artifact Verification & Coherence Gate
     runs-on: ubuntu-latest
     needs: build-verify-and-package
     environment:
       name: staging
     steps:
+      - name: Checkout gate script
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Download verified release bundle
         uses: actions/download-artifact@v4
         with:
           name: minadental-release-${{ needs.build-verify-and-package.outputs.release_id }}
           path: release-bundle
 
-      - name: Verify staged pointer and manifest coherence before promotion
+      - name: Verify staged immutable release directory, pointers & SHA-256 integrity
         run: |
-          node -e '
-            const fs = require("node:fs");
-            const assert = require("node:assert/strict");
-            const pointer = JSON.parse(fs.readFileSync("release-bundle/dist/release-pointer.json", "utf8"));
-            const manifest = JSON.parse(fs.readFileSync("release-bundle/dist/release-manifest.json", "utf8"));
-            assert.equal(pointer.schemaVersion, 2);
-            assert.equal(manifest.schemaVersion, 2);
-            assert.equal(pointer.currentReleaseId, manifest.releaseId);
-            assert.equal(pointer.releaseSequence, manifest.releaseSequence);
-            console.log("Staging health gate passed:", manifest.releaseId, "seq #" + manifest.releaseSequence);
-          '
+          node scripts/ci-release-gate.mjs --verify-local release-bundle/dist --require-ci-origin
 
   production-promotion:
-    name: Production Promotion (Manual Environment Approval Required)
+    name: Production Promotion & Post-Deploy Live HTTP Verification
     runs-on: ubuntu-latest
     needs:
       - build-verify-and-package
@@ -155,6 +182,14 @@ jobs:
       name: production
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Checkout gate script
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Download verified release bundle
         uses: actions/download-artifact@v4
         with:
@@ -164,7 +199,7 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload Pages artifact (versioned assets + pointer published atomically)
+      - name: Upload Pages artifact (complete immutable releases + pointers published atomically)
         uses: actions/upload-pages-artifact@v3
         with:
           path: release-bundle/dist
@@ -172,3 +207,10 @@ jobs:
       - name: Deploy verified release to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Post-Deploy Live HTTP/MIME/SHA-256 Verification Gate
+        env:
+          DEPLOYED_URL: ${{ steps.deployment.outputs.page_url }}
+          EXPECTED_RELEASE_ID: ${{ needs.build-verify-and-package.outputs.release_id }}
+        run: |
+          node scripts/ci-release-gate.mjs --verify-remote "$DEPLOYED_URL" --expected-release-id "$EXPECTED_RELEASE_ID"

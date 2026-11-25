@@ -7,7 +7,7 @@ import type {
 } from './contracts';
 
 /**
- * Authoritative V7 Update State Transition Table.
+ * Authoritative V7/V8 Update State Transition Table.
  * Every transition in UpdateCoordinator is checked against this table so invalid
  * transitions (e.g., CHECKING -> INSTALLED without activation & boot verification)
  * are mathematically impossible.
@@ -53,26 +53,60 @@ export const UPDATE_TIMING_POLICY = {
   MIN_AUTO_CHECK_DEBOUNCE_MS: 30 * 1000,
   /** Independent per-attempt network timeout */
   REQUEST_TIMEOUT_MS: 10_000,
-  /** Asset verification per-file timeout */
+  /** Asset verification per-file timeout (covers headers + body read + SHA-256) */
   ASSET_TIMEOUT_MS: 12_000,
+  /** Overall staging deadline across all assets */
+  STAGE_TOTAL_DEADLINE_MS: 60_000,
+  /** Maximum parallel asset fetches during staging */
+  MAX_CONCURRENT_ASSET_DOWNLOADS: 3,
+  /** Bounded per-asset byte ceiling (20 MiB) */
+  MAX_SINGLE_ASSET_BYTES: 20 * 1024 * 1024,
+  /** Bounded full-release byte ceiling (60 MiB) */
+  MAX_TOTAL_RELEASE_BYTES: 60 * 1024 * 1024,
   /** Retry budget for transient network/5xx errors */
   MAX_CHECK_RETRIES: 2,
   BASE_RETRY_BACKOFF_MS: 600,
   /** Cross-tab leader lock lease duration */
   LEADER_LEASE_MS: 20_000,
+  /** Multi-tab BroadcastChannel peer blocker heartbeat expiry */
+  PEER_HEARTBEAT_TTL_MS: 15_000,
   /** Maximum activation attempts for a given releaseId before pausing for user intervention */
   MAX_ACTIVATION_ATTEMPTS: 2,
   /** Supported clinic database schema version */
   CLIENT_SCHEMA_VERSION: 4,
 } as const;
 
+export const DEFAULT_REMOTE_RELEASE_BASE_URL: string =
+  ((typeof import.meta !== 'undefined' &&
+    (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+      ?.VITE_REMOTE_RELEASE_BASE_URL) ||
+    'https://galaxy1364.github.io/Dendalcare/').replace(/\/?$/, '/');
+
+function loadInjectedPinnedKeys(): readonly PinnedPublicKey[] {
+  try {
+    const raw =
+      typeof import.meta !== 'undefined'
+        ? (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+            ?.VITE_PINNED_RELEASE_KEYS_JSON
+        : undefined;
+    if (!raw || !raw.trim()) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (k): k is PinnedPublicKey =>
+        Boolean(k && typeof k.keyId === 'string' && k.algorithm === 'ECDSA-P256-SHA256' && k.jwk)
+    );
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Pinned release verification public keys (ECDSA P-256).
  * Private keys stay strictly in CI/KMS secrets and are NEVER bundled in the client.
- * Key rotation adds a new `active` entry, marks the previous key `rotated`, and
- * revokes compromised keys via `status: 'revoked'`.
+ * When empty, the engine NEVER claims `signatureVerified: true` (honest `unsigned_web_origin_only`).
  */
-export const PINNED_RELEASE_PUBLIC_KEYS: readonly PinnedPublicKey[] = [];
+export const PINNED_RELEASE_PUBLIC_KEYS: readonly PinnedPublicKey[] = loadInjectedPinnedKeys();
 
 export function computeJitteredDelayMs(
   baseMs: number,
@@ -88,13 +122,24 @@ export function evaluateSafePoint(input: {
   remoteTabBlockers: readonly SafePointBlocker[];
   offlineQueueCount: number;
   activeTabId: string;
+  nowMs?: number;
+  peerTtlMs?: number;
 }): SafePointEvaluation {
-  const blockers: SafePointBlocker[] = [...input.localBlockers, ...input.remoteTabBlockers];
+  const nowMs = input.nowMs ?? Date.now();
+  const peerTtlMs = input.peerTtlMs ?? UPDATE_TIMING_POLICY.PEER_HEARTBEAT_TTL_MS;
+
+  // Retain only non-expired remote tab blockers (handles crashed/frozen tabs conservatively)
+  const activeRemote = input.remoteTabBlockers.filter(
+    (b) => b.updatedAt === undefined || nowMs - b.updatedAt <= peerTtlMs
+  );
+
+  const blockers: SafePointBlocker[] = [...input.localBlockers, ...activeRemote];
   if (input.offlineQueueCount > 0) {
     blockers.push({
       id: 'offline_mutation_queue',
       reason: `${input.offlineQueueCount.toLocaleString('fa-IR')} تغییر ثبت‌شده در صف آفلاین هنوز با سرور همگام نشده است.`,
       tabId: input.activeTabId,
+      updatedAt: nowMs,
     });
   }
   return {
@@ -119,24 +164,30 @@ export function getPersianUpdateErrorMessage(code: UpdateErrorCode): string {
       return 'امضای دیجیتال بسته انتشار تأیید نشد؛ نصب برای جلوگیری از دستکاری متوقف شد.';
     case 'DIGEST_MISMATCH':
       return 'اثر انگشت SHA-256 فایل‌های دریافتی با مانیفست رسمی تطابق ندارد.';
+    case 'SIZE_MISMATCH':
+      return 'حجم فایل دریافتی با اندازه اعلام‌شده در مانیفست رسمی مطابقت ندارد.';
+    case 'STORAGE_QUOTA_EXCEEDED':
+      return 'فضای ذخیره‌سازی مرورگر برای آماده‌سازی نسخه جدید کافی نیست؛ داده‌های شما کاملاً محفوظ ماندند.';
     case 'SEQUENCE_CONFLICT':
       return 'تعارض نسخه شناسایی شد: شماره انتشار یکسان با محتوای متفاوت دریافت شد.';
     case 'DOWNGRADE_REJECTED':
       return 'بازگشت به نسخه قدیمی‌تر (Downgrade) جهت حفظ امنیت رد شد.';
     case 'REPLAY_REJECTED':
-      return 'مانیفست قدیمی یا تکراری (Replay) شناسایی و رد شد.';
+      return 'مانیفست منقضی یا تکراری (Replay) شناسایی و رد شد.';
     case 'RELEASE_REVOKED':
       return 'این انتشار توسط مرجع رسمی لغو (Revoked) شده و قابل نصب نیست.';
     case 'MIGRATION_REQUIRED':
       return 'نسخه جدید نیازمند به‌روزرسانی ساختار دیتابیس (Migration) کلینیک است.';
     case 'NATIVE_UPDATE_REQUIRED':
-      return 'برای دریافت این نسخه، به‌روزرسانی نسخه بومی اپلیکیشن از فروشگاه رسمی لازم است.';
+      return 'برای دریافت این نسخه، به‌روزرسانی نسخه بومی اپلیکیشن از کانال رسمی فروشگاه لازم است.';
     case 'ASSET_VERIFICATION_FAILED':
-      return 'برخی فایل‌های اجرایی انتشار جدید ناقص یا نامعتبر بودند؛ نسخه فعلی حفظ شد.';
+      return 'برخی فایل‌های اجرایی یا سرویس‌ورکر انتشار جدید ناقص یا نامعتبر بودند؛ نسخه فعلی حفظ شد.';
     case 'ACTIVATION_TIMEOUT':
       return 'سرویس‌ورکر نسخه جدید در زمان مقرر فعال نشد؛ نسخه فعلی همچنان فعال است.';
     case 'BOOT_MISMATCH':
-      return 'پس از بازنشانی، شناسه نسخه در حال اجرا با نسخه هدف تطابق نداشت.';
+      return 'پس از بازنشانی، شناسه اجرایی نسخه یا سرویس‌ورکر با نسخه هدف تطابق نداشت.';
+    case 'RECOVERY_VERIFICATION_FAILED':
+      return 'بازیابی به نسخه سالم قبلی هنوز روی کلاینت اثبات نشده است؛ پرونده خطا جهت بررسی حفظ شد.';
     case 'RELOAD_LIMIT_REACHED':
       return 'سقف بازنشانی خودکار برای جلوگیری از حلقه رفرش پر شد؛ می‌توانید به‌صورت دستی تلاش کنید.';
     case 'CLIENT_PUBLISH_FORBIDDEN':
@@ -154,6 +205,7 @@ export function isRetryableUpdateError(code: UpdateErrorCode): boolean {
     code === 'TIMEOUT' ||
     code === 'HTTP_ERROR' ||
     code === 'ASSET_VERIFICATION_FAILED' ||
-    code === 'ACTIVATION_TIMEOUT'
+    code === 'ACTIVATION_TIMEOUT' ||
+    code === 'STORAGE_QUOTA_EXCEEDED'
   );
 }

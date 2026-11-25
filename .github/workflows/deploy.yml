@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   build_verify_and_deploy:
-    name: Build, Verify Release Gates & Deploy GitHub Pages
+    name: Build, Verify V8 Release Gates & Deploy GitHub Pages
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -35,22 +35,46 @@ jobs:
       - name: Install lockfile dependencies
         run: npm ci
 
+      - name: Compute strict monotonic CI release sequence
+        id: seq
+        env:
+          MINA_BASE_SEQUENCE: '65'
+        run: |
+          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json
+
       - name: Mandatory Pre-Deploy TypeScript Typecheck
         run: npm run typecheck
 
-      - name: Mandatory Deterministic Production Build
-        run: npm run build
+      - name: Mandatory Deterministic Production Build (CI Identity)
+        id: build
+        env:
+          MINA_RELEASE_SEQUENCE: ${{ steps.seq.outputs.value }}
+          MINA_RELEASE_CHANNEL: 'stable'
+          MINA_GIT_COMMIT: ${{ github.sha }}
+          MINA_SIGNING_PRIVATE_KEY_JWK: ${{ secrets.MINA_SIGNING_PRIVATE_KEY_JWK }}
+          MINA_SIGNING_KEY_ID: ${{ secrets.MINA_SIGNING_KEY_ID }}
+          VITE_PINNED_RELEASE_KEYS_JSON: ${{ vars.VITE_PINNED_RELEASE_KEYS_JSON }}
+          VITE_ANDROID_PLAY_STORE_URL: ${{ vars.VITE_ANDROID_PLAY_STORE_URL }}
+          VITE_IOS_APP_STORE_URL: ${{ vars.VITE_IOS_APP_STORE_URL }}
+        run: |
+          npm run build
+          node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin
+          node -e '
+            const fs = require("node:fs");
+            const m = JSON.parse(fs.readFileSync("dist/release-manifest.json", "utf8"));
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_id=${m.releaseId}\n`);
+          '
 
       - name: Mandatory Pre-Deploy Inline Syntax, Hygiene & Subpath Asset Graph Gate
         run: npm run verify:assets
 
-      - name: Mandatory Pre-Deploy Unit & Audit Tests
+      - name: Mandatory Pre-Deploy Unit, Audit & V8 Release Assurance Tests
         run: npm test
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload verified ./dist artifact for GitHub Pages
+      - name: Upload verified ./dist artifact for GitHub Pages (NEVER branch root!)
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
@@ -58,3 +82,10 @@ jobs:
       - name: Deploy verified artifact to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Post-Deploy Live HTTP/MIME/SHA-256 Verification
+        env:
+          DEPLOYED_URL: ${{ steps.deployment.outputs.page_url }}
+          EXPECTED_RELEASE_ID: ${{ steps.build.outputs.release_id }}
+        run: |
+          node scripts/ci-release-gate.mjs --verify-remote "$DEPLOYED_URL" --expected-release-id "$EXPECTED_RELEASE_ID"
