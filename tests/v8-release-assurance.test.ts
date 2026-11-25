@@ -801,6 +801,47 @@ export async function runAllV8ReleaseAssuranceTests(): Promise<V8TestResult[]> {
       await ptrSrv.close();
     }
 
+    // Regression: only a confirmed 404 pointer and a real legacy root can auto-bootstrap.
+    const scenarios = [
+      { status: 404, rootStatus: 200, body: '<script type="module" src="./src/main.tsx"></script>', auto: true, explicit: false, expected: true },
+      { status: 404, rootStatus: 200, body: '<meta name="minadental-build-id" content="v4.9.6-1234567890"><script type="module" src="./assets/index.js"></script>', auto: true, explicit: true, expected: false },
+      { status: 404, rootStatus: 200, body: '<p>src/main.tsx</p>', auto: true, explicit: false, expected: false },
+      { status: 503, rootStatus: 200, body: '<script type="module" src="./src/main.tsx"></script>', auto: true, explicit: true, expected: false },
+      { status: 200, rootStatus: 200, body: '<script type="module" src="./src/main.tsx"></script>', auto: true, explicit: true, expected: false },
+      { status: 404, rootStatus: 404, body: '', auto: false, explicit: true, expected: true },
+      { status: 404, rootStatus: 404, body: '', auto: true, explicit: false, expected: false },
+    ];
+    for (const scenario of scenarios) {
+      const srv = await startCustomServer((req, res) => {
+        if (req.url?.startsWith('/release-pointer.json')) {
+          res.writeHead(scenario.status, { 'Content-Type': 'text/html' });
+          res.end('Not a release pointer');
+          return;
+        }
+        res.writeHead(scenario.rootStatus, { 'Content-Type': 'text/html' });
+        res.end(scenario.body);
+      });
+      try {
+        const opts = {
+          baseSequence: 65, runNumber: 32,
+          remotePointerUrl: `${srv.baseUrl}release-pointer.json`,
+          requireRemotePointer: true,
+          bootstrapFirstRelease: scenario.explicit,
+          allowLegacyRootMigration: scenario.auto,
+        };
+        if (scenario.expected) {
+          const result = await computeMonotonicSequence(opts);
+          assert.equal(result.bootstrapped, true);
+          assert.equal(result.sequence, 97);
+          await assert.rejects(() => computeMonotonicSequence({ ...opts, overrideInput: '65' }), /Non-monotonic/);
+        } else {
+          await assert.rejects(() => computeMonotonicSequence(opts), /Fail-closed monotonic sequence guard/);
+        }
+      } finally {
+        await srv.close();
+      }
+    }
+
     // Remote health gate MUST fail loudly if server serves dev index.html containing src/main.tsx!
     const brokenDeploySrv = await startCustomServer((_req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
