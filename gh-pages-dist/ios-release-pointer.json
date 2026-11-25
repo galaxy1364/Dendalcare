@@ -2,10 +2,10 @@
   "schemaVersion": 2,
   "channel": "stable",
   "platform": "ios",
-  "currentReleaseId": "v4.9.6-23543ae32a",
+  "currentReleaseId": "v4.9.6-43931127ef",
   "releaseSequence": 99,
-  "manifestUrl": "./releases/v4.9.6-23543ae32a/release-manifest.json",
-  "updatedAt": "2026-11-25T18:21:25.171Z",
+  "manifestUrl": "./releases/v4.9.6-43931127ef/release-manifest.json",
+  "updatedAt": "2026-11-25T19:00:46.921Z",
   "revokedReleaseIds": [],
   "minSupportedSequence": 1,
   "storeUrl": null

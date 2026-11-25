@@ -8,7 +8,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { SectionId } from '@/lib/sections';
 import type {
   Appointment,
   Check,
@@ -42,34 +41,36 @@ import {
 import { MemPalace } from '@/lib/memPalace';
 import {
   applyAppUpdateAtomically,
-  updateCoordinator,
   type AtomicUpdateProgress,
   type UpdateSnapshot,
 } from '@/lib/updateManager';
 import { activateCloudSqlAndGoogleDrive } from '@/lib/integrationsEngine';
 import { clearOfflineQueue, getOfflineQueue, processOfflineQueue } from '@/lib/offlineQueue';
-import {
-  HapticEngine,
-  isHapticsEnabled,
-  isSoundEnabled,
-  setHapticsEnabled,
-  setSoundEnabled,
-} from '@/platform/haptics';
-import { initAppearanceEngine } from '@/design-system/themes/appearance';
+import { HapticEngine } from '@/platform/haptics';
 import { getCurrentPlatformInfo, type PlatformInfo } from '@/platform/capabilities';
 import { useViewportMetrics } from '@/platform/safeArea';
 import {
-  getDeviceNotificationPermission,
-  isDeviceNotificationsEnabled,
   requestDeviceNotificationPermission,
-  sendRealDeviceNotification,
-  setDeviceNotificationsEnabled,
   syncSmartAlertsToDeviceNotifications,
   reconcileZeroLossAlerts,
   acknowledgeZeroLossAlert,
   snoozeZeroLossAlert,
   resetAllZeroLossAlertsForToday,
 } from '@/lib/deviceNotifications';
+import {
+  AppearanceProvider,
+  useAppearanceProvider,
+} from './providers/AppearanceProvider';
+import {
+  UpdateProvider,
+  useUpdateProvider,
+} from './providers/UpdateProvider';
+import {
+  NOTIFICATION_READ_MODEL_PROJECTIONS,
+  buildUnifiedNotificationAlerts,
+  computeMascotMood,
+  computeNotificationCount,
+} from './providers/NotificationReadModel';
 import type { GlobalReminderPopupItem } from '@/components/ui/IOSReminderPopup';
 import type { MascotMood } from '@/components/ui/MascotTooth';
 import { NavigationProvider } from '@/navigation/NavigationStack';
@@ -232,7 +233,47 @@ export function useClinicShell(): ClinicShellContextValue {
 }
 
 export function AppProviders({ children }: { children: ReactNode }) {
+  const [liveSyncToast, setLiveSyncToast] = useState<string | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSyncToast = useCallback((msg: string, ms = 3200) => {
+    setLiveSyncToast(msg);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setLiveSyncToast(null), ms);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
+
+  return (
+    <AppearanceProvider requestPermissionFn={requestDeviceNotificationPermission}>
+      <UpdateProvider onToast={showSyncToast} applyUpdateFn={applyAppUpdateAtomically}>
+        <ClinicShellProviders
+          liveSyncToast={liveSyncToast}
+          showSyncToast={showSyncToast}
+        >
+          {children}
+        </ClinicShellProviders>
+      </UpdateProvider>
+    </AppearanceProvider>
+  );
+}
+
+function ClinicShellProviders({
+  children,
+  liveSyncToast,
+  showSyncToast,
+}: {
+  children: ReactNode;
+  liveSyncToast: string | null;
+  showSyncToast: (msg: string, ms?: number) => void;
+}) {
   const viewport = useViewportMetrics();
+  const appearance = useAppearanceProvider();
+  const updates = useUpdateProvider();
 
   const [users, setUsers] = useState<ClinicUserAccount[]>(() => loadClinicUsers());
   const [currentUser, setCurrentUser] = useState<ClinicUserAccount>(() => loadActiveUser());
@@ -258,18 +299,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [offlineQueueCount, setOfflineQueueCount] = useState(() => getOfflineQueue().length);
   const [flushingQueue, setFlushingQueue] = useState(false);
 
-  const [updateSnapshot, setUpdateSnapshot] = useState<UpdateSnapshot>(() =>
-    updateCoordinator.getSnapshot()
-  );
-  const [atomicProgress, setAtomicProgress] = useState<AtomicUpdateProgress | null>(null);
-
-  const [liveSyncToast, setLiveSyncToast] = useState<string | null>(null);
   const [guardianToast, setGuardianToast] = useState<GuardianToastState | null>(null);
-
-  const [hapticsOn, setHapticsOn] = useState(() => isHapticsEnabled());
-  const [soundOn, setSoundOn] = useState(() => isSoundEnabled());
-  const [deviceNotifOn, setDeviceNotifOn] = useState(() => isDeviceNotificationsEnabled());
-  const [deviceNotifPerm, setDeviceNotifPerm] = useState(() => getDeviceNotificationPermission());
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(() =>
     typeof window !== 'undefined' ? (window as any).__deferredInstallPrompt || null : null
@@ -288,14 +318,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   const [zeroLossTick, setZeroLossTick] = useState(0);
   const [forceExpandReminderKey, setForceExpandReminderKey] = useState(0);
-  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastToastedInstalledReleaseIdRef = useRef<string | null>(null);
-
-  const showSyncToast = useCallback((msg: string, ms = 3200) => {
-    setLiveSyncToast(msg);
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = setTimeout(() => setLiveSyncToast(null), ms);
-  }, []);
 
   // Sync visualViewport keyboard state for zero-scroll layout adaptation
   useEffect(() => {
@@ -304,9 +326,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
     }
   }, [viewport.keyboardOpen]);
 
-  // Post-commit shell handshake, appearance boot, explicit Auth bootstrap state machine & SW update listener
+  // Post-commit shell handshake & explicit Auth bootstrap state machine
+  // (Runs before parent UpdateProvider's useEffect so markShellCommitted() always precedes updateCoordinator.start())
   useEffect(() => {
-    const cleanupAppearance = initAppearanceEngine();
     // V5 P0-04: Genuine post-commit handshake (replaces premature main.tsx flag)
     markShellCommitted();
     appBootstrap.transition('AUTH_RESOLVING');
@@ -332,24 +354,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
     purgeExpiredVaultMirrors().catch(() => {});
 
-    // V7/V8 Single UpdateCoordinator: starts strictly AFTER post-commit shell handshake
-    const unsubUpdate = updateCoordinator.subscribe((snap) => {
-      setUpdateSnapshot(snap);
-      if (
-        snap.state === 'INSTALLED' &&
-        snap.installed.releaseId &&
-        lastToastedInstalledReleaseIdRef.current !== snap.installed.releaseId
-      ) {
-        lastToastedInstalledReleaseIdRef.current = snap.installed.releaseId;
-        HapticEngine.success();
-        showSyncToast(
-          `نسخه v${snap.installed.semver} (${snap.installed.releaseId}) پس از تأیید بوت با موفقیت فعال شد`,
-          4500
-        );
-      }
-    });
-    const stopUpdateCoordinator = updateCoordinator.start();
-
     MemPalace.recordAudit({
       traceId: 'TRC-MINA-CORE-9001-A',
       action: 'SYSTEM_BOOT',
@@ -358,59 +362,52 @@ export function AppProviders({ children }: { children: ReactNode }) {
       actor: currentUser.fullName || 'سیستم مرکزی',
       status: 'pass',
     });
-
-    return () => {
-      unsubUpdate();
-      stopUpdateCoordinator();
-      cleanupAppearance();
-      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    };
   }, []);
 
-  // Minimal-column realtime tables (eliminating select('*') across the global shell)
+  // V10 P1 Data-Minimized realtime shell tables (strictly excluding clinical PHI/PII columns)
   const { data: reminders } = useRealtimeTable<Reminder>(
     'reminders',
-    'id,patient_id,title,description,reminder_date,reminder_time,category,priority,status,created_at'
+    NOTIFICATION_READ_MODEL_PROJECTIONS.reminders
   );
   const { data: messages } = useRealtimeTable<Message>(
     'messages',
-    'id,subject,body,is_read,created_at'
+    NOTIFICATION_READ_MODEL_PROJECTIONS.messages
   );
   const { data: patients } = useRealtimeTable<Patient>(
     'patients',
-    'id,first_name,last_name,phone,insurance_number,national_id,created_at'
+    NOTIFICATION_READ_MODEL_PROJECTIONS.patients
   );
   const { data: appointments } = useRealtimeTable<Appointment>(
     'appointments',
-    'id,patient_id,title,appointment_date,appointment_time,room,type,status,created_at'
+    NOTIFICATION_READ_MODEL_PROJECTIONS.appointments
   );
   const { data: treatments } = useRealtimeTable<Treatment>(
     'treatments',
-    'id,patient_id,diagnosis,treatment_plan,tooth_numbers,total_cost,paid_amount,status,created_at'
+    NOTIFICATION_READ_MODEL_PROJECTIONS.treatments
   );
   const { data: labOrders } = useRealtimeTable<LabOrder>(
     'lab_orders',
-    'id,patient_id,lab_name,tooth_numbers,work_type,status,due_date,received_date,created_at'
+    NOTIFICATION_READ_MODEL_PROJECTIONS.lab_orders
   );
   const { data: implants } = useRealtimeTable<Implant>(
     'implants',
-    'id,patient_id,brand,tooth_number,stage,placement_date,osseointegration_date,abutment_date,crown_date,created_at'
+    NOTIFICATION_READ_MODEL_PROJECTIONS.implants
   );
   const { data: inventory } = useRealtimeTable<InventoryItem>(
     'inventory',
-    'id,name,quantity,min_quantity,unit,expiry_date,created_at'
+    NOTIFICATION_READ_MODEL_PROJECTIONS.inventory
   );
   const { data: installments } = useRealtimeTable<Installment>(
     'installments',
-    'id,patient_id,total_amount,paid_amount,monthly_amount,next_due_date,status,created_at'
+    NOTIFICATION_READ_MODEL_PROJECTIONS.installments
   );
   const { data: checks } = useRealtimeTable<Check>(
     'checks',
-    'id,patient_id,check_number,bank_name,amount,due_date,status,created_at'
+    NOTIFICATION_READ_MODEL_PROJECTIONS.checks
   );
   const { data: safteh } = useRealtimeTable<Safteh>(
     'safteh',
-    'id,patient_id,safteh_number,guarantor_name,amount,due_date,status,created_at'
+    NOTIFICATION_READ_MODEL_PROJECTIONS.safteh
   );
 
   const liveSmartAlerts = useMemo(() => {
@@ -434,63 +431,26 @@ export function AppProviders({ children }: { children: ReactNode }) {
     [reminders]
   );
   const unreadMessages = useMemo(() => messages.filter((m) => !m.is_read), [messages]);
-  const notifCount = Math.max(liveSmartAlerts.length, pendingReminders.length) + unreadMessages.length;
+  const notifCount = computeNotificationCount(
+    liveSmartAlerts.length,
+    pendingReminders.length,
+    unreadMessages.length
+  );
 
-  const mascotMood: MascotMood = useMemo(() => {
-    if (
-      liveSmartAlerts.some((a) => a.urgency === 'critical' || a.urgency === 'today') ||
-      pendingReminders.length > 5
-    ) {
-      return 'sad';
-    }
-    return 'happy';
-  }, [liveSmartAlerts, pendingReminders.length]);
+  const mascotMood: MascotMood = useMemo(
+    () => computeMascotMood(liveSmartAlerts, pendingReminders.length),
+    [liveSmartAlerts, pendingReminders.length]
+  );
 
-  const unifiedGlobalAlerts: GlobalReminderPopupItem[] = useMemo(() => {
-    const mappedLive: GlobalReminderPopupItem[] = liveSmartAlerts.map((a) => ({
-      id: a.id,
-      domain: a.domain,
-      targetSection: a.targetSection,
-      patientName: a.patientName,
-      patientPhone: a.patientPhone,
-      title: a.title,
-      subtitle: a.subtitle,
-      dueDate: a.dueDate,
-      urgency: a.urgency,
-      amount: a.amount,
-    }));
-
-    const existingTitles = new Set(mappedLive.map((m) => m.title));
-    const mappedStored: GlobalReminderPopupItem[] = pendingReminders
-      .filter((r) => !existingTitles.has(r.title))
-      .map((r) => {
-        const pt = patients.find((p) => p.id === r.patient_id);
-        const ptName = pt ? `${pt.first_name} ${pt.last_name}` : 'بیمار کلینیک';
-        const secMap: Record<string, SectionId> = {
-          payment: 'finance',
-          implant: 'implants',
-          lab: 'lab',
-          appointment: 'appointments',
-          inventory: 'inventory',
-          treatment: 'treatments',
-        };
-        return {
-          id: `rem_${r.id}`,
-          domain: r.category || 'appointment',
-          targetSection: secMap[r.category] || 'reminders',
-          patientName: ptName,
-          patientPhone: pt?.phone || null,
-          title: r.title,
-          subtitle:
-            r.description ||
-            `موعد یادآوری: ${toJalaliStr(r.reminder_date)} ساعت ${r.reminder_time || '09:30'}`,
-          dueDate: r.reminder_date,
-          urgency: r.priority === 'urgent' ? 'critical' : r.priority === 'high' ? 'today' : 'upcoming',
-        };
-      });
-
-    return [...mappedLive, ...mappedStored];
-  }, [liveSmartAlerts, pendingReminders, patients]);
+  const unifiedGlobalAlerts: GlobalReminderPopupItem[] = useMemo(
+    () =>
+      buildUnifiedNotificationAlerts({
+        liveSmartAlerts,
+        pendingReminders,
+        patients,
+      }),
+    [liveSmartAlerts, pendingReminders, patients]
+  );
 
   const zeroLossPopupQueue = useMemo(() => {
     void zeroLossTick;
@@ -531,77 +491,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!deviceNotifOn || unifiedGlobalAlerts.length === 0) return;
+    if (!appearance.deviceNotifOn || unifiedGlobalAlerts.length === 0) return;
     syncSmartAlertsToDeviceNotifications(unifiedGlobalAlerts).catch(() => {});
-  }, [deviceNotifOn, unifiedGlobalAlerts]);
-
-  const installingUpdate =
-    updateSnapshot.state === 'DOWNLOADING' ||
-    updateSnapshot.state === 'VERIFYING' ||
-    updateSnapshot.state === 'ACTIVATING';
-
-  const updateAvailable = Boolean(
-    updateSnapshot.candidate &&
-      (updateSnapshot.state === 'AVAILABLE' ||
-        updateSnapshot.state === 'DOWNLOADING' ||
-        updateSnapshot.state === 'VERIFYING' ||
-        updateSnapshot.state === 'READY_TO_ACTIVATE' ||
-        updateSnapshot.state === 'WAITING_FOR_SAFE_POINT' ||
-        updateSnapshot.state === 'NATIVE_STORE_REQUIRED')
-  );
-
-  const otaUpdateInfo = useMemo(() => {
-    if (!updateSnapshot.candidate) return null;
-    const m = updateSnapshot.candidate.manifest;
-    return {
-      version: m.semver,
-      build: m.releaseSequence,
-      releaseId: m.releaseId,
-      releaseNotes: m.releaseNotes,
-      publishedBy: m.origin === 'ci_pipeline' ? 'انتشار رسمی مینادنتال' : 'بیلد محلی',
-    };
-  }, [updateSnapshot.candidate]);
-
-  const applyUpdate = useCallback(
-    async (forceEvenIfBusy = false) => {
-      try {
-        const snap = await applyAppUpdateAtomically({
-          forceEvenIfBusy,
-          reloadPage: true,
-          onProgress: (p) => setAtomicProgress(p),
-        });
-        if (snap.state === 'FAILED' || snap.state === 'CHECK_FAILED') {
-          HapticEngine.error();
-          if (snap.error?.messageFa) {
-            showSyncToast(snap.error.messageFa, 4500);
-          }
-        } else if (snap.state === 'WAITING_FOR_SAFE_POINT') {
-          HapticEngine.warning();
-          showSyncToast(
-            'به‌روزرسانی تأیید شد و پس از تکمیل فرم‌ها و ارسال صف آفلاین فعال می‌شود.',
-            4200
-          );
-        }
-      } catch {
-        HapticEngine.error();
-      } finally {
-        setTimeout(() => setAtomicProgress(null), 1200);
-      }
-    },
-    [showSyncToast]
-  );
-
-  const deferUpdate = useCallback((minutes = 30) => {
-    updateCoordinator.deferCandidate(minutes);
-  }, []);
-
-  const checkUpdatesNow = useCallback(async () => {
-    await updateCoordinator.checkForUpdates('manual');
-  }, []);
-
-  const openNativeUpdateStore = useCallback(() => {
-    updateCoordinator.openNativeStoreAction();
-  }, []);
+  }, [appearance.deviceNotifOn, unifiedGlobalAlerts]);
 
   // Cloud SQL & Real-Time Sync Channel (Realtime OTA events are HINT-ONLY — never release authority)
   useEffect(() => {
@@ -630,7 +522,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
           parsedReleaseId = (ota as { releaseId?: string }).releaseId;
         }
         // Strictly treat Realtime push as an untrusted hint; coordinator validates releaseId & fetches manifest
-        void updateCoordinator.handleRealtimeHint({
+        void updates.handleRealtimeHint({
           releaseId: parsedReleaseId,
           version: ota.version,
         });
@@ -640,7 +532,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       },
     });
     return cleanup;
-  }, [currentUser.fullName, currentUser.name, currentUser.email, showSyncToast]);
+  }, [currentUser.fullName, currentUser.name, currentUser.email, showSyncToast, updates.handleRealtimeHint]);
 
   // Guardian Toasts, Offline Queue & Table Workflow Popups
   useEffect(() => {
@@ -1022,57 +914,28 @@ export function AppProviders({ children }: { children: ReactNode }) {
     flushingQueue,
     flushOfflineQueue,
     clearQueue,
-    updateSnapshot,
-    updateAvailable,
-    otaUpdateInfo,
-    installingUpdate,
-    atomicProgress,
-    applyUpdate,
-    deferUpdate,
-    checkUpdatesNow,
-    openNativeUpdateStore,
+    updateSnapshot: updates.updateSnapshot,
+    updateAvailable: updates.updateAvailable,
+    otaUpdateInfo: updates.otaUpdateInfo,
+    installingUpdate: updates.installingUpdate,
+    atomicProgress: updates.atomicProgress,
+    applyUpdate: updates.applyUpdate,
+    deferUpdate: updates.deferUpdate,
+    checkUpdatesNow: updates.checkUpdatesNow,
+    openNativeUpdateStore: updates.openNativeUpdateStore,
     liveSyncToast,
     showSyncToast,
     guardianToast,
     dismissGuardianToast: () => setGuardianToast(null),
-    hapticsOn,
-    toggleHaptics: () => {
-      const next = !hapticsOn;
-      setHapticsOn(next);
-      setHapticsEnabled(next);
-    },
-    soundOn,
-    toggleSound: () => {
-      const next = !soundOn;
-      setSoundOn(next);
-      setSoundEnabled(next);
-    },
-    deviceNotifOn,
-    deviceNotifPerm,
-    toggleDeviceNotif: (next) => {
-      setDeviceNotificationsEnabled(next);
-      setDeviceNotifOn(next);
-    },
-    requestDeviceNotif: async () => {
-      const perm = await requestDeviceNotificationPermission();
-      setDeviceNotifPerm(perm);
-      const enabled = perm === 'granted';
-      setDeviceNotifOn(enabled);
-      if (enabled) {
-        await sendRealDeviceNotification({
-          title: 'مینادنتال متصل شد',
-          body: 'یادآوری‌های کلینیک روی نوتیفیکیشن گوشی نمایش داده می‌شوند.',
-          tag: 'minadental-connected',
-        });
-      }
-    },
-    testDeviceNotif: async () => {
-      await sendRealDeviceNotification({
-        title: 'مینادنتال • تست اعلان گوشی',
-        body: `${notifCount.toLocaleString('fa-IR')} یادآوری فعال در کلینیک ثبت شده است.`,
-        tag: `minadental-test-${Date.now()}`,
-      });
-    },
+    hapticsOn: appearance.hapticsOn,
+    toggleHaptics: appearance.toggleHaptics,
+    soundOn: appearance.soundOn,
+    toggleSound: appearance.toggleSound,
+    deviceNotifOn: appearance.deviceNotifOn,
+    deviceNotifPerm: appearance.deviceNotifPerm,
+    toggleDeviceNotif: appearance.toggleDeviceNotif,
+    requestDeviceNotif: appearance.requestDeviceNotif,
+    testDeviceNotif: () => appearance.testDeviceNotif(notifCount),
     deferredPrompt,
     clearDeferredPrompt: () => setDeferredPrompt(null),
     triggerInstall,

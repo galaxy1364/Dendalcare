@@ -1,11 +1,15 @@
-// MinaDental Unified Service Worker (V8 Verified Release Assurance)
+// MinaDental Unified Service Worker (V10 Resilient Foundation)
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
+// NOTE: Structural HTML checks below prevent cache poisoning & raw-TSX contamination;
+// they are NOT a substitute for cryptographic ECDSA manifest signature verification.
 const BUILD_ID = '__MINA_BUILD_ID_VALUE__';
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
 const NAVIGATION_TIMEOUT_MS = 4500;
+const ASSET_TIMEOUT_MS = 10000;
 const CLIENT_LEASE_TTL_MS = 10 * 60 * 1000;
+const VALID_BUILD_ID_RE = /^v\d+\.\d+\.\d+-[0-9a-f]{10}$/;
 
 const CRITICAL_PRECACHE_ASSETS = /*__MINA_CRITICAL_ASSETS__*/ [
   './',
@@ -31,7 +35,10 @@ const NEVER_CACHE_PATH_PATTERNS = [
   '/functions/v1/',
   '/api/',
   '/assets/aistudio/',
+  '/clinical-records/',
 ];
+
+const SENSITIVE_QUERY_KEYS = ['access_token', 'refresh_token', 'apikey', 'api_key', 'token'];
 
 const BYPASS_EXTENSIONS = ['.apk', '.mobileconfig', '.idsig', '.ipa'];
 
@@ -42,10 +49,15 @@ function isMinadentalCacheKey(key) {
   return typeof key === 'string' && key.startsWith('minadental-');
 }
 
-function isSensitiveOrApiPath(pathname) {
-  const lower = pathname.toLowerCase();
+function isSensitiveOrApiPath(pathname, search = '') {
+  const lower = String(pathname || '').toLowerCase();
   if (BYPASS_EXTENSIONS.some((ext) => lower.endsWith(ext))) return true;
-  return NEVER_CACHE_PATH_PATTERNS.some((pattern) => lower.includes(pattern));
+  if (NEVER_CACHE_PATH_PATTERNS.some((pattern) => lower.includes(pattern))) return true;
+  if (search) {
+    const lowerSearch = String(search).toLowerCase();
+    if (SENSITIVE_QUERY_KEYS.some((k) => lowerSearch.includes(k + '='))) return true;
+  }
+  return false;
 }
 
 function isValidMimeForPath(pathname, contentType, requestMode) {
@@ -76,9 +88,57 @@ function isValidMimeForPath(pathname, contentType, requestMode) {
   return !ct.includes('text/html');
 }
 
+/**
+ * V10 P0 Structural Navigation HTML Validator:
+ * Prevents raw TSX, dev-local, captive portals, error pages, or mismatched-build HTML
+ * from poisoning the healthy release cache or replacing a verified cached shell.
+ * NOTE: Structural integrity check ONLY — cryptographic authenticity is enforced via ECDSA manifest signing.
+ */
+function validateNavigationHtml(htmlText, expectedBuildId = RESOLVED_BUILD_ID) {
+  if (typeof htmlText !== 'string' || htmlText.length < 120) {
+    return { valid: false, reason: 'EMPTY_OR_TRUNCATED_HTML', responseBuildId: null };
+  }
+
+  // Never accept raw uncompiled TypeScript/TSX entry scripts in cached shell HTML
+  if (/<script\b[^>]+src=["'][^"']*\.tsx(?:[?#][^"']*)?["']/i.test(htmlText) || htmlText.includes('src/main.tsx')) {
+    return { valid: false, reason: 'RAW_TSX_ENTRY_HTML', responseBuildId: null };
+  }
+
+  // Never accept unstamped template placeholders (constructed dynamically so Vite build stamper only stamps BUILD_ID)
+  const unstampedBuildToken = '__' + 'MINA_BUILD_ID_VALUE__';
+  const unstampedDigestToken = '__' + 'MINA_CONTENT_DIGEST_VALUE__';
+  if (htmlText.includes(unstampedBuildToken) || htmlText.includes(unstampedDigestToken)) {
+    return { valid: false, reason: 'UNSTAMPED_TEMPLATE_HTML', responseBuildId: null };
+  }
+
+  const metaMatch = htmlText.match(/<meta\s+name=["']minadental-build-id["']\s+content=["']([^"']+)["']/i);
+  const responseBuildId = metaMatch ? metaMatch[1].trim() : null;
+  if (!responseBuildId) {
+    return { valid: false, reason: 'MISSING_BUILD_ID_META', responseBuildId: null };
+  }
+
+  const isProdWorker = expectedBuildId !== 'dev-local';
+  if (isProdWorker) {
+    if (responseBuildId === 'dev-local' || !VALID_BUILD_ID_RE.test(responseBuildId)) {
+      return { valid: false, reason: 'INVALID_OR_DEV_BUILD_ID', responseBuildId };
+    }
+    if (responseBuildId !== expectedBuildId) {
+      return { valid: false, reason: 'BUILD_ID_MISMATCH', responseBuildId };
+    }
+    // Require a compiled JS module bundle reference under assets/
+    const hasCompiledModuleEntry = /<script\b[^>]*type=["']module["'][^>]*src=["'][^"']*assets\/[^"']+\.(?:m?js)(?:[?#][^"']*)?["']/i.test(htmlText) ||
+      /<script\b[^>]*src=["'][^"']*assets\/[^"']+\.(?:m?js)(?:[?#][^"']*)?["'][^>]*type=["']module["']/i.test(htmlText);
+    if (!hasCompiledModuleEntry) {
+      return { valid: false, reason: 'MISSING_COMPILED_ENTRY_SCRIPT', responseBuildId };
+    }
+  }
+
+  return { valid: true, reason: 'OK', responseBuildId };
+}
+
 function isCacheableResponse(request, response, pathname) {
   if (!response || !response.ok || response.status !== 200) return false;
-  if (response.type !== 'basic') return false;
+  if (response.type && response.type !== 'basic' && response.type !== 'default') return false;
 
   const cacheControl = (response.headers.get('cache-control') || '').toLowerCase();
   if (cacheControl.includes('no-store') || cacheControl.includes('private')) {
@@ -95,6 +155,16 @@ function fetchWithTimeout(request, options, timeoutMs) {
   return fetch(request, Object.assign({}, options, { signal: controller.signal })).finally(() => {
     clearTimeout(timer);
   });
+}
+
+async function safeCachePut(cache, key, response) {
+  try {
+    await cache.put(key, response);
+    return true;
+  } catch {
+    // Isolate QuotaExceededError or transient cache write errors without corrupting active shell
+    return false;
+  }
 }
 
 function createOfflineHtmlResponse() {
@@ -132,28 +202,42 @@ function notifyClients(payload) {
 }
 
 async function fetchAndCacheAsset(cache, assetUrl, isCritical) {
+  const isHtmlAsset = assetUrl === './' || assetUrl.endsWith('.html');
+
   // Reuse verified candidate bytes already written by UpdateCoordinator if valid in CACHE_NAME
   const preStaged = await cache.match(assetUrl);
   if (preStaged && preStaged.ok && preStaged.status === 200) {
     const parsedExisting = new URL(assetUrl, self.location.href);
-    const modeExisting = assetUrl === './' || assetUrl.endsWith('.html') ? 'navigate' : 'cors';
+    const modeExisting = isHtmlAsset ? 'navigate' : 'cors';
     const ctExisting = preStaged.headers.get('content-type') || '';
     if (isValidMimeForPath(parsedExisting.pathname, ctExisting, modeExisting)) {
-      return;
+      if (!isHtmlAsset) return;
+      const existingHtml = await preStaged.clone().text().catch(() => '');
+      if (validateNavigationHtml(existingHtml).valid) return;
+      await cache.delete(assetUrl).catch(() => {});
     }
   }
 
   const req = new Request(assetUrl, { cache: 'no-store' });
-  const res = await fetch(req);
+  const res = await fetchWithTimeout(req, {}, ASSET_TIMEOUT_MS);
   const parsed = new URL(req.url);
-  const mode = assetUrl === './' || assetUrl.endsWith('.html') ? 'navigate' : 'cors';
+  const mode = isHtmlAsset ? 'navigate' : 'cors';
   const ct = res && res.headers ? res.headers.get('content-type') || '' : '';
-  const valid =
+  const typeValid = !res?.type || res.type === 'basic' || res.type === 'default';
+  let valid =
     Boolean(res) &&
     res.ok &&
     res.status === 200 &&
-    res.type === 'basic' &&
+    typeValid &&
     isValidMimeForPath(parsed.pathname, ct, mode);
+
+  if (valid && isHtmlAsset) {
+    const htmlProbe = await res.clone().text().catch(() => '');
+    const check = validateNavigationHtml(htmlProbe);
+    if (!check.valid) {
+      valid = false;
+    }
+  }
 
   if (!valid) {
     if (isCritical) {
@@ -161,7 +245,10 @@ async function fetchAndCacheAsset(cache, assetUrl, isCritical) {
     }
     return;
   }
-  await cache.put(assetUrl, res);
+  const written = await safeCachePut(cache, assetUrl, res);
+  if (!written && isCritical) {
+    throw new Error(`Critical precache cache write failed (possible storage quota): ${assetUrl}`);
+  }
 }
 
 async function verifyOwnStagedInventory() {
@@ -174,10 +261,18 @@ async function verifyOwnStagedInventory() {
       continue;
     }
     const parsed = new URL(assetUrl, self.location.href);
-    const mode = assetUrl === './' || assetUrl.endsWith('.html') ? 'navigate' : 'cors';
+    const isHtml = assetUrl === './' || assetUrl.endsWith('.html');
+    const mode = isHtml ? 'navigate' : 'cors';
     const ct = matched.headers.get('content-type') || '';
     if (!isValidMimeForPath(parsed.pathname, ct, mode)) {
       missing.push(assetUrl);
+      continue;
+    }
+    if (isHtml) {
+      const htmlText = await matched.clone().text().catch(() => '');
+      if (!validateNavigationHtml(htmlText).valid) {
+        missing.push(assetUrl);
+      }
     }
   }
   return {
@@ -191,7 +286,7 @@ async function verifyOwnStagedInventory() {
 }
 
 // Install: atomically validate critical entry shell/JS/CSS assets so a broken release never activates.
-// CRITICAL (V5/V6/V8): NEVER call self.skipWaiting() unconditionally in install.
+// CRITICAL (V5/V6/V8/V10): NEVER call self.skipWaiting() unconditionally in install.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -258,7 +353,7 @@ async function pruneObsoleteMinadentalCaches(keepBuildIds) {
   );
 }
 
-// V8 Authenticated MessageChannel & Controlled Activation Protocol
+// V8/V10 Authenticated MessageChannel & Controlled Activation Protocol
 self.addEventListener('message', (event) => {
   const data = event.data;
   if (!data || typeof data !== 'object') return;
@@ -273,7 +368,7 @@ self.addEventListener('message', (event) => {
   }
 
   if (data.type === 'SKIP_WAITING') {
-    // V8: Strictly require explicit targetReleaseId matching this exact worker (zero legacy FORCE_UPDATE bypass!)
+    // Strictly require explicit targetReleaseId matching this exact worker (zero legacy FORCE_UPDATE bypass!)
     if (!data.targetReleaseId || typeof data.targetReleaseId !== 'string') {
       return;
     }
@@ -328,32 +423,64 @@ self.addEventListener('sync', (event) => {
   }
 });
 
+async function getVerifiedCachedShell(cache, request) {
+  const candidates = [request, './index.html', './'];
+  for (const key of candidates) {
+    const hit = await cache.match(key);
+    if (!hit || hit.status !== 200) continue;
+    const ct = hit.headers.get('content-type') || '';
+    if (!ct.toLowerCase().includes('text/html')) continue;
+    const body = await hit.clone().text().catch(() => '');
+    if (validateNavigationHtml(body).valid) {
+      return hit;
+    }
+    // Purge poisoned entry if discovered in cache
+    await cache.delete(key).catch(() => {});
+  }
+  return null;
+}
+
 async function handleNavigationRequest(request, url) {
+  const cache = await caches.open(CACHE_NAME);
   try {
     const networkResponse = await fetchWithTimeout(
       request,
       { cache: 'no-store' },
       NAVIGATION_TIMEOUT_MS
     );
+
     if (isCacheableResponse(request, networkResponse, url.pathname)) {
       const htmlProbe = await networkResponse.clone().text().catch(() => '');
-      const metaMatch = htmlProbe.match(/<meta\s+name="minadental-build-id"\s+content="([^"]+)"/i);
-      const responseBuildId = metaMatch ? metaMatch[1] : null;
-      // V7/V8: NEVER cache navigation HTML belonging to a DIFFERENT release into this worker's cache
-      if (!responseBuildId || RESOLVED_BUILD_ID === 'dev-local' || responseBuildId === RESOLVED_BUILD_ID) {
+      const validation = validateNavigationHtml(htmlProbe, RESOLVED_BUILD_ID);
+
+      if (validation.valid) {
         const clone = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', clone)).catch(() => {});
+        await safeCachePut(cache, './index.html', clone);
+        return networkResponse;
       }
+
+      // V10 P0: Never cache structurally invalid HTML (raw TSX, dev-local, captive portal, mismatched build).
+      // If a newer valid release HTML arrived (BUILD_ID_MISMATCH with valid compiled bundle), serve it without poisoning THIS worker's cache.
+      if (validation.reason === 'BUILD_ID_MISMATCH' && validation.responseBuildId && VALID_BUILD_ID_RE.test(validation.responseBuildId)) {
+        const newerCheck = validateNavigationHtml(htmlProbe, validation.responseBuildId);
+        if (newerCheck.valid) {
+          return networkResponse;
+        }
+      }
+
+      // Broken/poisoned HTML (raw TSX, dev-local, missing entry script, captive portal): fall back to verified cached shell!
+      const verifiedFallback = await getVerifiedCachedShell(cache, request);
+      if (verifiedFallback) return verifiedFallback;
+      return createOfflineHtmlResponse();
     }
+
+    // Non-200 (404/503) or non-HTML navigation response: prefer verified cached shell!
+    const cachedShell = await getVerifiedCachedShell(cache, request);
+    if (cachedShell) return cachedShell;
     return networkResponse;
   } catch {
-    const cache = await caches.open(CACHE_NAME);
-    const exactMatch = await cache.match(request);
-    if (exactMatch) return exactMatch;
-    const indexMatch = await cache.match('./index.html');
-    if (indexMatch) return indexMatch;
-    const rootMatch = await cache.match('./');
-    if (rootMatch) return rootMatch;
+    const cachedShell = await getVerifiedCachedShell(cache, request);
+    if (cachedShell) return cachedShell;
     return createOfflineHtmlResponse();
   }
 }
@@ -370,10 +497,10 @@ async function handleStaticAssetRequest(request, url) {
   }
 
   try {
-    const networkResponse = await fetch(request);
+    const networkResponse = await fetchWithTimeout(request, {}, ASSET_TIMEOUT_MS);
     if (isCacheableResponse(request, networkResponse, url.pathname)) {
       const clone = networkResponse.clone();
-      cache.put(request, clone).catch(() => {});
+      await safeCachePut(cache, request, clone);
     }
     return networkResponse;
   } catch {
@@ -392,7 +519,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (isSensitiveOrApiPath(url.pathname)) return;
+  if (isSensitiveOrApiPath(url.pathname, url.search)) return;
 
   // Never cache mutable release pointers or manifests
   if (

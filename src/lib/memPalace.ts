@@ -306,6 +306,24 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'بروزرسانی یکپارچه نسخه و بیلد به v64.0 (Build #64) در وب، PWA، سرویس‌ورکر، دیتابیس ابری و versionCode = 64 اندروید',
     ],
   },
+  {
+    id: 'milestone-12',
+    traceId: 'TRC-MINA-V10-ARCH-9012-L',
+    phaseNumber: 12,
+    title: 'معماری کلینیکی و مهندسی ایمنی V10: اعتبارسنجی ساختاری HTML در SW، تفکیک تدریجی Providerها و کمینه‌سازی PHI در پوسته',
+    titleEn: 'V10 Global Clinical Architecture & Safety Engineering: SW Structural HTML Validation, Modular Providers & Shell PHI Minimization',
+    description: 'ثبت و اعمال استاندارد V10 (P0–P5) شامل اعتبارسنجی ساختاری HTML ناوبری در Service Worker برای جلوگیری از مسمومیت کش با TSX خام یا صفحات خطا (در کنار امضای ECDSA)، جداسازی تدریجی AppearanceProvider و UpdateProvider از AppProviders با حفظ کامل Facade، حذف ستون‌های PHI/PII غیرضروری (national_id، diagnosis، treatment_plan) از پرس‌وجوهای سراسری پوسته، و ثبت سند معماری و ADR-001 بدون ادعای گواهینامه انطباق.',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/04',
+    checksum: 'l100v10a94c2',
+    deliverables: [
+      'ثبت دائم سند معماری V10 در docs/MINADENTAL-V10-ARCHITECTURE.md و تصمیم معماری ADR-001 در docs/adr/ADR-001-v10-resilient-foundation.md',
+      'ایمن‌سازی public/sw.js با validateNavigationHtml، مهلت ۱۰ ثانیه‌ای شبکه، ایزوله‌سازی QuotaExceededError، بایپس پارامترهای حساس و تست‌های خصمانه V10-SW-01 تا V10-SW-08',
+      'تفکیک تدریجی AppProviders با استخراج AppearanceProvider، UpdateProvider و NotificationReadModel خالص بدون شکستن قرارداد useClinicShell',
+      'کمینه‌سازی داده در پوسته سراسری (حذف national_id، diagnosis و treatment_plan از Realtime Shell Projections) همراه با تست‌های معماری V10-ARCH-01 تا V10-ARCH-04',
+    ],
+  },
 ]);
 
 export interface ModuleBenchmarkPhase {
