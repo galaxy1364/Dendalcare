@@ -430,6 +430,10 @@ export function computeLiveSmartAlerts(params: {
   });
 }
 
+export function buildReminderReferenceTag(alertId: string): string {
+  return `[REF:${alertId}]`;
+}
+
 export async function syncLiveAlertsToDatabaseReminders(
   liveAlerts: LiveSmartAlert[],
   existingReminders: Reminder[]
@@ -438,9 +442,17 @@ export async function syncLiveAlertsToDatabaseReminders(
   let insertedCount = 0;
 
   for (const alert of liveAlerts) {
-    const exists = existingReminders.some(
-      r => r.title === alert.title && r.status === 'pending'
-    );
+    const refTag = buildReminderReferenceTag(alert.id);
+    const exists = existingReminders.some((r) => {
+      if (r.status !== 'pending') return false;
+      if (r.description && r.description.includes(refTag)) return true;
+      // Fallback match on composite stable identity when legacy record lacks ref tag
+      return (
+        r.patient_id === alert.patientId &&
+        r.reminder_date === (alert.dueDate < today ? today : alert.dueDate) &&
+        r.title === alert.title
+      );
+    });
     if (exists) continue;
 
     const categoryMap: Record<SmartAlertDomain, string> = {
@@ -467,7 +479,7 @@ export async function syncLiveAlertsToDatabaseReminders(
     const { error } = await supabase.from('reminders').insert({
       patient_id: alert.patientId,
       title: alert.title,
-      description: alert.subtitle,
+      description: `${alert.subtitle} ${refTag}`,
       reminder_date: targetDate,
       reminder_time: '09:30',
       category: categoryMap[alert.domain] || 'other',

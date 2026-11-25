@@ -25,6 +25,10 @@ import { Camera, Printer, FileSpreadsheet, AlertTriangle, FileSignature } from '
 import { exportToCsv } from '@/lib/exportUtils';
 import { detectMedicalAlerts } from '@/lib/medicalAlerts';
 import { subscribeGlobalFocus } from '@/lib/globalFocus';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
+import { HapticEngine } from '@/lib/hapticsAudio';
+import { ContextMenuTrigger } from '@/components/ui/ContextMenu';
+import { emitGlobalFocus } from '@/lib/globalFocus';
 
 const GENDER_OPTIONS = [
   { value: 'male', label: 'مرد' },
@@ -193,23 +197,42 @@ export function Patients() {
       ? await supabase.from('patients').update(data).eq('id', editing.id)
       : await supabase.from('patients').insert(data);
     setSaving(false);
-    if (result.error) return false;
+    const outcome = getMutationOutcome(result);
+    if (outcome === 'error') {
+      HapticEngine.error();
+      setActionError('ذخیره پرونده انجام نشد. لطفاً دوباره تلاش کنید.');
+      return false;
+    }
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+      setActionError('در حالت آفلاین ذخیره شد و پس از اتصال در سرور تایید می‌شود.');
+    }
     setFormOpen(false);
     setEditing(null);
-    setActionError(null);
     refresh();
     return true;
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('patients').delete().eq('id', deleteId);
+    const res = await supabase.from('patients').delete().eq('id', deleteId);
     setDeleteId(null);
-    if (error) {
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
       setActionError('حذف بیمار انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
     }
-    setActionError(null);
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+      setActionError('درخواست حذف در صف آفلاین ثبت شد.');
+    }
     refresh();
   };
 
@@ -408,7 +431,39 @@ export function Patients() {
             ];
 
             return (
-              <div key={patient.id} className="glass-card p-3.5 transition-all">
+              <ContextMenuTrigger
+                key={patient.id}
+                title={`${patient.first_name} ${patient.last_name}`}
+                testId={`patient_context_${patient.id}`}
+                items={[
+                  {
+                    id: 'open_detail',
+                    label: 'مشاهده پرونده کامل',
+                    icon: <FileText size={15} />,
+                    onSelect: () => setDetailPatient(patient),
+                  },
+                  {
+                    id: 'edit_patient',
+                    label: 'ویرایش مشخصات بیمار',
+                    icon: <Users size={15} />,
+                    onSelect: () => { setEditing(patient); setFormOpen(true); },
+                  },
+                  {
+                    id: 'patient_finance',
+                    label: 'حساب مالی و اقساط',
+                    icon: <Wallet size={15} />,
+                    onSelect: () => emitGlobalFocus({ section: 'finance', query: `${patient.first_name} ${patient.last_name}` }),
+                  },
+                  {
+                    id: 'delete_patient',
+                    label: 'حذف / آرشیو پرونده',
+                    destructive: true,
+                    icon: <Trash2 size={15} />,
+                    onSelect: () => setDeleteId(patient.id),
+                  },
+                ]}
+              >
+              <div className="glass-card p-3.5 transition-all">
                 {/* Main Top Row — Clean Non-Overlapping Hierarchy */}
                 <div className="flex items-start justify-between gap-2.5">
                   <div
@@ -567,6 +622,7 @@ export function Patients() {
                   </div>
                 )}
               </div>
+              </ContextMenuTrigger>
             );
           })}
         </div>

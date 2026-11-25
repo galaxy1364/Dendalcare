@@ -21,6 +21,8 @@ import { toJalaliStr, JALALI_MONTHS, todayGregorian } from '@/lib/jalali';
 import { exportToCsv } from '@/lib/exportUtils';
 import { PersonalFinance } from '@/components/sections/PersonalFinance';
 import { subscribeGlobalFocus } from '@/lib/globalFocus';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
+import { HapticEngine } from '@/lib/hapticsAudio';
 
 const fmt = (n: number) => Number(n || 0).toLocaleString('fa-IR');
 const today = todayGregorian();
@@ -533,7 +535,7 @@ function DebtorsAndReceivablesTab({
     try {
       const pId = quickPayPatient.patient.id;
       // 1. Insert into payments
-      await supabase.from('payments').insert({
+      const payRes = await supabase.from('payments').insert({
         patient_id: pId,
         amount: amt,
         payment_method: quickPayMethod,
@@ -541,6 +543,11 @@ function DebtorsAndReceivablesTab({
         description: `تسویه بدهی بیمار (${quickPayPatient.patient.first_name} ${quickPayPatient.patient.last_name})`,
         status: 'completed',
       });
+      const outcome = getMutationOutcome(payRes);
+      if (outcome === 'error') {
+        HapticEngine.error();
+        return;
+      }
 
       // 2. Insert into finance_transactions (clinic treasury)
       await supabase.from('finance_transactions').insert({
@@ -567,9 +574,14 @@ function DebtorsAndReceivablesTab({
         remainingToAllocate -= addNow;
       }
 
+      if (outcome === 'confirmed') HapticEngine.success();
+      else HapticEngine.warning();
+
       setQuickPayPatient(null);
       setQuickPayAmount('');
       onRefreshAll();
+    } catch {
+      HapticEngine.error();
     } finally {
       setSavingQuickPay(false);
     }
@@ -1095,7 +1107,7 @@ function DoctorTab({
     setSettling(true);
     setSettleMessage(null);
     try {
-      await supabase.from('finance_transactions').insert({
+      const res = await supabase.from('finance_transactions').insert({
         type: 'expense',
         category: 'salary',
         amount: stats.remainingToPayDoctor,
@@ -1104,11 +1116,24 @@ function DoctorTab({
         reference: `DOC_SETTLE_${selectedMonth}_${selectedDoctorProfile}`,
         description: `تسویه کامل سهم کارکرد ماه ${faMonthName(selectedMonth)} - ${currentDocObj.name} (مستقل از بدهی/اقساط بیماران)`,
       });
+      const outcome = getMutationOutcome(res);
+      if (outcome === 'error') {
+        HapticEngine.error();
+        setSettleMessage('خطا در ثبت تسویه پزشک در سرور.');
+        return;
+      }
       onRefreshTransactions();
-      setSettleMessage(
-        `مبلغ ${fmt(stats.remainingToPayDoctor)} تومان بابت تسویه کارکرد ماهانه ${currentDocObj.name} در خزانه ثبت و پرداخت شد.`
-      );
+      if (outcome === 'confirmed') {
+        HapticEngine.success();
+        setSettleMessage(
+          `مبلغ ${fmt(stats.remainingToPayDoctor)} تومان بابت تسویه کارکرد ماهانه ${currentDocObj.name} در خزانه ثبت و پرداخت شد.`
+        );
+      } else {
+        HapticEngine.warning();
+        setSettleMessage('تسویه در صف آفلاین ذخیره شد و پس از اتصال در سرور تایید می‌شود.');
+      }
     } catch {
+      HapticEngine.error();
       setSettleMessage('خطا در ثبت تسویه پزشک.');
     } finally {
       setSettling(false);
@@ -1443,14 +1468,30 @@ function TransactionsTab({ transactions, patients, refresh }: {
 
   const handleSave = async (data: Partial<FinanceTransaction>) => {
     setSaving(true);
-    if (editing) await supabase.from('finance_transactions').update(data).eq('id', editing.id);
-    else await supabase.from('finance_transactions').insert(data);
-    setSaving(false); setSheetOpen(false); setEditing(null); refresh();
+    const res = editing
+      ? await supabase.from('finance_transactions').update(data).eq('id', editing.id)
+      : await supabase.from('finance_transactions').insert(data);
+    setSaving(false);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else {
+      HapticEngine.error();
+      return;
+    }
+    setSheetOpen(false);
+    setEditing(null);
+    refresh();
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    await supabase.from('finance_transactions').delete().eq('id', deleteId);
+    const res = await supabase.from('finance_transactions').delete().eq('id', deleteId);
+    setDeleteId(null);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
     refresh();
   };
 
@@ -1618,12 +1659,18 @@ function InstallmentsTab({ installments, patients, refresh }: {
     nextDue.setMonth(nextDue.getMonth() + 1);
     const nextDueStr = nextDue.toISOString().slice(0, 10);
 
-    await supabase.from('installments').insert({
+    const instRes = await supabase.from('installments').insert({
       patient_id: form.patient_id, total_amount: totalAmt, paid_amount: 0,
       monthly_amount: monthly, total_months: months, paid_months: 0,
       start_date: startDate, next_due_date: nextDueStr,
       status: 'active', notes: form.notes || null,
     });
+    const instOutcome = getMutationOutcome(instRes);
+    if (instOutcome === 'error') {
+      setSaving(false);
+      HapticEngine.error();
+      return;
+    }
 
     // Automatically create a reminder 3 days before the first installment due date
     const patient = getPatient(form.patient_id);
@@ -1640,6 +1687,9 @@ function InstallmentsTab({ installments, patients, refresh }: {
       });
     }
 
+    if (instOutcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
+
     setSaving(false); setShowForm(false);
     setForm({ patient_id: '', total_amount: '', monthly_amount: '', total_months: '', start_date: today, notes: '' });
     refresh();
@@ -1651,11 +1701,16 @@ function InstallmentsTab({ installments, patients, refresh }: {
     const nextDue = new Date(inst.next_due_date || today);
     nextDue.setMonth(nextDue.getMonth() + 1);
     const isComplete = newPaid >= Number(inst.total_amount);
-    await supabase.from('installments').update({
+    const updRes = await supabase.from('installments').update({
       paid_amount: newPaid, paid_months: newMonths,
       next_due_date: isComplete ? null : nextDue.toISOString().slice(0, 10),
       status: isComplete ? 'completed' : 'active',
     }).eq('id', inst.id);
+    const outcome = getMutationOutcome(updRes);
+    if (outcome === 'error') {
+      HapticEngine.error();
+      return;
+    }
 
     // Also record in clinic treasury
     const patient = getPatient(inst.patient_id);
@@ -1669,10 +1724,19 @@ function InstallmentsTab({ installments, patients, refresh }: {
       description: `دریافت قسط شماره ${newMonths} - ${patient ? `${patient.first_name} ${patient.last_name}` : ''}`,
     });
 
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
     refresh();
   };
 
-  const del = async (id: string) => { await supabase.from('installments').delete().eq('id', id); refresh(); };
+  const del = async (id: string) => {
+    const res = await supabase.from('installments').delete().eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
+    refresh();
+  };
 
   return (
     <>
@@ -1827,12 +1891,18 @@ function ChecksTab({ checks, patients, refresh }: {
     if (form.sayad_id.trim()) {
       finalNotes = `[صیاد: ${form.sayad_id.trim()}] ${finalNotes}`.trim();
     }
-    await supabase.from('checks').insert({
+    const chkRes = await supabase.from('checks').insert({
       patient_id: form.patient_id, check_number: form.check_number || null,
       bank_name: form.bank_name || null, amount: Number(form.amount),
       issue_date: form.issue_date, due_date: form.due_date, status: 'pending',
       notes: finalNotes || null,
     });
+    const chkOutcome = getMutationOutcome(chkRes);
+    if (chkOutcome === 'error') {
+      setSaving(false);
+      HapticEngine.error();
+      return;
+    }
 
     // Automatically insert a reminder 3 days before the check due date
     const patient = getPatient(form.patient_id);
@@ -1849,13 +1919,21 @@ function ChecksTab({ checks, patients, refresh }: {
       });
     }
 
+    if (chkOutcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
+
     setSaving(false); setShowForm(false);
     setForm({ patient_id: '', check_number: '', sayad_id: '', bank_name: '', amount: '', issue_date: today, due_date: '', notes: '' });
     refresh();
   };
 
   const setStatus = async (ch: Check, status: string) => {
-    await supabase.from('checks').update({ status }).eq('id', ch.id);
+    const res = await supabase.from('checks').update({ status }).eq('id', ch.id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
+      return;
+    }
     if (status === 'cleared') {
       const patient = getPatient(ch.patient_id);
       await supabase.from('finance_transactions').insert({
@@ -1868,9 +1946,18 @@ function ChecksTab({ checks, patients, refresh }: {
         description: `وصول چک صیادی #${ch.check_number || '-'} - ${patient ? `${patient.first_name} ${patient.last_name}` : ''}`,
       });
     }
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
     refresh();
   };
-  const del = async (id: string) => { await supabase.from('checks').delete().eq('id', id); refresh(); };
+  const del = async (id: string) => {
+    const res = await supabase.from('checks').delete().eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
+    refresh();
+  };
 
   return (
     <>
@@ -2033,23 +2120,42 @@ function SaftehTab({ safteh, patients, refresh }: {
   const save = async () => {
     if (!form.patient_id || !form.amount || !form.due_date) return;
     setSaving(true);
-    await supabase.from('safteh').insert({
+    const res = await supabase.from('safteh').insert({
       patient_id: form.patient_id, safteh_number: form.safteh_number || null,
       amount: Number(form.amount), issue_date: form.issue_date, due_date: form.due_date,
       guarantor_name: form.guarantor_name || null,
       guarantor_national_id: form.guarantor_national_id || null,
       status: 'pending', notes: form.notes || null,
     });
-    setSaving(false); setShowForm(false);
+    setSaving(false);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
+      return;
+    }
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
+    setShowForm(false);
     setForm({ patient_id: '', safteh_number: '', amount: '', issue_date: today, due_date: '', guarantor_name: '', guarantor_national_id: '', notes: '' });
     refresh();
   };
 
   const setStatus = async (id: string, status: string) => {
-    await supabase.from('safteh').update({ status }).eq('id', id);
+    const res = await supabase.from('safteh').update({ status }).eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
     refresh();
   };
-  const del = async (id: string) => { await supabase.from('safteh').delete().eq('id', id); refresh(); };
+  const del = async (id: string) => {
+    const res = await supabase.from('safteh').delete().eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
+    refresh();
+  };
 
   return (
     <>

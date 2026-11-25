@@ -1,0 +1,18 @@
+export {
+  getThemeMode,
+  getFontScaleMode,
+  getMotionMode,
+  resolveTheme,
+  resolveReduceMotion,
+  getAppearanceSettings,
+  applyAppearanceToDocument,
+  setThemeMode,
+  setFontScaleMode,
+  setMotionMode,
+  initAppearanceEngine,
+  useAppearanceSettings,
+  type ThemeMode,
+  type FontScaleMode,
+  type MotionMode,
+  type AppearanceSettings,
+} from '@/design-system/themes/appearance';

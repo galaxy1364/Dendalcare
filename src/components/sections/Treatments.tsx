@@ -12,6 +12,8 @@ import { PalmerChart } from '@/components/PalmerChart';
 import { TreatmentForm } from '@/components/sections/TreatmentForm';
 import { toJalaliStr } from '@/lib/jalali';
 import { serviceLineTotal } from '@/lib/treatmentServices';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
+import { HapticEngine } from '@/lib/hapticsAudio';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   planned:     { label: 'برنامه‌ریزی',  color: '#F59E0B', bg: '#FEF3C7' },
@@ -111,8 +113,12 @@ export function Treatments() {
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    await supabase.from('treatments').delete().eq('id', deleteId);
+    const res = await supabase.from('treatments').delete().eq('id', deleteId);
     setDeleteId(null);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
     refresh();
   };
 

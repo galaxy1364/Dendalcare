@@ -19,6 +19,9 @@ import {
   minutesToTime, timeToMinutes, suggestFreeTimeSlots, findSmartConflicts,
 } from '@/lib/appointments';
 import { subscribeGlobalFocus } from '@/lib/globalFocus';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
+import { HapticEngine } from '@/lib/hapticsAudio';
+import { ContextMenuTrigger } from '@/components/ui/ContextMenu';
 
 const STATUS_ACTIONS: Record<string, { status: string; label: string; icon: React.ReactNode; className: string }[]> = {
   scheduled: [
@@ -167,7 +170,19 @@ export function Appointments() {
     const result = editing
       ? await supabase.from('appointments').update(payload).eq('id', editing.id)
       : await supabase.from('appointments').insert(payload);
-    if (result.error) return false;
+    const outcome = getMutationOutcome(result);
+    if (outcome === 'error') {
+      HapticEngine.error();
+      setActionError('ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
+      return false;
+    }
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+      setActionError('نوبت در صف آفلاین ذخیره شد و پس از اتصال در سرور تایید می‌شود.');
+    }
     closeSheet();
     setCurrentDate(payload.appointment_date);
     refresh();
@@ -178,7 +193,7 @@ export function Appointments() {
     if (!quickFirstName.trim()) return;
     setSavingQuickPatient(true);
     const notesWithFileNo = quickFileNo.trim() ? `[شماره پرونده: ${quickFileNo.trim()}]` : null;
-    const { data: created, error } = await supabase
+    const res = await supabase
       .from('patients')
       .insert({
         first_name: quickFirstName.trim(),
@@ -188,10 +203,17 @@ export function Appointments() {
         status: 'active',
         notes: notesWithFileNo,
       })
-      .select('*')
+      .select('id,first_name,last_name,phone,insurance_number,status,notes')
       .single();
     setSavingQuickPatient(false);
-    if (error || !created) return;
+    const outcome = getMutationOutcome(res);
+    const created = res.data;
+    if (outcome === 'error' || !created) {
+      HapticEngine.error();
+      return;
+    }
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
     setQuickNewPatientOpen(false);
     setQuickFirstName('');
     setQuickLastName('');
@@ -201,24 +223,39 @@ export function Appointments() {
   };
 
   const handleStatusChange = async (id: string, status: string) => {
-    const { error } = await supabase.from('appointments').update({ status }).eq('id', id);
-    if (error) {
+    const res = await supabase.from('appointments').update({ status }).eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
       setActionError('تغییر وضعیت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
     }
-    setActionError(null);
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+      setActionError('تغییر وضعیت در صف آفلاین ذخیره شد.');
+    }
     refresh();
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('appointments').delete().eq('id', deleteId);
+    const res = await supabase.from('appointments').delete().eq('id', deleteId);
     setDeleteId(null);
-    if (error) {
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
       setActionError('حذف نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
     }
-    setActionError(null);
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+    }
     refresh();
   };
 
@@ -645,8 +682,39 @@ export function Appointments() {
             const hasConflict = conflicts.length > 0;
 
             return (
-              <div
+              <ContextMenuTrigger
                 key={apt.id}
+                title={patient ? `${patient.first_name} ${patient.last_name}` : 'نوبت بیمار'}
+                testId={`appt_context_${apt.id}`}
+                items={[
+                  {
+                    id: 'edit_apt',
+                    label: 'ویرایش زمان / یونیت',
+                    icon: <Clock size={15} />,
+                    onSelect: () => openEdit(apt),
+                  },
+                  {
+                    id: 'confirm_apt',
+                    label: 'تایید نوبت',
+                    icon: <BadgeCheck size={15} />,
+                    onSelect: () => handleStatusChange(apt.id, 'confirmed'),
+                  },
+                  {
+                    id: 'complete_apt',
+                    label: 'ثبت تکمیل درمان',
+                    icon: <CheckCircle2 size={15} />,
+                    onSelect: () => handleStatusChange(apt.id, 'completed'),
+                  },
+                  {
+                    id: 'delete_apt',
+                    label: 'حذف / لغو نوبت',
+                    destructive: true,
+                    icon: <XCircle size={15} />,
+                    onSelect: () => setDeleteId(apt.id),
+                  },
+                ]}
+              >
+              <div
                 className="glass-card p-3"
                 style={{ borderRight: `3px solid ${hasConflict ? '#EF4444' : status.color}` }}
               >
@@ -719,6 +787,7 @@ export function Appointments() {
                   </button>
                 </div>
               </div>
+              </ContextMenuTrigger>
             );
           })}
         </div>

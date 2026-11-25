@@ -9,6 +9,8 @@ import { toJalaliStr, todayGregorian } from '@/lib/jalali';
 import { ClinicDefinitionsModal } from '@/components/ui/ClinicDefinitionsModal';
 import { loadLaboratories } from '@/lib/clinicDefinitions';
 import { subscribeGlobalFocus } from '@/lib/globalFocus';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
+import { HapticEngine } from '@/lib/hapticsAudio';
 
 const WORK_TYPES = [
   { value: 'crown', label: 'روکش' },
@@ -97,10 +99,21 @@ export function Lab() {
       ? await supabase.from('lab_orders').update(data).eq('id', editing.id)
       : await supabase.from('lab_orders').insert(data);
     setSaving(false);
-    if (result.error) return false;
+    const outcome = getMutationOutcome(result);
+    if (outcome === 'error') {
+      HapticEngine.error();
+      setActionError('ثبت سفارش لابراتوار انجام نشد.');
+      return false;
+    }
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+      setActionError('در صف آفلاین ذخیره شد و پس از اتصال در سرور تایید می‌شود.');
+    }
     setSheetOpen(false);
     setEditing(null);
-    setActionError(null);
     refresh();
     return true;
   };
@@ -108,24 +121,38 @@ export function Lab() {
   const handleStatusChange = async (id: string, status: string) => {
     const update: Record<string, unknown> = { status };
     if (status === 'received') update.received_date = todayGregorian();
-    const { error } = await supabase.from('lab_orders').update(update).eq('id', id);
-    if (error) {
+    const res = await supabase.from('lab_orders').update(update).eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
       setActionError('تغییر وضعیت انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
     }
-    setActionError(null);
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+    }
     refresh();
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('lab_orders').delete().eq('id', deleteId);
+    const res = await supabase.from('lab_orders').delete().eq('id', deleteId);
     setDeleteId(null);
-    if (error) {
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
       setActionError('حذف انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
     }
-    setActionError(null);
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+    }
     refresh();
   };
 

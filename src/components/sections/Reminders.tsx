@@ -32,8 +32,9 @@ import {
   snoozeZeroLossAlert,
   reconcileZeroLossAlerts,
 } from '@/lib/deviceNotifications';
-import { playTactileFeedback } from '@/lib/hapticsAudio';
+import { HapticEngine, playTactileFeedback } from '@/lib/hapticsAudio';
 import { subscribeGlobalFocus } from '@/lib/globalFocus';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
 
 const CATEGORIES = [
   { value: 'appointment', label: 'نوبت و ویزیت' },
@@ -261,19 +262,31 @@ export function Reminders() {
     if (nextStage === 'osseointegration') update.osseointegration_date = today;
     if (nextStage === 'abutment_placement') update.abutment_date = today;
     if (nextStage === 'crown_fitting') update.crown_date = today;
-    await supabase.from('implants').update(update).eq('id', implantId);
+    const res = await supabase.from('implants').update(update).eq('id', implantId);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
     rImp();
   };
 
   const handleAdvanceLabStage = async (labId: string, nextStatus: string) => {
     const update: Record<string, unknown> = { status: nextStatus };
     if (nextStatus === 'received') update.received_date = today;
-    await supabase.from('lab_orders').update(update).eq('id', labId);
+    const res = await supabase.from('lab_orders').update(update).eq('id', labId);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
     rLab();
   };
 
   const handleQuickClearCheck = async (checkId: string) => {
-    await supabase.from('checks').update({ status: 'cleared' }).eq('id', checkId);
+    const res = await supabase.from('checks').update({ status: 'cleared' }).eq('id', checkId);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
     rChecks();
   };
 
@@ -285,12 +298,16 @@ export function Reminders() {
     const nextDue = new Date(inst.next_due_date || today);
     nextDue.setMonth(nextDue.getMonth() + 1);
     const isComplete = newPaid >= Number(inst.total_amount);
-    await supabase.from('installments').update({
+    const res = await supabase.from('installments').update({
       paid_amount: newPaid,
       paid_months: newMonths,
       next_due_date: isComplete ? null : nextDue.toISOString().slice(0, 10),
       status: isComplete ? 'completed' : 'active',
     }).eq('id', inst.id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
     rInst();
   };
 
@@ -300,41 +317,63 @@ export function Reminders() {
       ? await supabase.from('reminders').update(data).eq('id', editing.id)
       : await supabase.from('reminders').insert(data);
     setSaving(false);
-    if (result.error) return false;
+    const outcome = getMutationOutcome(result);
+    if (outcome === 'error') {
+      HapticEngine.error();
+      setActionError('ثبت یادآوری انجام نشد.');
+      return false;
+    }
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+    }
     setSheetOpen(false);
     setEditing(null);
-    setActionError(null);
     refresh();
     return true;
   };
 
   const handleStatusChange = async (id: string, status: string) => {
-    const { error } = await supabase.from('reminders').update({ status }).eq('id', id);
-    if (error) {
+    const res = await supabase.from('reminders').update({ status }).eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
       setActionError('تغییر وضعیت انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
     }
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
     setActionError(null);
     refresh();
   };
 
   const handleSnoozeDays = async (r: Reminder, days: number) => {
     const nextDate = addDaysIso(r.reminder_date < today ? today : r.reminder_date, days);
-    await supabase
+    const res = await supabase
       .from('reminders')
       .update({ reminder_date: nextDate, status: 'pending' })
       .eq('id', r.id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.selection();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
     refresh();
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('reminders').delete().eq('id', deleteId);
+    const res = await supabase.from('reminders').delete().eq('id', deleteId);
     setDeleteId(null);
-    if (error) {
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
       setActionError('حذف انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
     }
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
     setActionError(null);
     refresh();
   };

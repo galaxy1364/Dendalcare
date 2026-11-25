@@ -25,6 +25,7 @@ import {
 import { QBankTile } from '@/components/ui/QBankTile';
 import { MascotTooth } from '@/components/ui/MascotTooth';
 import { playTactileFeedback } from '@/lib/hapticsAudio';
+import type { AppRouteId } from '@/lib/navigationStack';
 
 export interface DockSearchPatient {
   id: string;
@@ -89,8 +90,8 @@ export interface DockSearchReminder {
 }
 
 type Props = {
-  active: SectionId;
-  onChange: (id: SectionId) => void;
+  active: AppRouteId;
+  onChange: (id: AppRouteId) => void;
   onBack?: () => void;
   canGoBack?: boolean;
   patients?: DockSearchPatient[];
@@ -156,9 +157,10 @@ export function BottomDock({
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const isPrimaryActive = PRIMARY_SECTION_IDS.includes(active);
-  const activeSection = getSection(active);
-  const activeToken = getModuleToken(active);
+  const isPrimaryActive = active !== 'services' && PRIMARY_SECTION_IDS.includes(active);
+  const resolvedSectionId: SectionId = active === 'services' ? 'dashboard' : active;
+  const activeSection = getSection(resolvedSectionId);
+  const activeToken = getModuleToken(resolvedSectionId);
   const moreSections = SECTIONS.filter((s) => !PRIMARY_SECTION_IDS.includes(s.id));
 
   // Global listener so Top Bar / Sidebar / Dashboard / Shortcuts can open the QBank Folders & Search Menu from anywhere
@@ -179,10 +181,10 @@ export function BottomDock({
     };
   }, []);
 
-  const handleSelect = (id: SectionId, focus?: Omit<GlobalFocusPayload, 'section'>) => {
+  const handleSelect = (id: AppRouteId, focus?: Omit<GlobalFocusPayload, 'section'>) => {
     playTactileFeedback('dock');
     onChange(id);
-    if (focus) {
+    if (focus && id !== 'services') {
       emitGlobalFocus({ section: id, ...focus });
     }
     setMoreOpen(false);
@@ -527,6 +529,15 @@ export function BottomDock({
               </div>
 
               <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleSelect('services')}
+                  data-testid="qbank_open_services_screen_btn"
+                  className="px-2.5 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 text-[10.5px] font-black flex items-center gap-1 transition-all"
+                >
+                  <LayoutGrid size={13} />
+                  <span>صفحه خدمات</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => handleSelect('settings')}

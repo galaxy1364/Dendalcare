@@ -9,6 +9,8 @@ import { toJalaliStr, todayGregorian } from '@/lib/jalali';
 import { ClinicDefinitionsModal } from '@/components/ui/ClinicDefinitionsModal';
 import { loadImplantBrands } from '@/lib/clinicDefinitions';
 import { subscribeGlobalFocus } from '@/lib/globalFocus';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
+import { HapticEngine } from '@/lib/hapticsAudio';
 
 const STAGES = [
   { value: 'planning', label: 'برنامه‌ریزی', icon: '📋' },
@@ -92,10 +94,21 @@ export function Implants() {
       ? await supabase.from('implants').update(data).eq('id', editing.id)
       : await supabase.from('implants').insert(data);
     setSaving(false);
-    if (result.error) return false;
+    const outcome = getMutationOutcome(result);
+    if (outcome === 'error') {
+      HapticEngine.error();
+      setActionError('ثبت پرونده ایمپلنت انجام نشد.');
+      return false;
+    }
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+      setActionError('در صف آفلاین ذخیره شد و پس از اتصال در سرور تایید می‌شود.');
+    }
     setSheetOpen(false);
     setEditing(null);
-    setActionError(null);
     refresh();
     return true;
   };
@@ -107,24 +120,38 @@ export function Implants() {
     if (stage === 'osseointegration') update.osseointegration_date = today;
     if (stage === 'abutment_placement') update.abutment_date = today;
     if (stage === 'crown_fitting') update.crown_date = today;
-    const { error } = await supabase.from('implants').update(update).eq('id', id);
-    if (error) {
+    const res = await supabase.from('implants').update(update).eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
       setActionError('تغییر مرحله انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
     }
-    setActionError(null);
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+    }
     refresh();
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('implants').delete().eq('id', deleteId);
+    const res = await supabase.from('implants').delete().eq('id', deleteId);
     setDeleteId(null);
-    if (error) {
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
       setActionError('حذف انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
     }
-    setActionError(null);
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setActionError(null);
+    } else {
+      HapticEngine.warning();
+    }
     refresh();
   };
 

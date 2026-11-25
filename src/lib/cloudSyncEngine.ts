@@ -1,6 +1,15 @@
 import { supabase } from './supabase';
 import type { TableName } from './supabase';
 import { collectCompleteClinicSnapshot } from './dataVault';
+import {
+  ACTIVE_TENANT_ID,
+  generateSaltHex,
+  getActiveBranchId,
+  hashSecretSync,
+  hashSecretWithSalt,
+  verifySaltedSecret,
+} from '@/services/authentication/authService';
+import { purgeClinicalLocalStorageCaches } from '@/services/supabase/scopedCache';
 
 export type ClinicUserRole = 'manager' | 'dentist' | 'secretary' | 'assistant';
 
@@ -13,7 +22,11 @@ export type ClinicUserAccount = {
   roleLabel: string;
   email: string;
   phone: string;
-  pinOrPass: string;
+  /** Salted SHA-256 or deterministic hash — never plaintext PIN/password */
+  pinHash?: string;
+  pinSalt?: string;
+  branchId?: string;
+  tenantId?: string;
   avatarColor: string;
   canPublishUpdate?: boolean;
   permissions: {
@@ -25,6 +38,11 @@ export type ClinicUserAccount = {
   };
 };
 
+const MANAGER_SEED_SALT = 'mina_mgr_v1';
+const DENTIST_SEED_SALT = 'mina_doc_v1';
+const SECRETARY_SEED_SALT = 'mina_sec_v1';
+const ASSISTANT_SEED_SALT = 'mina_ast_v1';
+
 export const DEFAULT_CLINIC_USERS: ClinicUserAccount[] = [
   {
     id: 'usr_manager_mehdi',
@@ -35,8 +53,11 @@ export const DEFAULT_CLINIC_USERS: ClinicUserAccount[] = [
     roleLabel: 'مدیر، پزشک و صاحب مطب (دسترسی ۱۰۰٪)',
     email: 'mehdi.amiri19851364@gmail.com',
     phone: '09120000000',
-    pinOrPass: '1234',
-    avatarColor: '#8B5CF6',
+    pinSalt: MANAGER_SEED_SALT,
+    pinHash: hashSecretSync('1234', MANAGER_SEED_SALT),
+    branchId: 'main',
+    tenantId: ACTIVE_TENANT_ID,
+    avatarColor: '#087C76',
     canPublishUpdate: true,
     permissions: {
       canEditPricesAfterSave: true,
@@ -54,8 +75,11 @@ export const DEFAULT_CLINIC_USERS: ClinicUserAccount[] = [
     roleLabel: 'دندانپزشک',
     email: 'doctor@minadental.ir',
     phone: '09121111111',
-    pinOrPass: '1111',
-    avatarColor: '#06B6D4',
+    pinSalt: DENTIST_SEED_SALT,
+    pinHash: hashSecretSync('1111', DENTIST_SEED_SALT),
+    branchId: 'main',
+    tenantId: ACTIVE_TENANT_ID,
+    avatarColor: '#0E7490',
     canPublishUpdate: false,
     permissions: {
       canEditPricesAfterSave: false,
@@ -73,8 +97,11 @@ export const DEFAULT_CLINIC_USERS: ClinicUserAccount[] = [
     roleLabel: 'منشی (ثبت پرونده و نوبت)',
     email: 'secretary@minadental.ir',
     phone: '09122222222',
-    pinOrPass: '2222',
-    avatarColor: '#EC4899',
+    pinSalt: SECRETARY_SEED_SALT,
+    pinHash: hashSecretSync('2222', SECRETARY_SEED_SALT),
+    branchId: 'main',
+    tenantId: ACTIVE_TENANT_ID,
+    avatarColor: '#B02364',
     canPublishUpdate: false,
     permissions: {
       canEditPricesAfterSave: false,
@@ -92,8 +119,11 @@ export const DEFAULT_CLINIC_USERS: ClinicUserAccount[] = [
     roleLabel: 'دستیار بالینی و انبار',
     email: 'assistant@minadental.ir',
     phone: '09123333333',
-    pinOrPass: '3333',
-    avatarColor: '#10B981',
+    pinSalt: ASSISTANT_SEED_SALT,
+    pinHash: hashSecretSync('3333', ASSISTANT_SEED_SALT),
+    branchId: 'main',
+    tenantId: ACTIVE_TENANT_ID,
+    avatarColor: '#176B52',
     canPublishUpdate: false,
     permissions: {
       canEditPricesAfterSave: false,
@@ -133,21 +163,36 @@ export function canUserEditFinancials(role: string | null | undefined): boolean 
 export type AutoBackupConfig = {
   enabled: boolean;
   mode: 'realtime' | 'scheduled' | 'both';
-  scheduledTime: string; // HH:mm e.g. "22:00"
-  scheduledDate: string; // optional YYYY-MM-DD or daily
+  scheduledTime: string;
+  scheduledDate: string;
   autoCloudSupabase: boolean;
   autoLocalBrowser: boolean;
   lastCloudBackupAt: string | null;
   lastLocalBackupAt: string | null;
 };
 
-function normalizeUser(u: any): ClinicUserAccount {
+/**
+ * Strips any legacy plaintext `pinOrPass` field before normalizing or persisting accounts.
+ * If a legacy account still carries `pinOrPass`, migrates it immediately to salted hash.
+ */
+export function sanitizeUserAccount(u: Record<string, any>): ClinicUserAccount {
   const fullName = u?.fullName || u?.name || 'کاربر کلینیک';
   const role: ClinicUserRole = u?.role || 'secretary';
   const fallbackUsername =
     role === 'manager'
       ? 'dr.mehdi.amiri'
-      : (u?.email ? String(u.email).split('@')[0] : `${role}_${String(u?.id || 'user').slice(-4)}`);
+      : u?.email
+      ? String(u.email).split('@')[0]
+      : `${role}_${String(u?.id || 'user').slice(-4)}`;
+
+  let pinSalt = typeof u?.pinSalt === 'string' && u.pinSalt ? u.pinSalt : undefined;
+  let pinHash = typeof u?.pinHash === 'string' && u.pinHash ? u.pinHash : undefined;
+
+  if (!pinHash && typeof u?.pinOrPass === 'string' && u.pinOrPass) {
+    pinSalt = pinSalt || generateSaltHex(8);
+    pinHash = hashSecretSync(u.pinOrPass, pinSalt);
+  }
+
   return {
     id: u?.id || `usr_${Date.now()}`,
     username: u?.username || fallbackUsername,
@@ -157,9 +202,12 @@ function normalizeUser(u: any): ClinicUserAccount {
     roleLabel: u?.roleLabel || ROLE_LABELS[role] || 'کاربر',
     email: u?.email || '',
     phone: u?.phone || '',
-    pinOrPass: u?.pinOrPass || '1234',
-    avatarColor: u?.avatarColor || '#8B5CF6',
-    canPublishUpdate: u?.canPublishUpdate ?? (role === 'manager'),
+    pinHash,
+    pinSalt,
+    branchId: u?.branchId || getActiveBranchId(),
+    tenantId: u?.tenantId || ACTIVE_TENANT_ID,
+    avatarColor: u?.avatarColor || '#087C76',
+    canPublishUpdate: u?.canPublishUpdate ?? role === 'manager',
     permissions: u?.permissions || {
       canEditPricesAfterSave: role === 'manager',
       canDeleteCriticalRecords: role === 'manager',
@@ -170,34 +218,56 @@ function normalizeUser(u: any): ClinicUserAccount {
   };
 }
 
+export async function createCredentialHashPair(plainSecret: string): Promise<{
+  pinHash: string;
+  pinSalt: string;
+}> {
+  const pinSalt = generateSaltHex(12);
+  const pinHash = await hashSecretWithSalt(plainSecret, pinSalt);
+  return { pinHash, pinSalt };
+}
+
+export async function verifyUserCredential(
+  user: ClinicUserAccount,
+  candidateSecret: string
+): Promise<boolean> {
+  return verifySaltedSecret(candidateSecret, user.pinHash, user.pinSalt);
+}
+
 export function loadClinicUsers(): ClinicUserAccount[] {
   try {
     const raw = localStorage.getItem(USERS_STORAGE_KEY);
-    if (!raw) return DEFAULT_CLINIC_USERS.map(normalizeUser);
+    if (!raw) return DEFAULT_CLINIC_USERS.map((u) => sanitizeUserAccount(u));
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed.map(normalizeUser);
+      const sanitized = parsed.map(sanitizeUserAccount);
+      // Migrate away any legacy plaintext pinOrPass if detected
+      if (parsed.some((p: Record<string, unknown>) => 'pinOrPass' in p)) {
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(sanitized));
+      }
+      return sanitized;
     }
   } catch {
     // ignore
   }
-  return DEFAULT_CLINIC_USERS.map(normalizeUser);
+  return DEFAULT_CLINIC_USERS.map((u) => sanitizeUserAccount(u));
 }
 
 export function saveClinicUsers(users: ClinicUserAccount[]): void {
-  const normalized = users.map(normalizeUser);
+  const sanitized = users.map((u) => sanitizeUserAccount(u));
   try {
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(normalized));
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(sanitized));
   } catch {
     // ignore
   }
-  // Instant Cloud SQL mirror so newly created staff accounts sync across all devices
+  // Never sync pinHash / pinSalt / credentials to public clinic_settings metadata
+  const publicDirectory = sanitized.map(({ pinHash: _h, pinSalt: _s, ...pub }) => pub);
   try {
     void Promise.resolve(
       supabase.from('clinic_settings').upsert(
         {
           key: 'clinic_users_directory_v4',
-          value: JSON.stringify(normalized),
+          value: JSON.stringify(publicDirectory),
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'key' }
@@ -214,18 +284,22 @@ export function getActiveClinicUser(): ClinicUserAccount {
     const activeId = localStorage.getItem(ACTIVE_USER_STORAGE_KEY);
     if (activeId) {
       const found = users.find((u) => u.id === activeId);
-      if (found) return normalizeUser(found);
+      if (found) return sanitizeUserAccount(found);
     }
   } catch {
     // ignore
   }
-  return normalizeUser(users[0] ?? DEFAULT_CLINIC_USERS[0]);
+  return sanitizeUserAccount(users[0] ?? DEFAULT_CLINIC_USERS[0]);
 }
 
 export function setActiveClinicUserId(id: string): ClinicUserAccount {
   const users = loadClinicUsers();
-  const found = normalizeUser(users.find((u) => u.id === id) ?? users[0] ?? DEFAULT_CLINIC_USERS[0]);
+  const prevId = typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_USER_STORAGE_KEY) : null;
+  const found = sanitizeUserAccount(users.find((u) => u.id === id) ?? users[0] ?? DEFAULT_CLINIC_USERS[0]);
   try {
+    if (prevId && prevId !== found.id) {
+      purgeClinicalLocalStorageCaches({ userId: prevId });
+    }
     localStorage.setItem(ACTIVE_USER_STORAGE_KEY, found.id);
     window.dispatchEvent(new CustomEvent('minadental-user-changed', { detail: found }));
   } catch {
@@ -363,11 +437,6 @@ export async function broadcastClinicSyncEvent(
   }
 }
 
-/**
- * Publishes an OTA Update notification to Supabase clinic_settings AND broadcasts
- * it to all connected users (Doctor, Manager, Secretary, Assistant) so their apps
- * automatically refresh to the latest build.
- */
 export async function publishOtaUpdateToAllUsers(
   version: string,
   releaseNotes: string
@@ -420,9 +489,6 @@ export async function publishOtaUpdateToAllUsers(
   };
 }
 
-/**
- * Performs a full non-destructive Cloud & Local Snapshot Backup of all clinic tables.
- */
 export async function performAutomaticCloudAndLocalBackup(): Promise<{
   ok: boolean;
   timestamp: string;
@@ -439,14 +505,23 @@ export async function performAutomaticCloudAndLocalBackup(): Promise<{
 
     const totalRecords = snapshot.totalRecords;
 
-    // Save locally in browser storage (summary + snapshot fallback)
+    // Store ONLY non-PII backup summary metadata in localStorage (full backup stays in IndexedDB Vault / Cloud)
+    const nonPiiSummary = {
+      exportedAt: snapshot.exportedAt,
+      totalRecords,
+      checksum: snapshot.checksum,
+      traceId: snapshot.traceId,
+      counts: snapshot.counts,
+      version: CURRENT_APP_VERSION,
+      build: CURRENT_APP_BUILD,
+    };
     try {
-      localStorage.setItem('minadental_latest_auto_backup_v4', JSON.stringify(snapshot));
+      localStorage.removeItem('minadental_latest_auto_backup_v4');
+      localStorage.setItem('minadental_latest_backup_summary_v5', JSON.stringify(nonPiiSummary));
     } catch {
-      // ignore localStorage 5MB quota; full tables are already stored in IndexedDB Vault
+      // ignore localStorage quota
     }
 
-    // Save cloud snapshot metadata, checksum & Trace ID into Supabase clinic_settings
     try {
       const cloudSummary = JSON.stringify({
         backedUpAt: snapshot.exportedAt,
@@ -557,4 +632,3 @@ export function initCloudSyncChannel(callbacks: {
     }
   };
 }
-

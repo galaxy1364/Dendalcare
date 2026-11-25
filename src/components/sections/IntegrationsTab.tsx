@@ -235,7 +235,10 @@ export function IntegrationsTab() {
   const handleDownloadCalendarIcs = async () => {
     setDownloadingIcs(true);
     try {
-      const { data: appointments } = await supabase.from('appointments').select('*').limit(200);
+      const { data: appointments } = await supabase
+        .from('appointments')
+        .select('id,patient_id,appointment_date,appointment_time,status,type,notes')
+        .limit(200);
       const ics = generateIcsCalendar(appointments || []);
       const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
       const url = URL.createObjectURL(blob);

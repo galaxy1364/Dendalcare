@@ -11,6 +11,8 @@ import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
 import { toJalaliStr } from '@/lib/jalali';
 import { ClinicDefinitionsModal } from '@/components/ui/ClinicDefinitionsModal';
 import { loadSupplyCompanies } from '@/lib/clinicDefinitions';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
+import { HapticEngine } from '@/lib/hapticsAudio';
 
 const CATEGORIES = [
   { value: 'general', label: 'عمومی' },
@@ -84,12 +86,17 @@ export function Inventory() {
 
   const handleSave = async (data: Partial<InventoryItem>) => {
     setSaving(true);
-    if (editing) {
-      await supabase.from('inventory').update(data).eq('id', editing.id);
-    } else {
-      await supabase.from('inventory').insert(data);
-    }
+    const res = editing
+      ? await supabase.from('inventory').update(data).eq('id', editing.id)
+      : await supabase.from('inventory').insert(data);
     setSaving(false);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
+      return;
+    }
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
     setSheetOpen(false);
     setEditing(null);
     refresh();
@@ -98,14 +105,22 @@ export function Inventory() {
   const handleQuickAdjust = async (item: InventoryItem, delta: number, e: React.MouseEvent) => {
     e.stopPropagation();
     const nextQty = Math.max(0, Number(item.quantity) + delta);
-    await supabase.from('inventory').update({ quantity: nextQty }).eq('id', item.id);
+    const res = await supabase.from('inventory').update({ quantity: nextQty }).eq('id', item.id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.selection();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
     refresh();
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    await supabase.from('inventory').delete().eq('id', deleteId);
+    const res = await supabase.from('inventory').delete().eq('id', deleteId);
     setDeleteId(null);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
     refresh();
   };
 

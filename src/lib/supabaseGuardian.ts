@@ -156,6 +156,32 @@ export function evaluateMutationGuard(params: {
   return { allowed: true };
 }
 
+export type MutationOutcome = 'confirmed' | 'queued_offline' | 'error';
+
+export function verifyServerMutation(res: {
+  error?: unknown;
+  status?: number | null;
+  queuedOffline?: boolean;
+  serverConfirmed?: boolean;
+} | null | undefined): boolean {
+  if (!res) return false;
+  if (res.error) return false;
+  if (res.queuedOffline === true) return false;
+  if (res.status === 202 || res.status === 403) return false;
+  return true;
+}
+
+export function getMutationOutcome(res: {
+  error?: unknown;
+  status?: number | null;
+  queuedOffline?: boolean;
+  serverConfirmed?: boolean;
+} | null | undefined): MutationOutcome {
+  if (!res || res.error || res.status === 403) return 'error';
+  if (res.queuedOffline === true || res.status === 202) return 'queued_offline';
+  return 'confirmed';
+}
+
 function wrapMutationBuilder(
   rawClient: SupabaseClient,
   builder: any,
@@ -223,6 +249,8 @@ function wrapMutationBuilder(
         error: null,
         status: 202,
         statusText: 'Queued Offline',
+        queuedOffline: true,
+        serverConfirmed: false,
       };
     }
 
@@ -262,12 +290,15 @@ function wrapMutationBuilder(
           error: null,
           status: 202,
           statusText: 'Queued On Network Fallback',
+          queuedOffline: true,
+          serverConfirmed: false,
         };
       }
       if (!result?.error) {
         emitMutationEvent(payload);
+        return { ...result, queuedOffline: false, serverConfirmed: true };
       }
-      return result;
+      return { ...result, queuedOffline: false, serverConfirmed: false };
     } catch (err: any) {
       if (isNetworkFailure(err) && (operation === 'INSERT' || operation === 'UPDATE')) {
         const queuedPayload =
@@ -298,9 +329,11 @@ function wrapMutationBuilder(
           error: null,
           status: 202,
           statusText: 'Queued On Catch',
+          queuedOffline: true,
+          serverConfirmed: false,
         };
       }
-      return { data: null, error: err };
+      return { data: null, error: err, queuedOffline: false, serverConfirmed: false };
     }
   };
 

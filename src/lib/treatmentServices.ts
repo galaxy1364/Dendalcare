@@ -97,29 +97,53 @@ export type TreatmentPayload = {
   notes: string | null;
 };
 
-export async function saveTreatmentRecord(params: {
+import { verifyServerMutation } from '@/lib/supabaseGuardian';
+
+export type SaveTreatmentResult = {
+  ok: boolean;
+  serverConfirmed: boolean;
+  queuedOffline: boolean;
+};
+
+export async function saveTreatmentRecordDetailed(params: {
   treatmentId: string | null;
   payload: TreatmentPayload;
   services: ServiceDraft[];
   originalServiceIds: string[];
-}): Promise<boolean> {
+}): Promise<SaveTreatmentResult> {
   const { treatmentId: existingId, payload, services, originalServiceIds } = params;
 
+  let allServerConfirmed = true;
+  let anyQueuedOffline = false;
   let treatmentId = existingId;
+
   if (treatmentId) {
-    const { error } = await supabase.from('treatments').update(payload).eq('id', treatmentId);
-    if (error) return false;
+    const res = await supabase.from('treatments').update(payload).eq('id', treatmentId);
+    if (res.error) return { ok: false, serverConfirmed: false, queuedOffline: false };
+    if (!verifyServerMutation(res)) {
+      allServerConfirmed = false;
+      anyQueuedOffline = true;
+    }
   } else {
-    const { data, error } = await supabase.from('treatments').insert(payload).select('id').single();
-    if (error || !data) return false;
-    treatmentId = data.id as string;
+    const res = await supabase.from('treatments').insert(payload).select('id').single();
+    if (res.error || !res.data) return { ok: false, serverConfirmed: false, queuedOffline: false };
+    if (!verifyServerMutation(res)) {
+      allServerConfirmed = false;
+      anyQueuedOffline = true;
+    }
+    const insertedRow = Array.isArray(res.data) ? res.data[0] : res.data;
+    treatmentId = (insertedRow?.id as string) || `offline_treat_${Date.now()}`;
   }
 
   const keptIds = services.map(s => s.id).filter((id): id is string => id !== null);
   const removedIds = originalServiceIds.filter(id => !keptIds.includes(id));
   if (removedIds.length > 0) {
-    const { error } = await supabase.from('treatment_services').delete().in('id', removedIds);
-    if (error) return false;
+    const res = await supabase.from('treatment_services').delete().in('id', removedIds);
+    if (res.error) return { ok: false, serverConfirmed: false, queuedOffline: false };
+    if (!verifyServerMutation(res)) {
+      allServerConfirmed = false;
+      anyQueuedOffline = true;
+    }
   }
 
   for (const s of services) {
@@ -134,13 +158,35 @@ export async function saveTreatmentRecord(params: {
       notes: s.notes.trim() || null,
     };
     if (s.id) {
-      const { error } = await supabase.from('treatment_services').update(row).eq('id', s.id);
-      if (error) return false;
+      const res = await supabase.from('treatment_services').update(row).eq('id', s.id);
+      if (res.error) return { ok: false, serverConfirmed: false, queuedOffline: false };
+      if (!verifyServerMutation(res)) {
+        allServerConfirmed = false;
+        anyQueuedOffline = true;
+      }
     } else {
-      const { error } = await supabase.from('treatment_services').insert({ ...row, treatment_id: treatmentId });
-      if (error) return false;
+      const res = await supabase.from('treatment_services').insert({ ...row, treatment_id: treatmentId });
+      if (res.error) return { ok: false, serverConfirmed: false, queuedOffline: false };
+      if (!verifyServerMutation(res)) {
+        allServerConfirmed = false;
+        anyQueuedOffline = true;
+      }
     }
   }
 
-  return true;
+  return {
+    ok: true,
+    serverConfirmed: allServerConfirmed && !anyQueuedOffline,
+    queuedOffline: anyQueuedOffline,
+  };
+}
+
+export async function saveTreatmentRecord(params: {
+  treatmentId: string | null;
+  payload: TreatmentPayload;
+  services: ServiceDraft[];
+  originalServiceIds: string[];
+}): Promise<boolean> {
+  const res = await saveTreatmentRecordDetailed(params);
+  return res.ok;
 }

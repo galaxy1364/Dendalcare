@@ -6,8 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
+import android.view.HapticFeedbackConstants
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
+import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -32,6 +35,33 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+
+private class AndroidHapticBridge(private val webView: WebView) {
+    @JavascriptInterface
+    fun performHaptic(kind: String) {
+        val code = when (kind) {
+            "selection" -> HapticFeedbackConstants.CLOCK_TICK
+            "impact_light" -> HapticFeedbackConstants.KEYBOARD_TAP
+            "impact_medium" -> HapticFeedbackConstants.CONTEXT_CLICK
+            "impact_heavy" -> HapticFeedbackConstants.LONG_PRESS
+            "success" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                HapticFeedbackConstants.CONFIRM
+            } else {
+                HapticFeedbackConstants.KEYBOARD_TAP
+            }
+            "warning" -> HapticFeedbackConstants.LONG_PRESS
+            "error" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                HapticFeedbackConstants.REJECT
+            } else {
+                HapticFeedbackConstants.LONG_PRESS
+            }
+            else -> HapticFeedbackConstants.KEYBOARD_TAP
+        }
+        webView.post {
+            webView.performHapticFeedback(code)
+        }
+    }
+}
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -79,6 +109,8 @@ fun DentalCareWebView(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     setBackgroundColor(android.graphics.Color.parseColor("#0a0e27"))
+                    isHapticFeedbackEnabled = true
+                    addJavascriptInterface(AndroidHapticBridge(this), "AndroidBridge")
 
                     settings.apply {
                         javaScriptEnabled = true

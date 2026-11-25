@@ -1,7 +1,7 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ArrowRight, ShieldCheck, Lock } from 'lucide-react';
-import { playTactileFeedback } from '@/lib/hapticsAudio';
+import { HapticEngine, playTactileFeedback } from '@/lib/hapticsAudio';
 
 type SheetProps = {
   open: boolean;
@@ -22,8 +22,18 @@ export function Sheet({
   color = '#3B82F6',
   children,
 }: SheetProps) {
+  const [swipeBackX, setSwipeBackX] = useState(0);
+  const swipeRef = useRef<{ active: boolean; startX: number; startY: number }>({
+    active: false,
+    startX: 0,
+    startY: 0,
+  });
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setSwipeBackX(0);
+      return;
+    }
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
@@ -49,18 +59,53 @@ export function Sheet({
         onClose();
       }}
     >
-      {/* Authentic iOS 27 Sheet Container (Card-like rounded top on mobile, centered inset sheet on tablet/desktop) */}
+      {/* Full-Screen Push Route on Mobile (100dvh), Centered Sheet on iPad/Desktop */}
       <div
         data-testid="ios27_registration_sheet"
-        className="ios27-sheet-surface relative w-full h-[96dvh] sm:h-[92dvh] max-w-2xl mx-auto flex flex-col bg-[#F4F5F9] rounded-t-[32px] sm:rounded-[32px] shadow-2xl overflow-hidden animate-scale-in border border-white/80"
+        className="ios27-sheet-surface relative w-full h-[100dvh] sm:h-[92dvh] max-w-2xl mx-auto flex flex-col bg-[#F4F5F9] rounded-none sm:rounded-[32px] shadow-2xl overflow-hidden animate-scale-in border-0 sm:border sm:border-white/80 safe-top safe-bottom"
         style={{
           boxShadow: '0 -12px 48px rgba(15, 23, 42, 0.24), 0 20px 60px rgba(15, 23, 42, 0.28)',
+          transform: swipeBackX < 0 ? `translateX(${swipeBackX}px)` : undefined,
+          transition: swipeRef.current.active ? 'none' : 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
         }}
         onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => {
+          const vw = typeof window !== 'undefined' ? window.innerWidth : 390;
+          if (e.clientX >= vw - 48) {
+            swipeRef.current = { active: true, startX: e.clientX, startY: e.clientY };
+          }
+        }}
+        onPointerMove={(e) => {
+          if (!swipeRef.current.active) return;
+          const dx = e.clientX - swipeRef.current.startX;
+          const dy = Math.abs(e.clientY - swipeRef.current.startY);
+          if (dy > 48 && Math.abs(dx) < 20) {
+            swipeRef.current.active = false;
+            setSwipeBackX(0);
+            return;
+          }
+          if (dx < 0) {
+            setSwipeBackX(Math.max(-180, dx * 0.85));
+          }
+        }}
+        onPointerUp={(e) => {
+          if (!swipeRef.current.active) return;
+          const dx = e.clientX - swipeRef.current.startX;
+          swipeRef.current.active = false;
+          setSwipeBackX(0);
+          if (dx < -72) {
+            HapticEngine.selection();
+            onClose();
+          }
+        }}
+        onPointerCancel={() => {
+          swipeRef.current.active = false;
+          setSwipeBackX(0);
+        }}
       >
-        {/* iOS 27 Top Grabber Pill + Subtle Accent Hairline */}
+        {/* Top Grabber Pill */}
         <div
-          className="pt-2.5 pb-1 flex flex-col items-center justify-center bg-white/92 backdrop-blur-2xl shrink-0 cursor-pointer"
+          className="pt-2 pb-1 flex flex-col items-center justify-center bg-white/92 backdrop-blur-2xl shrink-0 cursor-pointer"
           onClick={() => {
             playTactileFeedback('soft');
             onClose();
@@ -70,7 +115,7 @@ export function Sheet({
           <div className="w-10 h-1.5 rounded-full bg-slate-300/90 transition-transform active:scale-95" />
         </div>
 
-        {/* Sticky iOS 27 Frosted Navigation Bar Header */}
+        {/* Sticky Navigation Bar Header */}
         <header
           className="ios27-sheet-navbar sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-white/92 backdrop-blur-2xl border-b border-slate-200/85 shrink-0"
         >
@@ -82,7 +127,7 @@ export function Sheet({
                 onClose();
               }}
               aria-label="بازگشت و بستن"
-              className="w-9 h-9 rounded-full flex items-center justify-center bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200/80 transition-all haptic active:scale-90 shrink-0"
+              className="w-11 h-11 rounded-full flex items-center justify-center bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200/80 transition-all haptic active:scale-90 shrink-0"
             >
               <ArrowRight size={18} />
             </button>
@@ -100,9 +145,9 @@ export function Sheet({
             )}
 
             <div className="min-w-0">
-              <h2 className="text-[15px] font-black text-slate-900 truncate leading-tight">{title}</h2>
-              <p className="text-[11px] font-medium text-slate-500 truncate mt-0.5">
-                {subtitle || 'فرم ثبت هوشمند • استاندارد iOS 27 کلینیک مینادنتال'}
+              <h2 className="text-[15px] font-black text-slate-900 dark:text-slate-100 truncate leading-tight">{title}</h2>
+              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                {subtitle || 'فرم ثبت تمام‌صفحه • مینادنتال'}
               </p>
             </div>
           </div>
@@ -115,14 +160,14 @@ export function Sheet({
             }}
             aria-label="بستن پنجره"
             data-testid="close_fullscreen_modal_btn"
-            className="px-3.5 py-1.5 rounded-full flex items-center gap-1 bg-slate-100 hover:bg-slate-200/90 text-slate-700 font-extrabold text-xs border border-slate-200/80 transition-all haptic active:scale-92 shrink-0"
+            className="px-3.5 py-2 rounded-full flex items-center gap-1 bg-slate-100 hover:bg-slate-200/90 text-slate-700 font-extrabold text-xs border border-slate-200/80 transition-all haptic active:scale-92 shrink-0 min-h-[40px]"
           >
             <X size={15} />
             <span>بستن</span>
           </button>
         </header>
 
-        {/* Scrollable iOS 27 Inset Grouped Content Area */}
+        {/* Scrollable Inset Grouped Content Area */}
         <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 pb-24 safe-bottom desktop-scroll">
           <div className="max-w-2xl mx-auto space-y-3">{children}</div>
         </div>

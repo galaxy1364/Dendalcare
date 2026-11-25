@@ -1,14 +1,15 @@
 import { SECTIONS, type SectionId } from '@/lib/sections';
+import type { AppRouteId } from '@/lib/navigationStack';
 import { MascotTooth, type MascotMood } from '@/components/ui/MascotTooth';
 import { playTactileFeedback } from '@/lib/hapticsAudio';
-import { FolderKanban, Keyboard, User, Monitor, Tablet, Search, BellRing, ChevronRight } from 'lucide-react';
+import { FolderKanban, Keyboard, User, Monitor, Tablet, Search, BellRing, ChevronRight, LayoutGrid } from 'lucide-react';
 import type { ClinicUserAccount } from '@/lib/cloudSyncEngine';
 import { ROLE_LABELS } from '@/lib/cloudSyncEngine';
 import type { PlatformInfo } from '@/lib/platformEngine';
 
 interface DesktopSidebarProps {
-  active: SectionId;
-  onChange: (id: SectionId) => void;
+  active: AppRouteId;
+  onChange: (id: AppRouteId) => void;
   onBack?: () => void;
   canGoBack?: boolean;
   mascotMood: MascotMood;
@@ -47,7 +48,7 @@ export function DesktopSidebar({
   onOpenGlobalSearch,
   onOpenNotifications,
 }: DesktopSidebarProps) {
-  const handleSelect = (id: SectionId) => {
+  const handleSelect = (id: AppRouteId) => {
     playTactileFeedback('dock');
     onChange(id);
   };
@@ -151,6 +152,22 @@ export function DesktopSidebar({
 
       {/* Scrollable Navigation Groups */}
       <nav className="flex-1 overflow-y-auto px-2 lg:px-3 py-2 space-y-4 desktop-scroll">
+        <button
+          type="button"
+          onClick={() => handleSelect('services')}
+          data-testid="sidebar_nav_services"
+          className={`w-full flex items-center justify-center lg:justify-start gap-2.5 px-2.5 py-2.5 rounded-2xl transition-all duration-150 ${
+            active === 'services'
+              ? 'bg-white/14 text-white shadow-md'
+              : 'text-slate-300 hover:bg-white/8 hover:text-white'
+          }`}
+        >
+          <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-indigo-500/25 text-indigo-300 border border-indigo-400/35">
+            <LayoutGrid size={17} />
+          </span>
+          <span className="hidden lg:block text-xs font-extrabold truncate">همه خدمات و گزارش نوبت</span>
+        </button>
+
         {SECTION_GROUPS.map((group) => (
           <div key={group.title} className="space-y-1">
             <p className="hidden lg:block px-2.5 text-[10px] font-bold text-slate-400/90 tracking-tight mb-1.5">

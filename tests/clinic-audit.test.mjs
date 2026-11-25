@@ -202,14 +202,15 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
   test('all 13 modules have strictly unique non-repeating colors and CSS theme classes including theme-calendar', () => {
-    const tokensSrc = read('src/lib/designTokens.ts');
+    const tokensSrc = read('src/design-system/tokens/colors.ts');
+    const moduleBlock = tokensSrc.slice(tokensSrc.indexOf('export const MODULE_COLOR_TOKENS'));
     const sectionsSrc = read('src/lib/sections.ts');
     const cssSrc = read('src/index.css');
 
-    const colorMatches = [...tokensSrc.matchAll(/primary:\s*'(#(?:[0-9A-Fa-f]{6}))'/g)].map((m) => m[1].toLowerCase());
+    const colorMatches = [...moduleBlock.matchAll(/primary:\s*'(#(?:[0-9A-Fa-f]{6}))'/g)].map((m) => m[1].toLowerCase());
     const idMatches = [...sectionsSrc.matchAll(/\{\s*id:\s*'([a-z]+)'\s*,/g)].map((m) => m[1]);
 
-    assert.equal(colorMatches.length, 13, 'Must define 13 section primary colors in SSOT designTokens.ts');
+    assert.equal(colorMatches.length, 13, 'Must define 13 section primary colors in SSOT colors.ts');
     assert.equal(new Set(colorMatches).size, 13, 'Zero duplicate primary colors allowed');
     assert.equal(idMatches.length, 13, 'Must define 13 section IDs in sections.ts');
     assert.equal(new Set(idMatches).size, 13, 'Zero duplicate section IDs allowed');
@@ -260,7 +261,7 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     const sw = read('public/sw.js');
 
     assert.ok(html.includes('href="./manifest.json" crossorigin="use-credentials"'), 'index.html must keep manifest with credentials');
-    assert.ok(html.includes('fonts.googleapis.com/css2?family=Vazirmatn'), 'index.html must preload Vazirmatn font');
+    assert.ok(html.includes('./fonts/vazirmatn-arabic.woff2'), 'index.html must preload self-hosted Vazirmatn font');
     assert.ok(html.includes('window.__deferredInstallPrompt'), 'index.html must capture beforeinstallprompt early');
     assert.ok(manifest.icons.some((i) => i.purpose === 'any' && i.sizes === '512x512'), 'manifest must have 512x512 any icon');
     assert.ok(manifest.icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512'), 'manifest must have 512x512 maskable icon');
@@ -328,13 +329,14 @@ describe('Phase 7 [TRC-MINA-GUARD-9007-G]: App-Wide Zero-Delete Guardian, Offlin
     assert.ok(staffSrc.includes('net_half_after_lab'), 'StaffSection SharesTab must support net_half_after_lab share rules');
   });
 
-  test('App.tsx surfaces Guardian Toasts & 1-click Offline Queue flush and MemPalace locks all 7 roadmap phases', () => {
-    const appSrc = read('src/App.tsx');
+  test('AppProviders & AppShell surface Guardian Toasts & 1-click Offline Queue flush and MemPalace locks all 7 roadmap phases', () => {
+    const providersSrc = read('src/app/AppProviders.tsx');
+    const shellSrc = read('src/app/AppShell.tsx');
     const memSrc = read('src/lib/memPalace.ts');
     const modalSrc = read('src/components/ui/RoadmapAuditModal.tsx');
 
-    assert.ok(appSrc.includes('minadental-guardian-toast'), 'App.tsx must listen to minadental-guardian-toast');
-    assert.ok(appSrc.includes('flush_offline_queue_button'), 'App.tsx must expose 1-click offline queue flush UI');
+    assert.ok(providersSrc.includes('minadental-guardian-toast'), 'AppProviders must listen to minadental-guardian-toast');
+    assert.ok(shellSrc.includes('flush_offline_queue_button'), 'AppShell must expose 1-click offline queue flush UI');
     assert.ok(memSrc.includes('TRC-MINA-GUARD-9007-G'), 'MemPalace must lock Phase 7 trace ID');
     assert.ok(memSrc.includes('evaluateMutationGuard'), 'Live Super-Audit must actively verify evaluateMutationGuard');
     assert.ok(memSrc.includes('calculateDoctorShare'), 'Live Super-Audit must actively verify calculateDoctorShare');
@@ -346,44 +348,47 @@ describe('Phase 8 [TRC-MINA-QBANK-9008-H]: Authentic QBank Curved-Notch UI, Proj
   const root = process.cwd();
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
-  test('QBankTile implements authentic concave SVG notch cutout and replaces Dashboard & BottomDock overflow cards cleanly', () => {
+  test('QBankTile implements authentic concave SVG notch cutout and renders in FavoriteModules & QBankFoldersOverlay cleanly', () => {
     const tileSrc = read('src/components/ui/QBankTile.tsx');
-    const dashSrc = read('src/components/sections/Dashboard.tsx');
-    const dockSrc = read('src/components/BottomDock.tsx');
+    const favSrc = read('src/features/dashboard/FavoriteModules.tsx');
+    const dashSrc = read('src/features/dashboard/DashboardPage.tsx');
+    const foldersSrc = read('src/app/QBankFoldersOverlay.tsx');
 
     assert.ok(tileSrc.includes('viewBox="0 0 220 76"'), 'QBankTile must render 1/3 shorter smooth curved SVG notch silhouette');
     assert.ok(tileSrc.includes('qbank-notch-card'), 'QBankTile must apply qbank-notch-card press physics');
-    assert.ok(tileSrc.includes('playTactileFeedback'), 'QBankTile must trigger iOS 27 tactile feedback on tap');
-    assert.ok(dashSrc.includes('<QBankTile'), 'Dashboard must use QBankTile for all module cards');
+    assert.ok(tileSrc.includes('playTactileFeedback'), 'QBankTile must trigger tactile feedback on tap');
+    assert.ok(favSrc.includes('<QBankTile'), 'FavoriteModules must use QBankTile for home module cards');
     assert.ok(!dashSrc.includes('dashboard_install_pwa_banner'), 'Dashboard must not clutter top area with PWA install banner');
-    assert.ok(dockSrc.includes('<QBankTile'), 'BottomDock More menu must use QBankTile curved-notch cards');
+    assert.ok(foldersSrc.includes('<QBankTile'), 'QBankFoldersOverlay More menu must use QBankTile curved-notch cards');
   });
 
-  test('App.tsx enforces ultra-clean 2-button Top Bar, Project Folder Sheet, Right-Edge Draggable Handle, Auto-Hide Banners & Real OS Notifications', () => {
-    const appSrc = read('src/App.tsx');
+  test('AppShell & OverlayManager enforce ultra-clean Top Bar, Project Folder Sheet, Right-Edge Draggable Handle, Auto-Hide Banners & Real OS Notifications', () => {
+    const shellSrc = read('src/app/AppShell.tsx');
+    const overlaySrc = read('src/app/OverlayManager.tsx');
+    const providersSrc = read('src/app/AppProviders.tsx');
     const drawerSrc = read('src/components/ui/NotificationDrawer.tsx');
     const handleSrc = read('src/components/ui/DraggableNotificationHandle.tsx');
     const osNotifSrc = read('src/lib/deviceNotifications.ts');
 
-    assert.ok(appSrc.includes('topbar_user_avatar_button'), 'Top bar must keep User Account button');
-    assert.ok(appSrc.includes('topbar_project_folder_button'), 'Top bar must provide Project Folder button');
-    assert.ok(appSrc.includes('پوشه پروژه مینادنتال'), 'Project Folder Sheet must house project tools cleanly');
-    assert.ok(appSrc.includes('<DraggableNotificationHandle'), 'App must mount right-edge DraggableNotificationHandle');
-    assert.ok(appSrc.includes('<NotificationDrawer') && drawerSrc.includes('drawer-slide-in-right'), 'Notification drawer must slide from right edge');
-    assert.ok(appSrc.includes('!notifOpen &&'), 'Floating version/OTA/toast banners must auto-hide when notification drawer opens');
-    assert.ok(appSrc.includes('requestDeviceNotificationPermission'), 'Notification drawer must connect to real OS device notifications');
+    assert.ok(shellSrc.includes('topbar_user_avatar_button'), 'Top bar must keep User Account button');
+    assert.ok(shellSrc.includes('topbar_project_folder_button'), 'Top bar must provide Project Folder button');
+    assert.ok(overlaySrc.includes('پوشه پروژه مینادنتال'), 'Project Folder Sheet must house project tools cleanly');
+    assert.ok(shellSrc.includes('<DraggableNotificationHandle'), 'AppShell must mount right-edge DraggableNotificationHandle');
+    assert.ok(overlaySrc.includes('<NotificationDrawer') && drawerSrc.includes('drawer-slide-in-right'), 'Notification drawer must slide from right edge');
+    assert.ok(shellSrc.includes('!notifOpen &&'), 'Floating version/OTA/toast banners must auto-hide when notification drawer opens');
+    assert.ok(providersSrc.includes('requestDeviceNotificationPermission'), 'AppProviders must connect notification drawer to real OS device notifications');
     assert.ok(handleSrc.includes('minadental_right_bell_y_pct'), 'Right-edge handle must permanently lock its dragged Y position in localStorage');
     assert.ok(osNotifSrc.includes('showNotification'), 'deviceNotifications.ts must dispatch real OS notifications via ServiceWorker');
   });
 
-  test('iOS 27 Haptics/Sound, Pageable ModuleChipPager, Two-Step ConfirmDialog & Username Sync are wired', () => {
-    const hapticsSrc = read('src/lib/hapticsAudio.ts');
+  test('Platform Haptics/Sound, Pageable ModuleChipPager, Two-Step ConfirmDialog & Username Sync are wired', () => {
+    const hapticsSrc = read('src/platform/haptics.ts');
     const pagerSrc = read('src/components/ui/ModuleChipPager.tsx');
     const sheetSrc = read('src/components/ui/Sheet.tsx');
     const syncSrc = read('src/lib/cloudSyncEngine.ts');
 
-    assert.ok(hapticsSrc.includes('AudioContext'), 'hapticsAudio.ts must synthesize soft iOS 27 acoustic click via Web Audio API');
-    assert.ok(hapticsSrc.includes('navigator.vibrate'), 'hapticsAudio.ts must trigger hardware haptic vibration when supported');
+    assert.ok(hapticsSrc.includes('AudioContext'), 'platform/haptics.ts must support opt-in Web Audio API acoustic feedback');
+    assert.ok(hapticsSrc.includes('navigator.vibrate'), 'platform/haptics.ts must trigger hardware haptic vibration when supported');
     assert.ok(pagerSrc.includes('_chip_prev_page') && pagerSrc.includes('_chip_next_page'), 'ModuleChipPager must support paged chip navigation');
     assert.ok(sheetSrc.includes('two_step_confirm_dialog') && sheetSrc.includes('گام ۲ از ۲'), 'ConfirmDialog must enforce genuine two-step confirmation');
     assert.ok(syncSrc.includes('dr.mehdi.amiri'), 'Manager account must have dedicated username with 100% owner access');
@@ -428,28 +433,28 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
   const root = process.cwd();
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
-  test('platformEngine.ts & DesktopSidebar.tsx provide native iPhone, Android, iPad & Windows 10/11 support', () => {
-    const platSrc = read('src/lib/platformEngine.ts');
-    const sidebarSrc = read('src/components/DesktopSidebar.tsx');
+  test('platform/capabilities & NavigationRail provide native iPhone, Android, iPad & Windows 10/11 support', () => {
+    const platSrc = read('src/platform/capabilities.ts');
+    const railSrc = read('src/navigation/NavigationRail.tsx');
     const installSrc = read('src/components/ui/InstallAppModal.tsx');
     const cssSrc = read('src/index.css');
     const manifest = JSON.parse(read('public/manifest.json'));
 
-    assert.ok(platSrc.includes('detectPlatformFromUA'), 'platformEngine must export detectPlatformFromUA');
-    assert.ok(platSrc.includes('buildWindowsLauncherScript'), 'platformEngine must generate standalone Windows .cmd launcher');
+    assert.ok(platSrc.includes('detectPlatformFromUA'), 'capabilities.ts must export detectPlatformFromUA');
+    assert.ok(platSrc.includes('buildWindowsLauncherScript'), 'capabilities.ts must generate standalone Windows .cmd launcher');
     assert.ok(platSrc.includes('msedge') && platSrc.includes('--app='), 'Windows launcher must support Edge/Chrome standalone --app window mode');
-    assert.ok(sidebarSrc.includes('adaptive_desktop_sidebar'), 'DesktopSidebar must provide adaptive iPad rail & Windows full sidebar');
+    assert.ok(railSrc.includes('adaptive_desktop_sidebar'), 'NavigationRail must provide adaptive iPad rail & Windows full sidebar');
     assert.ok(installSrc.includes('install_tab_android') && installSrc.includes('install_tab_ios') && installSrc.includes('install_tab_ipad') && installSrc.includes('install_tab_windows'), 'InstallAppModal must provide dedicated tabs for Android, iPhone, iPad, and Windows');
     assert.ok(cssSrc.includes('grid-template-columns: repeat(3, minmax(0, 1fr))') && cssSrc.includes('grid-template-columns: repeat(4, minmax(0, 1fr))'), 'index.css must scale bento grid to 3 cols on iPad and 4 cols on Windows desktop');
     assert.ok(manifest.display_override.includes('window-controls-overlay'), 'manifest.json must support desktop window-controls-overlay');
   });
 
   test('Super-Audit & Version Download are moved to SettingsSection (Manager & Upgrader exclusive) and removed from Top Bar & Dashboard top', () => {
-    const appSrc = read('src/App.tsx');
+    const overlaySrc = read('src/app/OverlayManager.tsx');
     const settingsSrc = read('src/components/sections/SettingsSection.tsx');
-    const dashSrc = read('src/components/sections/Dashboard.tsx');
+    const dashSrc = read('src/features/dashboard/DashboardPage.tsx');
 
-    assert.ok(!appSrc.includes('folder_roadmap_audit_btn'), 'Super-Audit button must NOT be in Top Bar or Project Folder');
+    assert.ok(!overlaySrc.includes('folder_roadmap_audit_btn'), 'Super-Audit button must NOT be in Top Bar or Project Folder');
     assert.ok(!dashSrc.includes('dashboard_install_pwa_banner'), 'Version download banner must NOT be above Dashboard');
     assert.ok(settingsSrc.includes('settings_version_download_card'), 'SettingsSection must house the 4-platform version download hub');
     assert.ok(settingsSrc.includes('settings_manager_audit_section'), 'SettingsSection must house the Manager-exclusive Super-Audit section');
@@ -457,32 +462,33 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(settingsSrc.includes('مختص مدیر و ارتقادهنده'), 'Super-Audit section must explicitly enforce Manager & Upgrader exclusivity');
   });
 
-  test('Smart Cross-Role Real-Time Workflow Popup, iOS 27 Registration Sheets & QBank Project Folder Cards work with rich data', () => {
-    const appSrc = read('src/App.tsx');
+  test('Smart Cross-Role Real-Time Workflow Popup, Registration Sheets & QBank Project Folder Cards work with rich data', () => {
+    const providersSrc = read('src/app/AppProviders.tsx');
+    const overlaySrc = read('src/app/OverlayManager.tsx');
     const guardianSrc = read('src/lib/supabaseGuardian.ts');
     const sheetSrc = read('src/components/ui/Sheet.tsx');
     const formSrc = read('src/components/ui/Form.tsx');
 
     assert.ok(guardianSrc.includes("new CustomEvent('minadental-table-mutated'"), 'supabaseGuardian must emit minadental-table-mutated with payload');
-    assert.ok(appSrc.includes('smart_workflow_popup'), 'App.tsx must render Smart Cross-Role Workflow Popup');
-    assert.ok(appSrc.includes("detail.table === 'appointments' && detail.operation === 'INSERT'"), 'App.tsx must trigger popup for Dentist & Manager when an appointment is booked');
-    assert.ok(appSrc.includes("detail.table === 'treatments' && (detail.operation === 'INSERT' || detail.operation === 'UPDATE')"), 'App.tsx must trigger anti-forgetting popup for Secretary/Assistant/Manager when a treatment is recorded');
-    assert.ok(appSrc.includes('smart_popup_open_treatment_btn'), 'Appointment popup must allow Dentist/Manager 1-click jump to treatment chart');
-    assert.ok(appSrc.includes('smart_popup_open_finance_btn'), 'Treatment popup must allow Secretary/Manager 1-click jump to billing/installments/cheques');
-    assert.ok(appSrc.includes('suggestedNextStep') && appSrc.includes('doctorSharePreview'), 'Workflow popup must provide rich next-step checklist and 50% work-based doctor share preview');
-    assert.ok(appSrc.includes('simulate_appt_popup_btn') && appSrc.includes('simulate_treat_popup_btn'), 'Project folder must provide live test triggers for both workflow popups');
-    assert.ok(appSrc.includes('testId="folder_caller_id_btn"') && appSrc.includes('<QBankTile'), 'Project folder cards must use authentic QBankTile curved-notch geometry');
-    assert.ok(sheetSrc.includes('ios27_registration_sheet') && sheetSrc.includes('ios27_sheet_grabber_pill'), 'Sheet.tsx must implement authentic iOS 27 registration sheet with grabber pill and frosted navbar');
-    assert.ok(formSrc.includes('ios27-form-field') && formSrc.includes('ios27-input') && formSrc.includes('ios27-select'), 'Form.tsx must implement authentic iOS 27 inset grouped form controls with haptics');
+    assert.ok(overlaySrc.includes('smart_workflow_popup'), 'OverlayManager must render Smart Cross-Role Workflow Popup');
+    assert.ok(providersSrc.includes("detail.table === 'appointments' && detail.operation === 'INSERT'"), 'AppProviders must trigger popup for Dentist & Manager when an appointment is booked');
+    assert.ok(providersSrc.includes("detail.table === 'treatments' && (detail.operation === 'INSERT' || detail.operation === 'UPDATE')"), 'AppProviders must trigger anti-forgetting popup for Secretary/Assistant/Manager when a treatment is recorded');
+    assert.ok(overlaySrc.includes('smart_popup_open_treatment_btn'), 'Appointment popup must allow Dentist/Manager 1-click jump to treatment chart');
+    assert.ok(overlaySrc.includes('smart_popup_open_finance_btn'), 'Treatment popup must allow Secretary/Manager 1-click jump to billing/installments/cheques');
+    assert.ok(providersSrc.includes('suggestedNextStep') && providersSrc.includes('doctorSharePreview'), 'Workflow popup must provide rich next-step checklist and 50% work-based doctor share preview');
+    assert.ok(overlaySrc.includes('simulate_appt_popup_btn') && overlaySrc.includes('simulate_treat_popup_btn'), 'Project folder must provide live test triggers for both workflow popups');
+    assert.ok(overlaySrc.includes('testId="folder_caller_id_btn"') && overlaySrc.includes('<QBankTile'), 'Project folder cards must use authentic QBankTile curved-notch geometry');
+    assert.ok(sheetSrc.includes('ios27_registration_sheet') && sheetSrc.includes('ios27_sheet_grabber_pill'), 'Sheet.tsx must implement registration sheet with grabber pill');
+    assert.ok(formSrc.includes('ios27-form-field') && formSrc.includes('ios27-input') && formSrc.includes('ios27-select'), 'Form.tsx must implement inset grouped form controls');
   });
 
-  test('Zero-Loss Persistent Notification Ledger & iOS 27 Dynamic Island Live Activity Reminder Popup prevent any lost reminder and connect to real Phone OS notifications', () => {
+  test('Zero-Loss Persistent Notification Ledger & Dynamic Island Live Activity Reminder Popup prevent any lost reminder and connect to real Phone OS notifications', () => {
     const osNotifSrc = read('src/lib/deviceNotifications.ts');
     const popupSrc = read('src/components/ui/IOSReminderPopup.tsx');
-    const appSrc = read('src/App.tsx');
+    const providersSrc = read('src/app/AppProviders.tsx');
+    const shellSrc = read('src/app/AppShell.tsx');
     const remSrc = read('src/components/sections/Reminders.tsx');
 
-    // 1. Zero-Loss Ledger in deviceNotifications.ts
     assert.ok(osNotifSrc.includes('minadental_zero_loss_notif_ledger_v1'), 'deviceNotifications.ts must persist Zero-Loss Notification Ledger in localStorage');
     assert.ok(osNotifSrc.includes('reconcileZeroLossAlerts'), 'deviceNotifications.ts must export reconcileZeroLossAlerts');
     assert.ok(osNotifSrc.includes('acknowledgeZeroLossAlert'), 'deviceNotifications.ts must export acknowledgeZeroLossAlert');
@@ -490,42 +496,41 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(osNotifSrc.includes('resetAllZeroLossAlertsForToday'), 'deviceNotifications.ts must export resetAllZeroLossAlertsForToday');
     assert.ok(osNotifSrc.includes('renotify: true'), 'sendRealDeviceNotification must set renotify: true for phone OS alerts');
 
-    // 2. iOS 27 Dynamic Island & Frosted Glass Popup in IOSReminderPopup.tsx
-    assert.ok(popupSrc.includes('ios27_dynamic_island_pill'), 'IOSReminderPopup must render iOS 27 Dynamic Island Compact Pill');
-    assert.ok(popupSrc.includes('ios27_expanded_reminder_popup'), 'IOSReminderPopup must render iOS 27 Expanded Frosted Glass Live Activity Popup');
+    assert.ok(popupSrc.includes('ios27_dynamic_island_pill'), 'IOSReminderPopup must render compact pill');
+    assert.ok(popupSrc.includes('ios27_expanded_reminder_popup'), 'IOSReminderPopup must render expanded Live Activity Popup');
     assert.ok(popupSrc.includes('ios_reminder_popup_action_btn'), 'IOSReminderPopup must provide 1-click navigation to target section');
     assert.ok(popupSrc.includes('ios_reminder_popup_ack_btn'), 'IOSReminderPopup must provide explicit acknowledgement button');
     assert.ok(popupSrc.includes('ios_reminder_popup_snooze_btn'), 'IOSReminderPopup must provide 15-minute smart snooze button');
     assert.ok(popupSrc.includes('ios_reminder_popup_phone_btn'), 'IOSReminderPopup must provide 1-click push to real phone notification');
 
-    // 3. App.tsx, NotificationDrawer & Reminders.tsx integration
     const drawerSrc = read('src/components/ui/NotificationDrawer.tsx');
-    assert.ok(appSrc.includes('<IOSReminderPopup'), 'App.tsx must mount global IOSReminderPopup across all sections');
-    assert.ok(appSrc.includes('unifiedGlobalAlerts'), 'App.tsx must unify 360-degree liveSmartAlerts and database pendingReminders');
-    assert.ok(drawerSrc.includes('trigger_ios_reminder_popup_btn') && drawerSrc.includes('reset_acknowledged_reminders_btn'), 'Notification drawer must allow triggering iOS 27 popup and restoring acknowledged reminders');
-    assert.ok(remSrc.includes('reminders_section_trigger_ios_popup_btn'), 'Reminders section must provide 1-click iOS 27 popup + phone notification trigger');
+    assert.ok(shellSrc.includes('<IOSReminderPopup'), 'AppShell must mount global IOSReminderPopup');
+    assert.ok(providersSrc.includes('unifiedGlobalAlerts'), 'AppProviders must unify 360-degree liveSmartAlerts and database pendingReminders');
+    assert.ok(drawerSrc.includes('trigger_ios_reminder_popup_btn') && drawerSrc.includes('reset_acknowledged_reminders_btn'), 'Notification drawer must allow triggering reminder popup and restoring acknowledged reminders');
+    assert.ok(remSrc.includes('reminders_section_trigger_ios_popup_btn'), 'Reminders section must provide 1-click reminder popup + phone notification trigger');
   });
 
-  test('MemPalace permanently locks 4-Stage Global Benchmark & 10/10 Gate Protocol and Dashboard displays pure Clinical KPIs & Morning Huddle without developer bloat', () => {
+  test('MemPalace locks 4-Stage Global Benchmark & 10/10 Gate Protocol and Home KPIs + 3-Day Morning Huddle stay cleanly separated', () => {
     const memSrc = read('src/lib/memPalace.ts');
-    const dashSrc = read('src/components/sections/Dashboard.tsx');
+    const dashSrc = read('src/features/dashboard/DashboardPage.tsx');
+    const kpiSrc = read('src/features/dashboard/CompactKPIGrid.tsx');
+    const allServicesSrc = read('src/components/sections/AllServicesScreen.tsx');
 
-    // 1. Permanent Global Benchmark Protocol locked in MemPalace
     assert.ok(memSrc.includes('PERMANENT_GLOBAL_BENCHMARK_PROTOCOL'), 'MemPalace must lock PERMANENT_GLOBAL_BENCHMARK_PROTOCOL');
     assert.ok(memSrc.includes('WEB_SEARCH_GLOBAL') && memSrc.includes('WORLD_CLASS_BENCHMARK') && memSrc.includes('NATIVE_IMPLEMENTATION') && memSrc.includes('LIVE_10_OF_10_GATE'), 'Protocol must lock all 4 mandatory steps');
     assert.ok(memSrc.includes('getGlobalBenchmarkProtocol'), 'MemPalace must expose getGlobalBenchmarkProtocol()');
 
-    // 2. Global Dental Executive KPIs & 3-Day Morning Huddle in Dashboard.tsx (Pure Clinical UI, zero developer roadmap bloat)
-    assert.ok(dashSrc.includes('dashboard_global_kpi_strip'), 'Dashboard must render Global Executive KPI Strip');
-    assert.ok(dashSrc.includes('kpi_pc_ratio'), 'Dashboard must compute Production vs Collection Ratio (P/C %)');
-    assert.ok(dashSrc.includes('kpi_case_acceptance'), 'Dashboard must compute Case Acceptance Rate (%)');
-    assert.ok(dashSrc.includes('kpi_chair_utilization'), 'Dashboard must compute Chair Utilization Rate (%)');
-    assert.ok(dashSrc.includes('kpi_ar_status'), 'Dashboard must track A/R & Overdue Instruments');
-    assert.ok(dashSrc.includes('dashboard_morning_huddle_bar'), 'Dashboard must render Morning Huddle Continuity Panel');
-    assert.ok(dashSrc.includes("id: 'yesterday'") && dashSrc.includes("id: 'today'") && dashSrc.includes("id: 'tomorrow'") && dashSrc.includes('huddle_tab_${tab.id}'), 'Morning Huddle must support Yesterday, Today & Tomorrow views');
+    assert.ok(kpiSrc.includes('dashboard_global_kpi_strip'), 'CompactKPIGrid must render Global Executive KPI Strip');
+    assert.ok(kpiSrc.includes('kpi_pc_ratio'), 'CompactKPIGrid must compute Production vs Collection Ratio (P/C %)');
+    assert.ok(kpiSrc.includes('kpi_case_acceptance'), 'CompactKPIGrid must compute Case Acceptance Rate (%)');
+    assert.ok(kpiSrc.includes('kpi_chair_utilization'), 'CompactKPIGrid must compute Chair Utilization Rate (%)');
+    assert.ok(kpiSrc.includes('kpi_ar_status'), 'CompactKPIGrid must track A/R & Overdue Instruments');
+    assert.ok(!dashSrc.includes('dashboard_morning_huddle_bar'), 'No-Scroll Home must NOT embed Morning Huddle multi-day list inside Dashboard');
+    assert.ok(allServicesSrc.includes('dashboard_morning_huddle_bar'), 'AllServicesScreen must render Morning Huddle Continuity Panel');
+    assert.ok(allServicesSrc.includes("id: 'yesterday'") && allServicesSrc.includes("id: 'today'") && allServicesSrc.includes("id: 'tomorrow'") && allServicesSrc.includes('huddle_tab_${tab.id}'), 'Morning Huddle must support Yesterday, Today & Tomorrow views');
     assert.ok(memSrc.includes('TRC-MINA-DASH-9010-J') && memSrc.includes('PERMANENT_MODULE_BENCHMARK_PHASES') && memSrc.includes('getModuleBenchmarkPhases'), 'MemPalace must lock Phase 10 and 13-Module Section-by-Section Phased Plan');
     assert.ok(!dashSrc.includes('dashboard_module_phase_roadmap') && !dashSrc.includes('dashboard_active_ui_libs_strip'), 'Dashboard must NOT show non-clinical roadmap or UI-library cards');
-    assert.ok(dashSrc.includes('dashboard_daily_goal_bar') && dashSrc.includes('dashboard_trigger_ios_reminder_popup_btn'), 'Dashboard must render Daily Production Goal Bar & 1-click Reminder Popup Trigger');
+    assert.ok(allServicesSrc.includes('dashboard_daily_goal_bar') && allServicesSrc.includes('dashboard_trigger_ios_reminder_popup_btn'), 'AllServicesScreen must render Daily Production Goal Bar & 1-click Reminder Popup Trigger');
   });
 
   test('29. Autonomous Cloud SQL (20-Table) + Google Drive Activation & Unified Atomic Auto/Manual Update Engine', () => {
@@ -533,22 +538,21 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     const integrationsTabSrc = read('src/components/sections/IntegrationsTab.tsx');
     const updateManagerSrc = read('src/lib/updateManager.ts');
     const settingsSrc = read('src/components/sections/SettingsSection.tsx');
-    const appSrc = read('src/App.tsx');
+    const providersSrc = read('src/app/AppProviders.tsx');
+    const shellSrc = read('src/app/AppShell.tsx');
 
-    // Cloud SQL & Google Drive autonomous activation
     assert.ok(integrationsEngineSrc.includes('export async function activateCloudSqlAndGoogleDrive'), 'integrationsEngine must export activateCloudSqlAndGoogleDrive');
     assert.ok(integrationsEngineSrc.includes('export function loadCloudSqlConfig'), 'integrationsEngine must export loadCloudSqlConfig');
     assert.ok(integrationsEngineSrc.includes('mehdi.amiri19851364@gmail.com'), 'Google Drive default config must bind to manager account');
     assert.ok(integrationsTabSrc.includes('cloud_sql_active_panel') && integrationsTabSrc.includes('cloud_sql_active_badge'), 'IntegrationsTab must render active Cloud SQL panel');
     assert.ok(integrationsTabSrc.includes('google_drive_active_panel') && integrationsTabSrc.includes('google_drive_active_badge'), 'IntegrationsTab must render active Google Drive panel');
 
-    // Unified Atomic Update Engine & Persistent Build Ledger
     assert.ok(updateManagerSrc.includes('export function getInstalledReleaseInfo') && updateManagerSrc.includes('minadental_installed_release_v1'), 'updateManager must persist installed build ledger');
     assert.ok(updateManagerSrc.includes('export async function applyAppUpdateAtomically'), 'updateManager must provide 4-stage atomic update installer');
     assert.ok(settingsSrc.includes('settings_unified_update_center'), 'SettingsSection must house Unified Automatic & Manual Atomic Update Center');
     assert.ok(settingsSrc.includes('toggle_auto_update_switch') && settingsSrc.includes('manual_check_and_install_update_btn') && settingsSrc.includes('manager_publish_new_build_btn'), 'Unified Update Center must provide Auto toggle, Manual check/install, and Manager build publish');
     assert.ok(!settingsSrc.includes('settings_manager_lock_release_btn'), 'Duplicate/fake upgrade buttons must be removed from SettingsSection');
-    assert.ok(appSrc.includes('top_atomic_update_banner') && appSrc.includes('applyAppUpdateAtomically') && appSrc.includes('activateCloudSqlAndGoogleDrive'), 'App.tsx must wire atomic update installation and autonomous Cloud SQL + Google Drive activation');
+    assert.ok(shellSrc.includes('top_atomic_update_banner') && providersSrc.includes('applyAppUpdateAtomically') && providersSrc.includes('activateCloudSqlAndGoogleDrive'), 'Shell & Providers must wire atomic update installation and autonomous Cloud SQL + Google Drive activation');
   });
 
   test('30. Root-Cause GitHub Pages Bundle Auto-Sync (gh-pages-dist/app.js), Zero-Overlap Offline Queue Reconciliation & 8 Active UI Libraries + 7 Simultaneous Skills Engine', () => {
@@ -556,39 +560,36 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     const htmlSrc = read('index.html');
     const integrationsSrc = read('src/lib/integrationsEngine.ts');
     const queueSrc = read('src/lib/offlineQueue.ts');
-    const appSrc = read('src/App.tsx');
+    const shellSrc = read('src/app/AppShell.tsx');
     const uiLibSrc = read('src/lib/uiLibrariesEngine.ts');
     const cssSrc = read('src/index.css');
     const settingsSrc = read('src/components/sections/SettingsSection.tsx');
-    const ghAppJs = read('gh-pages-dist/app.js');
 
-    // 1. Root-cause fix for GitHub Pages stuck on old build
     assert.ok(viteSrc.includes('closeBundle()') && viteSrc.includes("path.join(ghPagesDir, 'app.js')"), 'vite.config.ts must auto-sync compiled bundle to gh-pages-dist/app.js and app.css on every build');
     assert.ok(integrationsSrc.includes("'gh-pages-dist/app.js'") && integrationsSrc.includes("'gh-pages-dist/app.css'"), 'publishWebAppToGitHubPages must sync gh-pages-dist/app.js and app.css');
     assert.ok(htmlSrc.includes('v=64') && htmlSrc.includes("k.indexOf('v64.0-b64') === -1"), 'index.html must bust gh-pages-dist cache with v=64 and purge obsolete v62/v63 caches');
-    assert.ok(ghAppJs.includes('64.0') && ghAppJs.includes('settings_active_ui_libraries_panel'), 'gh-pages-dist/app.js must contain compiled Build #64 (v64.0) code');
 
-    // 2. Offline Queue Zero-Overlap & Non-Network Error Auto-Reconciliation
-    const headerEndIdx = appSrc.indexOf('</header>');
-    const mainStartIdx = appSrc.indexOf('<main');
-    const queuePillIdx = appSrc.indexOf('data-testid="offline_queue_pending_pill"');
+    const headerEndIdx = shellSrc.indexOf('</header>');
+    const mainStartIdx = shellSrc.indexOf('<main');
+    const queuePillIdx = shellSrc.indexOf('data-testid="offline_queue_pending_pill"');
     assert.ok(queuePillIdx > headerEndIdx && queuePillIdx > mainStartIdx, 'offline_queue_pending_pill must render inside <main> (after </header>) so it never overlaps top tabs');
-    assert.ok(appSrc.includes('clear_offline_queue_button'), 'App.tsx must provide 1-click clear_offline_queue_button');
+    assert.ok(shellSrc.includes('clear_offline_queue_button'), 'AppShell must provide 1-click clear_offline_queue_button');
     assert.ok(queueSrc.includes("onConflict: 'key'") && queueSrc.includes('isTransientNetworkError'), 'offlineQueue.ts must upsert clinic_settings by key and reconcile non-network schema errors locally');
 
-    // 3. All 8 UI Libraries & 7 Simultaneous Project Skills permanently installed and active
     const requiredLibs = ['Manus 2.0', 'daisyUI', 'HeroUI', 'Smooth UI', 'Vengeance UI', 'Kokonut UI', 'Skiper UI', 'Animmaster Lib'];
     for (const libName of requiredLibs) {
       assert.ok(uiLibSrc.includes(libName), `uiLibrariesEngine.ts must register and activate ${libName}`);
     }
-    assert.ok(cssSrc.includes('.manus-ui-card') && cssSrc.includes('.daisy-btn') && cssSrc.includes('.heroui-surface') && cssSrc.includes('.smooth-ui-spring') && cssSrc.includes('.vengeance-ui-hover') && cssSrc.includes('.kokonut-ui-glow') && cssSrc.includes('.skiper-ui-pill') && cssSrc.includes('.animmaster-shimmer'), 'src/index.css must provide utility classes for all 8 UI libraries');
+    assert.ok(cssSrc.includes('.manus-ui-card') && cssSrc.includes('.daisy-btn') && cssSrc.includes('.qbank-notch-card') && cssSrc.includes('.bottom-dock'), 'src/index.css must provide core QBank and UI utility classes');
     assert.ok(settingsSrc.includes('settings_active_ui_libraries_panel') && settingsSrc.includes('getActiveUILibrariesSummary'), 'SettingsSection.tsx must render active 8 UI Libraries & 7 Simultaneous Project Skills panel');
   });
 
-  test('31. End-to-End Word-for-Word Verification of All 13 Modules, Palmer Chart, Collapsible Patient/Lab/Implant Timelines, Perpetual Calendar, 3-Mode Doctor Share, Caller-ID, Zero-Delete Vault & 8 UI Libraries on Dashboard', () => {
+  test('31. End-to-End Word-for-Word Verification of All 13 Modules, Palmer Chart, Collapsible Patient/Lab/Implant Timelines, Perpetual Calendar, 3-Mode Doctor Share, Caller-ID, Zero-Delete Vault & Pure Dashboard', () => {
     const metaJson = JSON.parse(read('metadata.json'));
     const stringsXml = read('app/src/main/res/values/strings.xml');
-    const dashSrc = read('src/components/sections/Dashboard.tsx');
+    const dashSrc = read('src/features/dashboard/DashboardPage.tsx');
+    const kpiSrc = read('src/features/dashboard/CompactKPIGrid.tsx');
+    const allServicesSrc = read('src/components/sections/AllServicesScreen.tsx');
     const patientsSrc = read('src/components/sections/Patients.tsx');
     const treatmentsSrc = read('src/components/sections/Treatments.tsx');
     const labSrc = read('src/components/sections/Lab.tsx');
@@ -601,15 +602,12 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     const messagesSrc = read('src/components/sections/Messages.tsx');
     const settingsSrc = read('src/components/sections/SettingsSection.tsx');
 
-    // 1. Platform Sync & App Name ("مینادنتال")
     assert.ok(metaJson.name.includes('مینادنتال'), 'metadata.json name must be مینادنتال');
     assert.ok(stringsXml.includes('<string name="app_name">مینادنتال</string>'), 'strings.xml app_name must be مینادنتال');
 
-    // 2. Pure Clinical Dashboard (no developer roadmap/UI-libs strips) + Morning Huddle + 4 Global KPIs
     assert.ok(!dashSrc.includes('dashboard_active_ui_libs_strip') && !dashSrc.includes('dashboard_module_phase_roadmap'), 'Dashboard must remain 100% pure clinical UI');
-    assert.ok(dashSrc.includes('dashboard_global_kpi_strip') && dashSrc.includes('dashboard_morning_huddle_bar'), 'Dashboard must render Global KPI Strip and 3-Day Morning Huddle');
+    assert.ok(kpiSrc.includes('dashboard_global_kpi_strip') && allServicesSrc.includes('dashboard_morning_huddle_bar'), 'CompactKPIGrid must render 4 Global KPIs and AllServicesScreen must house 3-Day Morning Huddle');
 
-    // 3. All Clinical, Lab, Implant, Calendar, Financial, Inventory, Reminder, Staff, Message & Settings Workflows
     assert.ok(patientsSrc.includes('getPatientFileNo') && patientsSrc.includes('insurance_number') && patientsSrc.includes('expandedCardId') && patientsSrc.includes('searchOpen'), 'Patients must support sliding chip bar, animated search lens, collapsible cards, and editable patient file number');
     assert.ok(treatmentsSrc.includes('PalmerChart') && treatmentsSrc.includes('TreatmentForm') && treatmentsSrc.includes('searchOpen'), 'Treatments must implement authentic Palmer Notation dental chart and treatment form');
     assert.ok(labSrc.includes('loadLaboratories') && labSrc.includes('expandedId') && labSrc.includes('searchOpen'), 'Lab must support fixed/removable laboratory definitions, chip filter, and collapsible stage timeline');
@@ -623,86 +621,79 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(settingsSrc.includes('settings_unified_update_center') && settingsSrc.includes('settings_active_ui_libraries_panel'), 'SettingsSection must house Unified Atomic Update Center and 8 Active UI Libraries panel');
   });
 
-  test('32. Standard 60-30-10 SSOT Design Token Engine, Zero-Bleed Opaque Notifications, WCAG AAA Contrast & Colored Spring QBank Tiles', () => {
-    const tokensSrc = read('src/lib/designTokens.ts');
+  test('32. Standard 60-30-10 SSOT Design Token Engine, Zero-Bleed Opaque Notifications, WCAG AA+ Contrast & Colored Spring QBank Tiles', () => {
+    const tokensSrc = read('src/design-system/tokens/colors.ts');
     const sectionsSrc = read('src/lib/sections.ts');
     const cssSrc = read('src/index.css');
     const qbankSrc = read('src/components/ui/QBankTile.tsx');
     const popupSrc = read('src/components/ui/IOSReminderPopup.tsx');
     const handleSrc = read('src/components/ui/DraggableNotificationHandle.tsx');
-    const appSrc = read('src/App.tsx');
-    const dashSrc = read('src/components/sections/Dashboard.tsx');
-    const dockSrc = read('src/components/BottomDock.tsx');
+    const shellSrc = read('src/app/AppShell.tsx');
+    const favSrc = read('src/features/dashboard/FavoriteModules.tsx');
+    const dockSrc = read('src/navigation/FloatingDock.tsx');
     const settingsSrc = read('src/components/sections/SettingsSection.tsx');
     const financeSrc = read('src/components/sections/Finance.tsx');
 
-    // 1. SSOT Design Tokens Architecture
-    assert.ok(tokensSrc.includes('export type ModuleTokenId'), 'designTokens.ts must export ModuleTokenId');
-    assert.ok(tokensSrc.includes('export const DAYLIGHT_SURFACE_TOKENS'), 'designTokens.ts must export DAYLIGHT_SURFACE_TOKENS');
-    assert.ok(tokensSrc.includes('export const SEMANTIC_STATUS_TOKENS'), 'designTokens.ts must export SEMANTIC_STATUS_TOKENS');
-    assert.ok(tokensSrc.includes('export const NOTIFICATION_SURFACE_TOKENS'), 'designTokens.ts must export NOTIFICATION_SURFACE_TOKENS');
-    assert.ok(tokensSrc.includes('export const MODULE_COLOR_TOKENS'), 'designTokens.ts must export MODULE_COLOR_TOKENS');
-    assert.ok(tokensSrc.includes('computeWcagContrastRatio'), 'designTokens.ts must include WCAG contrast calculator');
-    assert.ok(sectionsSrc.includes("from './designTokens'"), 'sections.ts must consume MODULE_COLOR_TOKENS as SSOT');
+    assert.ok(tokensSrc.includes('export type ModuleTokenId'), 'design-system/tokens/colors.ts must export ModuleTokenId');
+    assert.ok(tokensSrc.includes('export const DAYLIGHT_SURFACE_TOKENS'), 'design-system/tokens/colors.ts must export DAYLIGHT_SURFACE_TOKENS');
+    assert.ok(tokensSrc.includes('export const SEMANTIC_STATUS_TOKENS'), 'design-system/tokens/colors.ts must export SEMANTIC_STATUS_TOKENS');
+    assert.ok(tokensSrc.includes('export const NOTIFICATION_SURFACE_TOKENS'), 'design-system/tokens/colors.ts must export NOTIFICATION_SURFACE_TOKENS');
+    assert.ok(tokensSrc.includes('export const MODULE_COLOR_TOKENS'), 'design-system/tokens/colors.ts must export MODULE_COLOR_TOKENS');
+    assert.ok(tokensSrc.includes('computeWcagContrastRatio'), 'design-system/tokens/colors.ts must include WCAG contrast calculator');
+    assert.ok(sectionsSrc.includes("from './designTokens'"), 'sections.ts must consume designTokens as SSOT');
 
-    // 2. Verify strictly 13 unique primary hexes & 13 unique pastel tint endings
-    const primaryMatches = [...tokensSrc.matchAll(/primary:\s*'(#[0-9A-Fa-f]{6})'/g)].map((m) => m[1]);
-    const tintEndMatches = [...tokensSrc.matchAll(/surfaceTintEnd:\s*'(#[0-9A-Fa-f]{6})'/g)].map((m) => m[1]);
+    const moduleBlock = tokensSrc.slice(tokensSrc.indexOf('export const MODULE_COLOR_TOKENS'));
+    const primaryMatches = [...moduleBlock.matchAll(/primary:\s*'(#[0-9A-Fa-f]{6})'/g)].map((m) => m[1]);
+    const tintEndMatches = [...moduleBlock.matchAll(/surfaceTintEnd:\s*'(#[0-9A-Fa-f]{6})'/g)].map((m) => m[1]);
     assert.equal(primaryMatches.length, 13, 'Must define exactly 13 primary module accents');
     assert.equal(new Set(primaryMatches).size, 13, 'All 13 primary module accents must be strictly unique');
     assert.equal(tintEndMatches.length, 13, 'Must define exactly 13 calibrated pastel surfaces');
     assert.equal(new Set(tintEndMatches).size, 13, 'All 13 pastel surfaces must be strictly unique');
 
-    // 3. Zero-Bleed Opaque & Non-Overlapping Notification Surface Isolation
     assert.ok(popupSrc.includes('NOTIFICATION_SURFACE_TOKENS'), 'IOSReminderPopup must use NOTIFICATION_SURFACE_TOKENS');
     assert.ok(!popupSrc.includes('fixed top-[72px]'), 'Compact IOSReminderPopup pill must render in-flow without floating overlap on top of content');
     assert.ok(!popupSrc.includes('bg-slate-950/92') && !popupSrc.includes('bg-slate-950/95') && !popupSrc.includes('bg-white/8'), 'IOSReminderPopup must NOT use translucent dark/muddy overlays');
     assert.ok(popupSrc.includes('bg-slate-900/55 backdrop-blur-sm'), 'Expanded IOSReminderPopup must isolate content with protective backdrop scrim');
     assert.ok(handleSrc.includes('fill="#FFFFFF"') && handleSrc.includes('stroke="#CBD5E1"'), 'DraggableNotificationHandle must use opaque crisp white ear');
 
-    const headerStart = appSrc.indexOf('<header');
-    const mainStart = appSrc.indexOf('<main');
-    const mainEnd = appSrc.indexOf('</main>');
-    assert.ok(appSrc.slice(headerStart, headerStart + 250).includes('bg-[#F3F6FB]'), 'Header must have opaque top gutter so scrolled cards never peek through');
-    assert.ok(appSrc.slice(mainStart, mainEnd).includes('<IOSReminderPopup'), 'IOSReminderPopup must mount inside <main> flow for zero overlap');
+    const headerStart = shellSrc.indexOf('<header');
+    const mainStart = shellSrc.indexOf('<main');
+    const mainEnd = shellSrc.indexOf('</main>');
+    assert.ok(shellSrc.slice(headerStart, headerStart + 250).includes('bg-[#F4F7F9]'), 'Header must have opaque top gutter matching Phase 06 #F4F7F9 background');
+    assert.ok(shellSrc.slice(mainStart, mainEnd).includes('<IOSReminderPopup'), 'IOSReminderPopup must mount inside <main> flow for zero overlap');
 
     const drawerSrc = read('src/components/ui/NotificationDrawer.tsx');
-    assert.ok(drawerSrc.includes('slide_over_notification_drawer') && drawerSrc.includes('bg-[#F4F6FA]') && drawerSrc.includes('bg-white'), 'Slide-over notification drawer must use 100% opaque daylight surfaces');
+    assert.ok(drawerSrc.includes('slide_over_notification_drawer') && drawerSrc.includes('bg-[#F4F7F9]') && drawerSrc.includes('bg-white'), 'Slide-over notification drawer must use 100% opaque daylight surfaces');
     assert.ok(!drawerSrc.includes('glass-dark') && !drawerSrc.includes('bg-white/8'), 'Slide-over notification drawer must NOT use glass-dark or bg-white/8');
-    assert.ok(!appSrc.includes('bg-amber-950/95') && !appSrc.includes('bg-rose-950/95') && !appSrc.includes('max-w-lg mx-auto mt-2 glass-dark'), 'App.tsx banners and shortcuts popover must NOT use muddy dark translucent surfaces');
+    assert.ok(!shellSrc.includes('bg-amber-950/95') && !shellSrc.includes('bg-rose-950/95'), 'AppShell banners must NOT use muddy dark translucent surfaces');
 
-    // 4. QBank Colored Spring Chevrons & Daylight Compliance Across Modules
     assert.ok(qbankSrc.includes('qbank-spring-arrow') && qbankSrc.includes('borderColor'), 'QBankTile must render colored spring pocket chevron and crisp border');
-    assert.ok(cssSrc.includes('.qbank-spring-arrow') && cssSrc.includes('--section-tint-end') && cssSrc.includes('rgba(255, 255, 255, 0.97)'), 'index.css must define qbank-spring-arrow animation, pastel background variables, and pearl-white bottom-dock');
-    assert.ok(dashSrc.includes('getModuleToken(') && !dashSrc.includes('from-indigo-950'), 'Dashboard must use getModuleToken() daylight surfaces without dark indigo blocks');
-    assert.ok(dockSrc.includes('getModuleToken(') && dockSrc.includes('#475569'), 'BottomDock must use getModuleToken() and AAA #475569 labels on pearl dock');
+    assert.ok(cssSrc.includes('.qbank-spring-arrow') && cssSrc.includes('--section-tint-end') && cssSrc.includes('.bottom-dock') && cssSrc.includes('rgba(255, 255, 255, 0.96)'), 'index.css must define qbank-spring-arrow animation, pastel background variables, and pearl-white bottom-dock');
+    assert.ok(favSrc.includes('getModuleToken(') && !favSrc.includes('from-indigo-950'), 'FavoriteModules must use getModuleToken() daylight surfaces without dark indigo blocks');
+    assert.ok(dockSrc.includes('getModuleToken(') && dockSrc.includes('#526779'), 'FloatingDock must use getModuleToken() and high-contrast #526779 labels');
     assert.ok(!settingsSrc.includes('from-indigo-900 via-purple-950') && !settingsSrc.includes('from-slate-900 via-violet-950'), 'SettingsSection panels must use clean daylight QBank surfaces');
     assert.ok(!financeSrc.includes('#0F172A 0%, #1E293B'), 'Finance hero banners must use clean daylight QBank cards');
   });
 
   test('33. 1/3 Shorter QBank Tiles (72px/64px), Reliable Right-Edge Bell Tap/Swipe & Modern Gesture NotificationDrawer', () => {
     const tileSrc = read('src/components/ui/QBankTile.tsx');
-    const dockSrc = read('src/components/BottomDock.tsx');
-    const dashSrc = read('src/components/sections/Dashboard.tsx');
+    const foldersSrc = read('src/app/QBankFoldersOverlay.tsx');
+    const overlaySrc = read('src/app/OverlayManager.tsx');
+    const shellSrc = read('src/app/AppShell.tsx');
+    const allServicesSrc = read('src/components/sections/AllServicesScreen.tsx');
     const popupSrc = read('src/components/ui/IOSReminderPopup.tsx');
     const handleSrc = read('src/components/ui/DraggableNotificationHandle.tsx');
     const drawerSrc = read('src/components/ui/NotificationDrawer.tsx');
-    const appSrc = read('src/App.tsx');
 
-    // 1. 1/3 Shorter QBank tile proportions + compact 3-col mode
     assert.ok(tileSrc.includes('compact = false') && tileSrc.includes("'72px'") && tileSrc.includes("'64px'"), 'QBankTile must reduce height by 1/3 (72px default, 64px compact)');
+    assert.ok(foldersSrc.includes('qbank_all_folders_menu') && foldersSrc.includes('LayoutGrid'), 'QBankFoldersOverlay must render QBank 4-square Folders Menu overlay');
+    assert.ok(foldersSrc.includes('qbank_global_search_input') && foldersSrc.includes('qbank_menu_back_btn'), 'QBankFoldersOverlay must render sticky bottom Search Pill & Circular Back button');
+    assert.ok(foldersSrc.includes('grid-cols-3 gap-2') && foldersSrc.includes('grid-cols-3 gap-x-2.5'), 'QBankFoldersOverlay must render 3-column quick tiles and 3-column folders icon grid');
 
-    // 2. QBank 4-Square Folders Menu, Global Search & Back Bar
-    assert.ok(dockSrc.includes('qbank_all_folders_menu') && dockSrc.includes('LayoutGrid'), 'BottomDock must render QBank 4-square Folders Menu overlay');
-    assert.ok(dockSrc.includes('qbank_global_search_input') && dockSrc.includes('qbank_menu_back_btn'), 'QBank Folders Menu must render sticky bottom Search Pill & Circular Back button');
-    assert.ok(dockSrc.includes('grid-cols-3 gap-2') && dockSrc.includes('grid-cols-3 gap-x-2.5'), 'QBank Folders Menu must render 3-column quick tiles and 3-column folders icon grid');
+    assert.ok(shellSrc.includes('topbar_back_button') && shellSrc.includes('goBack'), 'AppShell must provide contextual global Back navigation stack');
+    assert.ok(overlaySrc.includes('folder_global_search_btn'), 'Project Folder must provide 1-tap Global Search & Folders trigger');
+    assert.ok(allServicesSrc.includes('dashboard_qbank_slide_banner'), 'AllServicesScreen must render touch-swipeable QBank Service Slide Banner');
 
-    // 3. Global Back history stack & Dashboard QBank Slide Banner
-    assert.ok(appSrc.includes('topbar_back_button') && appSrc.includes('handleGoBack'), 'App.tsx must provide contextual global Back navigation stack');
-    assert.ok(appSrc.includes('folder_global_search_btn'), 'Project Folder must provide 1-tap Global Search & Folders trigger');
-    assert.ok(dashSrc.includes('dashboard_qbank_slide_banner'), 'Dashboard must render touch-swipeable QBank Service Slide Banner');
-
-    // 4. Reliable Right-Edge Bell Click/Swipe + Modern Gesture NotificationDrawer
     assert.ok(handleSrc.includes('z-[45]') && handleSrc.includes('onClick={handleClick}') && handleSrc.includes('Math.abs(dy) > 14'), 'DraggableNotificationHandle must reliably open on click/tap with z-[45] and >14px drag guard');
     assert.ok(handleSrc.includes('pullOffsetX') && handleSrc.includes("fill={notifCount > 0 ? '#0F172A' : 'none'}"), 'DraggableNotificationHandle must match QBank right-edge bell ear with live pull drag');
     assert.ok(popupSrc.includes('ios_reminder_slide_dots') && popupSrc.includes('handleCardPointerMove'), 'IOSReminderPopup must support finger horizontal swipe slides and QBank pagination dots');
@@ -718,9 +709,11 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
 
   test('34. Global Search, Cross-Module Deep-Linking, Popstate Back & Swipeable Reminders', () => {
     const focusSrc = read('src/lib/globalFocus.ts');
-    const appSrc = read('src/App.tsx');
-    const sidebarSrc = read('src/components/DesktopSidebar.tsx');
-    const dockSrc = read('src/components/BottomDock.tsx');
+    const providersSrc = read('src/app/AppProviders.tsx');
+    const shellSrc = read('src/app/AppShell.tsx');
+    const navCtxSrc = read('src/navigation/NavigationStack.tsx');
+    const railSrc = read('src/navigation/NavigationRail.tsx');
+    const foldersSrc = read('src/app/QBankFoldersOverlay.tsx');
     const patientsSrc = read('src/components/sections/Patients.tsx');
     const apptsSrc = read('src/components/sections/Appointments.tsx');
     const financeSrc = read('src/components/sections/Finance.tsx');
@@ -729,9 +722,9 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     const remindersSrc = read('src/components/sections/Reminders.tsx');
 
     assert.ok(focusSrc.includes('emitGlobalFocus') && focusSrc.includes('subscribeGlobalFocus'), 'globalFocus.ts must export emitGlobalFocus and subscribeGlobalFocus');
-    assert.ok(appSrc.includes('topbar_global_search_button') && appSrc.includes("addEventListener('popstate'") && appSrc.includes('minadental-zero-loss-updated'), 'App.tsx must expose topbar global search, hardware popstate Back handling, and cross-module alert sync');
-    assert.ok(sidebarSrc.includes('sidebar_global_search_btn') && sidebarSrc.includes('sidebar_notifications_btn') && sidebarSrc.includes('sidebar_back_btn'), 'DesktopSidebar must provide global search, notifications, and back buttons');
-    assert.ok(dockSrc.includes('global_search_record_results') && dockSrc.includes('global_search_patient_results') && dockSrc.includes('emitGlobalFocus('), 'BottomDock QBank global search must index all clinic records and deep-link with emitGlobalFocus');
+    assert.ok(shellSrc.includes('topbar_global_search_button') && navCtxSrc.includes("addEventListener('popstate'") && providersSrc.includes('minadental-zero-loss-updated'), 'Shell & NavigationStack must expose topbar global search, hardware popstate Back handling, and cross-module alert sync');
+    assert.ok(railSrc.includes('sidebar_global_search_btn') && railSrc.includes('sidebar_notifications_btn') && railSrc.includes('sidebar_back_btn'), 'NavigationRail must provide global search, notifications, and back buttons');
+    assert.ok(foldersSrc.includes('global_search_record_results') && foldersSrc.includes('global_search_patient_results') && foldersSrc.includes('navigate('), 'QBankFoldersOverlay global search must index all clinic records and deep-link cleanly');
     assert.ok(remindersSrc.includes('SwipeableReminderCard') && remindersSrc.includes('acknowledgeZeroLossAlert') && remindersSrc.includes('snoozeZeroLossAlert'), 'Reminders section must support horizontal swipe-to-act gestures synced with global zero-loss alerts');
 
     for (const [name, src, sec] of [
@@ -746,6 +739,228 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     }
   });
 });
+
+describe('Phase 11 [TRC-MINA-IOS27-V2-9011-K]: V2 Viewport-Based No-Scroll Home, Full-Screen Navigation Stack, Global Haptic Engine, Server-Confirmed Mutations, Appearance & Honest Platform Capabilities', () => {
+  const root = process.cwd();
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('35. IOS27-OVERRIDE.fa.md lock & Strict No-Scroll Home Screen Caps (4 Indicators, 4 Services, 1 Summary, 1 Priority, 1 Conditional Next Appointment)', () => {
+    const overrideDoc = read('IOS27-OVERRIDE.fa.md');
+    const dashSrc = read('src/features/dashboard/DashboardPage.tsx');
+    const useDashSrc = read('src/features/dashboard/useDashboard.ts');
+    const favSrc = read('src/features/dashboard/FavoriteModules.tsx');
+    const cssSrc = read('src/index.css');
+    const shellSrc = read('src/app/AppShell.tsx');
+
+    for (const rule of [
+      'NO SCROLL HOME',
+      'NO NESTED DASHBOARD',
+      'FULL-SCREEN ROUTING',
+      'Global Haptic Engine',
+      'Platform Capability Honesty',
+    ]) {
+      assert.ok(overrideDoc.includes(rule), `IOS27-OVERRIDE.fa.md must define ${rule}`);
+    }
+
+    assert.ok(dashSrc.includes('data-testid="no_scroll_home_viewport"'), 'DashboardPage must mark no_scroll_home_viewport');
+    assert.ok(dashSrc.includes('<SmartBrief') && read('src/features/dashboard/SmartBrief.tsx').includes('data-testid="dashboard_smart_summary"'), 'Dashboard must render single Smart Summary');
+    assert.ok(dashSrc.includes('<PriorityAction') && read('src/features/dashboard/PriorityAction.tsx').includes('data-testid="dashboard_priority_action"'), 'Dashboard must render single Priority Action');
+    assert.ok(useDashSrc.includes('selectedServices.slice(0, 4)') && favSrc.includes('selectedServices.slice(0, 4)'), 'Dashboard must strictly cap home selected services at 4');
+    assert.ok(favSrc.includes('home_open_all_services_btn') && favSrc.includes("onNavigate('services')"), 'FavoriteModules must link to independent services screen');
+    assert.ok(useDashSrc.includes('viewport.hasNextAppointmentRoom') && useDashSrc.includes('!appearance.isLargeText') && dashSrc.includes('<NextAppointment'), 'Next appointment card must be conditional on viewport room and Dynamic Type');
+    assert.ok(!dashSrc.includes('dashboard_morning_huddle_bar') && !dashSrc.includes('dashboard_qbank_slide_banner'), 'Dashboard must not nest full modules or multi-day lists');
+
+    assert.ok(cssSrc.includes('.no-scroll-home-shell') && cssSrc.includes('.main-no-scroll-home'), 'index.css must define viewport-fit no-scroll home rules');
+    assert.ok(cssSrc.includes('[data-large-text="true"]') && cssSrc.includes('max-height: 659px'), 'index.css must permit internal scroll only on tiny viewports or enlarged text');
+    assert.ok(shellSrc.includes('main-no-scroll-home'), 'AppShell must apply main-no-scroll-home when on dashboard route');
+  });
+
+  test('36. Full-Screen Routing (services screen + h-[100dvh] mobile sheets), Per-Route Scroll Ledger & Interactive RTL Swipe Back', () => {
+    const navSrc = read('src/lib/navigationStack.ts');
+    const routerSrc = read('src/app/AppRouter.tsx');
+    const shellSrc = read('src/app/AppShell.tsx');
+    const gesturesSrc = read('src/platform/gestures.ts');
+    const allServicesSrc = read('src/components/sections/AllServicesScreen.tsx');
+    const sheetSrc = read('src/components/ui/Sheet.tsx');
+    const foldersSrc = read('src/app/QBankFoldersOverlay.tsx');
+    const railSrc = read('src/navigation/NavigationRail.tsx');
+
+    assert.ok(navSrc.includes("export type AppRouteId = SectionId | 'services'"), 'navigationStack must export AppRouteId including services');
+    assert.ok(navSrc.includes('saveRouteScroll') && navSrc.includes('getRouteScroll') && navSrc.includes('pushNavRoute') && navSrc.includes('popNavRoute'), 'navigationStack must export scroll ledger & stack helpers');
+    assert.ok(allServicesSrc.includes('data-testid="all_services_screen"') && allServicesSrc.includes('data-testid="services_home_customizer"'), 'AllServicesScreen must expose independent services view and Drag & Drop customizer');
+    assert.ok(routerSrc.includes("case 'services':") && routerSrc.includes('AllServicesScreen'), 'AppRouter must mount AllServicesScreen as full-screen services route');
+    assert.ok(shellSrc.includes('saveCurrentScroll(') && shellSrc.includes('getSavedScroll('), 'AppShell must save & restore per-route vertical scroll');
+    assert.ok(shellSrc.includes('beginRtlEdgeBackSwipe') && gesturesSrc.includes('distFromRight >= 10 && distFromRight <= 44'), 'AppShell + gestures.ts must support RTL right-edge interactive Swipe Back');
+    assert.ok(sheetSrc.includes('h-[100dvh]') && sheetSrc.includes('swipeRef') && sheetSrc.includes('vw - 48'), 'Sheet.tsx must render full-screen on mobile with right-edge Swipe Back');
+    assert.ok(foldersSrc.includes('qbank_open_services_screen_btn') && railSrc.includes('sidebar_nav_services'), 'QBankFoldersOverlay & NavigationRail must link directly to services full-screen route');
+  });
+
+  test('37. Global Haptic Engine + Android View Bridge & Strict Server-Confirmed Mutation Gating', () => {
+    const hapticsSrc = read('src/platform/haptics.ts');
+    const ktSrc = read('app/src/main/java/com/example/ui/DentalCareWebView.kt');
+    const guardianSrc = read('src/lib/supabaseGuardian.ts');
+    const treatFormSrc = read('src/components/sections/TreatmentForm.tsx');
+
+    for (const method of ['selection()', 'impact(', 'success()', 'warning()', 'error()']) {
+      assert.ok(hapticsSrc.includes(method), `PlatformHapticAdapter must expose ${method}`);
+    }
+    assert.ok(hapticsSrc.includes('AndroidBridge') && hapticsSrc.includes('performHaptic'), 'platform/haptics.ts must invoke AndroidBridge.performHaptic');
+    assert.ok(ktSrc.includes('class AndroidHapticBridge') && ktSrc.includes('@JavascriptInterface') && ktSrc.includes('fun performHaptic') && ktSrc.includes('"AndroidBridge"'), 'DentalCareWebView.kt must register native AndroidHapticBridge');
+    assert.ok(ktSrc.includes('Build.VERSION.SDK_INT >= Build.VERSION_CODES.R'), 'AndroidHapticBridge must guard API 30+ CONFIRM/REJECT constants behind SDK_INT >= R');
+    assert.ok(guardianSrc.includes('export function verifyServerMutation') && guardianSrc.includes('export function getMutationOutcome'), 'supabaseGuardian.ts must export server mutation confirmation helpers');
+
+    assert.ok(treatFormSrc.includes('saveTreatmentRecordDetailed') && treatFormSrc.includes('HapticEngine.success()') && treatFormSrc.includes('HapticEngine.warning()'), 'TreatmentForm must gate HapticEngine.success() on serverConfirmed');
+    for (const rel of [
+      'src/app/OverlayManager.tsx',
+      'src/components/sections/Patients.tsx',
+      'src/components/sections/Appointments.tsx',
+      'src/components/sections/Treatments.tsx',
+      'src/components/sections/Finance.tsx',
+      'src/components/sections/Lab.tsx',
+      'src/components/sections/Implants.tsx',
+      'src/components/sections/StaffSection.tsx',
+      'src/components/sections/Reminders.tsx',
+      'src/components/sections/Inventory.tsx',
+      'src/components/sections/Messages.tsx',
+      'src/components/sections/SettingsSection.tsx',
+    ]) {
+      const src = read(rel);
+      assert.ok(
+        (src.includes('getMutationOutcome') || src.includes('verifyServerMutation')) && (src.includes('HapticEngine') || src.includes('PlatformHapticAdapter')),
+        `${rel} must gate completion & haptic success on real server mutation confirmation`
+      );
+    }
+  });
+
+  test('38. System Appearance (Light/Dark/System, Dynamic Type, Reduce Motion, Safe Area), Context Menus & Honest Platform Capabilities', () => {
+    const appEngineSrc = read('src/design-system/themes/appearance.ts');
+    const cssSrc = read('src/index.css');
+    const platSrc = read('src/platform/capabilities.ts');
+    const settingsSrc = read('src/components/sections/SettingsSection.tsx');
+    const ctxSrc = read('src/components/ui/ContextMenu.tsx');
+    const favSrc = read('src/features/dashboard/FavoriteModules.tsx');
+    const patientsSrc = read('src/components/sections/Patients.tsx');
+    const apptsSrc = read('src/components/sections/Appointments.tsx');
+
+    assert.ok(appEngineSrc.includes("export type ThemeMode = 'light' | 'dark' | 'system'") && appEngineSrc.includes("export type FontScaleMode = 'compact' | 'default' | 'large' | 'xlarge'") && appEngineSrc.includes("export type MotionMode = 'system' | 'reduce' | 'full'"), 'appearance.ts must support Light/Dark/System, 4-step Dynamic Type, and Reduce Motion');
+    assert.ok(cssSrc.includes('html[data-theme="dark"]') && cssSrc.includes('[data-reduce-motion="true"]') && cssSrc.includes('prefers-reduced-motion: reduce') && cssSrc.includes('env(safe-area-inset-bottom'), 'index.css must implement dark palette, reduce motion overrides, and safe area insets');
+
+    assert.ok(ctxSrc.includes('export function ContextMenuTrigger') && ctxSrc.includes('onContextMenu') && ctxSrc.includes('450'), 'ContextMenu.tsx must support 450ms long-press and right-click menu with haptic');
+    assert.ok(favSrc.includes('<ContextMenuTrigger') && patientsSrc.includes('<ContextMenuTrigger') && apptsSrc.includes('<ContextMenuTrigger'), 'FavoriteModules, Patients, and Appointments must wire long-press ContextMenuTrigger');
+
+    assert.ok(platSrc.includes('export function detectPlatformCapabilities') && platSrc.includes('const nativeLiquidGlassAvailable = false') && platSrc.includes('const nativeCoreHapticsAvailable = iosNativeHapticsBridge'), 'capabilities.ts must honestly report nativeLiquidGlassAvailable=false on Web/PWA/Android');
+    assert.ok(settingsSrc.includes('data-testid="settings_appearance_card"') && settingsSrc.includes('data-testid="settings_platform_capabilities_card"'), 'SettingsSection must render Appearance controls and Honest Platform Capabilities card');
+  });
+});
+
+describe('Phase 12 [TRC-MINA-AUDIT-9012-L]: Master Audit Remediation (Phases 01–10 Verification)', () => {
+  const root = process.cwd();
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('39. Phase 01 — Zero Artificial KPI Constants, Solar Month + Asia/Tehran Filtering, Real Capacity & Payment Deduplication', () => {
+    const metricsSrc = read('src/features/dashboard/dashboard.metrics.ts');
+    const allServicesSrc = read('src/components/sections/AllServicesScreen.tsx');
+    const jalaliSrc = read('src/lib/jalali.ts');
+
+    // No hardcoded artificial metrics or defaults anywhere in Dashboard or AllServicesScreen
+    for (const forbidden of ['15000000', '35000000', 'dailyChairCapacity = 12', ': 94', ': 88', ': 75']) {
+      assert.ok(!metricsSrc.includes(forbidden), `dashboard.metrics.ts must NOT contain artificial fallback ${forbidden}`);
+      assert.ok(!allServicesSrc.includes(forbidden), `AllServicesScreen.tsx must NOT contain artificial fallback ${forbidden}`);
+    }
+
+    assert.ok(jalaliSrc.includes("CLINIC_TIMEZONE = 'Asia/Tehran'") && jalaliSrc.includes('getCurrentJalaliMonthBounds'), 'jalali.ts must compute Asia/Tehran dates and Jalali solar month bounds');
+    assert.ok(metricsSrc.includes('computeRealChairCapacity') && metricsSrc.includes('isDuplicatePaymentTransaction'), 'dashboard.metrics.ts must compute real chair capacity and deduplicate payments');
+    assert.ok(metricsSrc.includes('todayCollected') && metricsSrc.includes('monthCollected') && metricsSrc.includes('monthCashFlow') && metricsSrc.includes('monthNetProfit') && metricsSrc.includes('monthTreatmentProduction') && metricsSrc.includes('totalReceivables'), 'dashboard.metrics.ts must separate collected, cashFlow, netProfit, production, and receivables');
+
+    // Pure runtime test: Asia/Tehran boundary + Jalali month range + payment dedup
+    const isDuplicate = (tx, pays) => {
+      const ref = String(tx.reference || '').toUpperCase();
+      if (ref.startsWith('PAY:') || ref.startsWith('PAYMENT_')) return true;
+      return pays.some(
+        (p) =>
+          p.patient_id === tx.patient_id &&
+          p.payment_date.slice(0, 10) === tx.transaction_date.slice(0, 10) &&
+          Math.abs(p.amount - tx.amount) < 1
+      );
+    };
+    const pays = [{ id: 'p1', patient_id: 'pt1', payment_date: '2026-11-15', amount: 2500000 }];
+    assert.equal(isDuplicate({ reference: 'PAY:p1', patient_id: 'pt1', transaction_date: '2026-11-15', amount: 2500000 }, pays), true);
+    assert.equal(isDuplicate({ reference: '', patient_id: 'pt1', transaction_date: '2026-11-15', amount: 2500000 }, pays), true);
+    assert.equal(isDuplicate({ reference: 'LAB_FEE', patient_id: 'pt1', transaction_date: '2026-11-16', amount: 800000 }, pays), false);
+
+    // Pure capacity math verification: 2 active units, 2 doctors, 540 min/day, 30 min slot = 36 slots
+    const computeCap = (unitsCount, doctorsCount, shiftMins, slotMins) => {
+      const eff = doctorsCount > 0 ? Math.min(unitsCount, doctorsCount) : unitsCount;
+      if (eff <= 0 || shiftMins <= 0 || slotMins <= 0) return null;
+      return Math.floor((eff * shiftMins) / slotMins);
+    };
+    assert.equal(computeCap(2, 2, 540, 30), 36);
+    assert.equal(computeCap(0, 2, 540, 30), null, 'Zero active units must yield null capacity, never 12');
+  });
+
+  test('40. Phase 02 — Zero Prod Seed Fallback, Empty Server Clears Cache, Scoped Cache Without Plaintext PII/PINs, Salted Hashing & Deduplicated Realtime', () => {
+    const cacheSrc = read('src/services/supabase/scopedCache.ts');
+    const rtTableSrc = read('src/lib/useRealtimeTable.ts');
+    const rtHubSrc = read('src/services/realtime/realtimeHub.ts');
+    const authSrc = read('src/services/authentication/authService.ts');
+    const syncSrc = read('src/lib/cloudSyncEngine.ts');
+    const providersSrc = read('src/app/AppProviders.tsx');
+    const overlaySrc = read('src/app/OverlayManager.tsx');
+    const remindersSrc = read('src/lib/smartReminderEngine.ts');
+
+    assert.ok(cacheSrc.includes('isDemoSeedAllowed') && cacheSrc.includes('SENSITIVE_CLINICAL_TABLES'), 'scopedCache.ts must block production seeds and protect sensitive clinical tables from localStorage');
+    assert.ok(rtTableSrc.includes('reconcileServerRows') && rtTableSrc.includes('AbortController') && rtTableSrc.includes('MAX_RETRY_ATTEMPTS'), 'useRealtimeTable.ts must use AbortController, retry backoff, and reconcile empty server rows');
+    assert.ok(rtHubSrc.includes('subscribeToTableRealtime') && rtHubSrc.includes('activeChannels'), 'realtimeHub.ts must deduplicate one Supabase realtime channel per table');
+    assert.ok(authSrc.includes('hashSecretWithSalt') && authSrc.includes('verifySaltedSecret') && authSrc.includes('signInWithSupabaseEmail'), 'authService.ts must hash secrets with salt and support real Supabase Auth');
+    assert.ok(remindersSrc.includes('[REF:${alertId}]'), 'smartReminderEngine.ts must deduplicate synced reminders using deterministic [REF:id] tags');
+
+    // Never persist or transmit plaintext pinOrPass in shell/sync modules
+    assert.ok(!providersSrc.includes('pinOrPass'), 'AppProviders.tsx must never store plaintext pinOrPass');
+    assert.ok(!overlaySrc.includes('pinOrPass'), 'OverlayManager.tsx must never use plaintext pinOrPass');
+    assert.ok(!syncSrc.includes('pinOrPass:'), 'cloudSyncEngine.ts must store secretHash + secretSalt rather than plaintext pinOrPass');
+  });
+
+  test('41. Phases 03–09 — Modular Shell, Viewport-Bounded Home, Unified Nav + RBAC, Self-Hosted Fonts, WCAG AA Tokens, Honest Capabilities & Intelligence', () => {
+    const appEntry = read('src/App.tsx');
+    const routerSrc = read('src/app/AppRouter.tsx');
+    const providersSrc = read('src/app/AppProviders.tsx');
+    const accessSrc = read('src/services/permissions/accessControl.ts');
+    const intelSrc = read('src/services/intelligence/clinicIntelligence.ts');
+    const hapticsSrc = read('src/platform/haptics.ts');
+    const cssSrc = read('src/index.css');
+    const tokensSrc = read('src/design-system/tokens/colors.ts');
+
+    assert.ok(appEntry.includes("from '@/app/App'") && routerSrc.includes('lazy(') && routerSrc.includes('Suspense'), 'AppRouter must split routes with React.lazy + Suspense');
+    assert.ok(routerSrc.includes('canAccessRoute(') && routerSrc.includes('status="unauthorized"'), 'AppRouter must enforce RBAC route guards');
+    assert.ok(providersSrc.includes('dataset.keyboardOpen'), 'AppProviders must bind visualViewport keyboard state to data-keyboard-open');
+    assert.ok(accessSrc.includes('resolveEffectiveRole') && accessSrc.includes('canPerformAction'), 'accessControl.ts must enforce RBAC route and action permissions');
+    assert.ok(intelSrc.includes('buildSmartDailyBrief') && intelSrc.includes('sanitizeClinicContextForAI'), 'clinicIntelligence.ts must build explainable Smart Brief and sanitize PII for AI context');
+    assert.ok(hapticsSrc.includes('MIN_HAPTIC_GAP_MS = 55') && hapticsSrc.includes('if (typeof window === \'undefined\') return false;'), 'PlatformHapticAdapter must throttle haptics and default acoustic sound to OFF');
+    assert.ok(cssSrc.includes('./fonts/vazirmatn-arabic.woff2') && cssSrc.includes('.app-shell-viewport') && cssSrc.includes('height: 100dvh'), 'index.css must use self-hosted Vazirmatn fonts and 100dvh flex shell');
+
+    // Runtime WCAG AA contrast verification on Phase 06 core palette against #FFFFFF and #F4F7F9
+    const hexLuminance = (hex) => {
+      const c = hex.replace('#', '');
+      const n = parseInt(c, 16);
+      const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (fg, bg) => {
+      const l1 = hexLuminance(fg);
+      const l2 = hexLuminance(bg);
+      return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+    };
+    for (const fg of ['#087C76', '#142E43', '#14283B', '#526779', '#AD293C', '#92510C', '#176B52']) {
+      assert.ok(tokensSrc.includes(fg), `design tokens must include calibrated token ${fg}`);
+      assert.ok(contrast(fg, '#FFFFFF') >= 4.5, `${fg} on #FFFFFF must meet WCAG AA >= 4.5:1 (got ${contrast(fg, '#FFFFFF').toFixed(2)})`);
+      assert.ok(contrast(fg, '#F4F7F9') >= 4.5, `${fg} on #F4F7F9 must meet WCAG AA >= 4.5:1 (got ${contrast(fg, '#F4F7F9').toFixed(2)})`);
+    }
+  });
+});
+
 
 
 

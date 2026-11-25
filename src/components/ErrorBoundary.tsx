@@ -25,13 +25,16 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="w-16 h-16 rounded-3xl bg-red-500/10 text-red-500 flex items-center justify-center mb-4">
             <AlertTriangle size={32} />
           </div>
-          <h3 className="text-base font-bold text-white mb-2">خطایی در نمایش این بخش رخ داد</h3>
-          <p className="text-xs text-gray-400 max-w-sm mb-6 leading-relaxed">
+          <h3 className="text-base font-bold text-[#14283B] dark:text-[#F1F5F9] mb-2">
+            خطایی در نمایش این بخش رخ داد
+          </h3>
+          <p className="text-xs text-[#526779] dark:text-[#9FB1C1] max-w-sm mb-6 leading-relaxed">
             {this.state.error?.message || 'مشکلی در پردازش اطلاعات به وجود آمده است.'}
           </p>
           <button
+            type="button"
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all active:scale-95 shadow-lg shadow-blue-500/25"
+            className="flex items-center gap-2 px-5 py-2.5 min-h-[48px] rounded-[12px] bg-[#087C76] text-white text-xs font-bold hover:opacity-95 transition-all active:scale-95"
           >
             <RefreshCw size={14} />
             تلاش مجدد و بارگذاری

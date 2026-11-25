@@ -19,6 +19,7 @@ import { todayGregorian, dateStrToJalali } from '@/lib/jalali';
 import {
   loadClinicUsers,
   saveClinicUsers,
+  createCredentialHashPair,
   type ClinicUserAccount,
   type ClinicUserRole,
 } from '@/lib/cloudSyncEngine';
@@ -28,6 +29,8 @@ import {
   type DoctorShareMode,
 } from '@/lib/doctorShareEngine';
 import { ModuleChipPager } from '@/components/ui/ModuleChipPager';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
+import { HapticEngine } from '@/lib/hapticsAudio';
 
 const ROLES = [
   { value: 'manager', label: 'مدیر کلینیک (پزشک ارشد)' },
@@ -85,10 +88,14 @@ export function StaffSection() {
   const handleSave = async (data: Partial<Staff> & { pinOrPass?: string }) => {
     setSaving(true);
     const { pinOrPass, ...staffData } = data;
-    if (editing) {
-      await supabase.from('staff').update(staffData).eq('id', editing.id);
-    } else {
-      await supabase.from('staff').insert(staffData);
+    const res = editing
+      ? await supabase.from('staff').update(staffData).eq('id', editing.id)
+      : await supabase.from('staff').insert(staffData);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      setSaving(false);
+      HapticEngine.error();
+      return;
     }
 
     try {
@@ -96,6 +103,10 @@ export function StaffSection() {
       const fullName = `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'کاربر جدید';
       const role = (data.role || 'secretary') as ClinicUserRole;
       const userEmail = data.email || `${role}_${Date.now()}@minadental.ir`;
+      const prevUser = existingUsers.find(u => u.fullName === fullName);
+      const creds = pinOrPass
+        ? await createCredentialHashPair(pinOrPass)
+        : { pinHash: prevUser?.pinHash, pinSalt: prevUser?.pinSalt };
 
       const userAccount: ClinicUserAccount = {
         id: editing ? `usr_${editing.id}` : `usr_${Date.now()}`,
@@ -105,8 +116,9 @@ export function StaffSection() {
         roleLabel: ROLES.find(r => r.value === role)?.label || 'کاربر کلینیک',
         email: userEmail,
         phone: data.phone || '',
-        pinOrPass: pinOrPass || '1234',
-        avatarColor: data.color || '#6366F1',
+        pinHash: creds.pinHash,
+        pinSalt: creds.pinSalt,
+        avatarColor: data.color || '#087C76',
         canPublishUpdate: role === 'manager',
         permissions: {
           canEditPricesAfterSave: role === 'manager',
@@ -124,6 +136,9 @@ export function StaffSection() {
       console.error('Failed to sync user account:', e);
     }
 
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
+
     setSaving(false);
     setFormOpen(false);
     setEditing(null);
@@ -132,8 +147,12 @@ export function StaffSection() {
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    await supabase.from('staff').delete().eq('id', deleteId);
+    const res = await supabase.from('staff').delete().eq('id', deleteId);
     setDeleteId(null);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
     rs();
   };
 
@@ -389,8 +408,9 @@ function DoctorShareCalculatorTab({
     setSavingPayroll(true);
     const jNow = dateStrToJalali(todayGregorian());
     const targetStaffId = doctors.find(d => d.id === selectedDoctorId)?.id || staff[0]?.id;
+    let outcome: 'confirmed' | 'queued_offline' | 'error' = 'error';
     if (targetStaffId) {
-      await supabase.from('staff_salaries').insert({
+      const res = await supabase.from('staff_salaries').insert({
         staff_id: targetStaffId,
         base_salary: 0,
         bonus: 0,
@@ -402,9 +422,21 @@ function DoctorShareCalculatorTab({
         status: 'pending',
         notes: `${activeResult.formulaDescription} | مستقل از چک ضمانت و اقساط`,
       });
+      outcome = getMutationOutcome(res);
     }
     setSavingPayroll(false);
-    setSavedNotice('سهم کارکردی با تایید دو مرحله‌ای در فیش حقوقی ثبت شد');
+    if (outcome === 'error') {
+      HapticEngine.error();
+      setSavedNotice('خطا در ثبت سهم پزشک در سرور.');
+      return;
+    }
+    if (outcome === 'confirmed') {
+      HapticEngine.success();
+      setSavedNotice('سهم کارکردی با تایید سرور در فیش حقوقی ثبت شد');
+    } else {
+      HapticEngine.warning();
+      setSavedNotice('در صف آفلاین ذخیره شد و پس از اتصال تایید می‌شود');
+    }
     setTimeout(() => {
       setSavedNotice(null);
       onGoToSalaries();
@@ -647,9 +679,9 @@ function StaffForm({
     role: staff?.role ?? 'secretary',
     phone: staff?.phone ?? '',
     email: staff?.email ?? '',
-    color: staff?.color ?? '#6366F1',
+    color: staff?.color ?? '#087C76',
     active: staff?.active ?? true,
-    pinOrPass: '1234',
+    pinOrPass: '',
   });
   const submit = () => {
     if (!form.first_name.trim()) return;
@@ -735,7 +767,7 @@ function SalariesTab({ salaries, staff }: { salaries: StaffSalary[]; staff: Staf
   const save = async () => {
     if (!form.staff_id) return;
     setSaving(true);
-    await supabase.from('staff_salaries').insert({
+    const res = await supabase.from('staff_salaries').insert({
       staff_id: form.staff_id,
       base_salary: Number(form.base_salary) || 0,
       bonus: Number(form.bonus) || 0,
@@ -748,13 +780,19 @@ function SalariesTab({ salaries, staff }: { salaries: StaffSalary[]; staff: Staf
       notes: form.notes || null,
     });
     setSaving(false);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') { HapticEngine.error(); return; }
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
     setShowForm(false);
     setForm({ staff_id: '', base_salary: '', bonus: '', deductions: '', notes: '' });
   };
 
   const paySalary = async (sal: StaffSalary) => {
     const total = Number(sal.base_salary) + Number(sal.bonus) - Number(sal.deductions) + Number(sal.share_amount);
-    await supabase.from('staff_salaries').update({ status: 'paid', total_paid: total, pay_date: todayGregorian() }).eq('id', sal.id);
+    const res = await supabase.from('staff_salaries').update({ status: 'paid', total_paid: total, pay_date: todayGregorian() }).eq('id', sal.id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') { HapticEngine.error(); return; }
     await supabase.from('finance_transactions').insert({
       type: 'expense',
       category: 'salary',
@@ -763,9 +801,15 @@ function SalariesTab({ salaries, staff }: { salaries: StaffSalary[]; staff: Staf
       description: `حقوق ${faMonths[sal.pay_month - 1]} ${sal.pay_year}`,
       payment_method: 'transfer',
     });
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
   };
   const del = async (id: string) => {
-    await supabase.from('staff_salaries').delete().eq('id', id);
+    const res = await supabase.from('staff_salaries').delete().eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
   };
 
   return (
@@ -926,7 +970,7 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
     const resolvedVal = form.share_type === 'net_half_after_lab' ? 50 : Number(form.share_value);
     if (!form.staff_id || !resolvedVal) return;
     setSaving(true);
-    await supabase.from('staff_shares').insert({
+    const res = await supabase.from('staff_shares').insert({
       staff_id: form.staff_id,
       share_type: form.share_type,
       share_value: resolvedVal,
@@ -936,6 +980,10 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
       notes: form.notes || null,
     });
     setSaving(false);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') { HapticEngine.error(); return; }
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
     setShowForm(false);
     setForm({
       staff_id: '',
@@ -947,10 +995,18 @@ function SharesTab({ shares, staff }: { shares: StaffShare[]; staff: Staff[]; fi
     });
   };
   const toggleActive = async (id: string, active: boolean) => {
-    await supabase.from('staff_shares').update({ active: !active }).eq('id', id);
+    const res = await supabase.from('staff_shares').update({ active: !active }).eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
   };
   const del = async (id: string) => {
-    await supabase.from('staff_shares').delete().eq('id', id);
+    const res = await supabase.from('staff_shares').delete().eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
   };
 
   return (

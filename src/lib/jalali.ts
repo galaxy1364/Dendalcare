@@ -298,6 +298,8 @@ export function getJalaliWeekDays(centerDateStr: string): {
   return days;
 }
 
+export const CLINIC_TIMEZONE = 'Asia/Tehran';
+
 export function formatGregorianDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -305,12 +307,59 @@ export function formatGregorianDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Computes YYYY-MM-DD strictly in Asia/Tehran timezone so UTC offset or device TZ mismatch
+ * never shifts daily appointments, payments, or Jalali month bounds.
+ */
+export function todayInClinicTz(now: Date = new Date()): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: CLINIC_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(now);
+    const y = parts.find((p) => p.type === 'year')?.value;
+    const m = parts.find((p) => p.type === 'month')?.value;
+    const d = parts.find((p) => p.type === 'day')?.value;
+    if (y && m && d) return `${y}-${m}-${d}`;
+  } catch {
+    // Fallback using IRST (+03:30)
+  }
+  const irst = new Date(now.getTime() + 210 * 60 * 1000);
+  return irst.toISOString().slice(0, 10);
+}
+
 export function todayGregorian(): string {
-  return formatGregorianDate(new Date());
+  return todayInClinicTz();
 }
 
 export function todayJalali(): JDate {
   return dateStrToJalali(todayGregorian());
+}
+
+export function getCurrentJalaliMonthBounds(referenceDateStr: string = todayGregorian()): {
+  jy: number;
+  jm: number;
+  monthLabel: string;
+  startGregorian: string;
+  endGregorian: string;
+} {
+  const j = dateStrToJalali(referenceDateStr);
+  const len = jalaliMonthLength(j.jy, j.jm);
+  return {
+    jy: j.jy,
+    jm: j.jm,
+    monthLabel: `${JALALI_MONTHS[j.jm - 1] || ''} ${j.jy.toLocaleString('fa-IR')}`,
+    startGregorian: jalaliToGregorianStr(j.jy, j.jm, 1),
+    endGregorian: jalaliToGregorianStr(j.jy, j.jm, len),
+  };
+}
+
+export function isDateInRange(dateStr: string | null | undefined, startIso: string, endIso: string): boolean {
+  if (!dateStr) return false;
+  const iso = String(dateStr).slice(0, 10);
+  return iso >= startIso && iso <= endIso;
 }
 
 export function shiftGregorianDate(dateStr: string, days: number): string {

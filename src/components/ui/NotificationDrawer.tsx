@@ -305,7 +305,7 @@ export function NotificationDrawer({
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-fade-in" />
 
       <aside
-        className="relative w-full max-w-sm h-full bg-[#F4F6FA] text-slate-900 border-l border-slate-200 rounded-l-[30px] flex flex-col drawer-slide-in-right safe-top safe-bottom overflow-hidden"
+        className="relative w-full max-w-sm h-full bg-[#F4F7F9] dark:bg-[#0A141E] text-[#14283B] dark:text-[#F1F5F9] border-l border-[#D8E2EA] dark:border-[#25394D] rounded-l-[30px] flex flex-col drawer-slide-in-right safe-top safe-bottom overflow-hidden"
         onClick={e => e.stopPropagation()}
         onPointerDown={(e) => {
           if ((e.target as HTMLElement)?.closest('button, a, [data-no-drawer-drag="true"]')) return;

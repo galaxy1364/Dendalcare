@@ -51,6 +51,20 @@ import {
   type VaultStats,
 } from '@/lib/dataVault';
 import { getActiveUILibrariesSummary } from '@/lib/uiLibrariesEngine';
+import {
+  useAppearanceSettings,
+  setThemeMode,
+  setFontScaleMode,
+  setMotionMode,
+  type ThemeMode,
+  type FontScaleMode,
+  type MotionMode,
+} from '@/lib/appearanceEngine';
+import { detectPlatformCapabilities } from '@/lib/platformEngine';
+import { HapticEngine } from '@/lib/hapticsAudio';
+import { verifyServerMutation } from '@/lib/supabaseGuardian';
+import { Sun, Moon, Monitor, Type, Gauge, Cpu, Target } from 'lucide-react';
+import { CLINIC_BRANCHES, getActiveBranchId, setActiveBranchId } from '@/services/authentication/authService';
 
 type SettingsTab = 'clinic' | 'diagnostics' | 'integrations' | 'ads';
 
@@ -299,17 +313,42 @@ function ClinicSettingsTab({
     setValues(map);
   }, [settings]);
 
+  const [settingsMsg, setSettingsMsg] = useState<{ type: 'success' | 'warning' | 'error'; text: string } | null>(null);
+  const [branchId, setBranchId] = useState<string>(() => getActiveBranchId());
+  const appearance = useAppearanceSettings();
+  const platformCaps = detectPlatformCapabilities();
+
   const save = async () => {
     setSaving(true);
+    setSettingsMsg(null);
+    let anyQueued = false;
+    let anyError = false;
+
     for (const [key, value] of Object.entries(values)) {
       const existing = settings.find(s => s.key === key);
       if (existing) {
-        if (existing.value !== value) await supabase.from('clinic_settings').update({ value }).eq('id', existing.id);
+        if (existing.value !== value) {
+          const res = await supabase.from('clinic_settings').update({ value }).eq('id', existing.id);
+          if (res.error) anyError = true;
+          else if (!verifyServerMutation(res)) anyQueued = true;
+        }
       } else {
-        await supabase.from('clinic_settings').insert({ key, value, category: 'general' });
+        const res = await supabase.from('clinic_settings').insert({ key, value, category: 'general' });
+        if (res.error) anyError = true;
+        else if (!verifyServerMutation(res)) anyQueued = true;
       }
     }
     setSaving(false);
+    if (anyError) {
+      HapticEngine.error();
+      setSettingsMsg({ type: 'error', text: 'خطا در ذخیره برخی تنظیمات کلینیک.' });
+    } else if (anyQueued) {
+      HapticEngine.warning();
+      setSettingsMsg({ type: 'warning', text: 'تنظیمات در صف آفلاین ذخیره شد و پس از اتصال به سرور تایید می‌شود.' });
+    } else {
+      HapticEngine.success();
+      setSettingsMsg({ type: 'success', text: 'تنظیمات کلینیک در سرور تایید و ذخیره شد.' });
+    }
   };
 
   const handleExportFullBackup = async () => {
@@ -380,6 +419,8 @@ function ClinicSettingsTab({
     { key: 'clinic_phone', label: 'تلفن کلینیک', icon: <Phone size={14} />, placeholder: '021-xxxxxxxx' },
     { key: 'clinic_address', label: 'آدرس کلینیک', icon: <MapPin size={14} />, placeholder: 'آدرس مطب' },
     { key: 'currency', label: 'واحد پول', icon: <SettingsIcon size={14} />, placeholder: 'تومان' },
+    { key: 'daily_revenue_target', label: 'هدف درآمد روزانه (تومان)', icon: <Target size={14} />, placeholder: 'مثلاً 30000000' },
+    { key: 'monthly_revenue_target', label: 'هدف درآمد ماهانه (تومان)', icon: <Target size={14} />, placeholder: 'مثلاً 650000000' },
     { key: 'default_appointment_duration', label: 'مدت پیش‌فرض نوبت (دقیقه)', icon: <Calendar size={14} />, placeholder: '30' },
     { key: 'clinic_morning_hours', label: 'ساعت کاری شیفت صبح', icon: <Clock size={14} />, placeholder: '09:00 الی 13:30' },
     { key: 'clinic_evening_hours', label: 'ساعت کاری شیفت عصر', icon: <Clock size={14} />, placeholder: '16:00 الی 21:30' },
@@ -388,6 +429,189 @@ function ClinicSettingsTab({
 
   return (
     <div className="space-y-3 animate-fade-in">
+      {settingsMsg && (
+        <div
+          className={`p-3 rounded-2xl border text-xs font-extrabold flex items-center gap-2 ${
+            settingsMsg.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              : settingsMsg.type === 'warning'
+              ? 'bg-amber-50 border-amber-200 text-amber-900'
+              : 'bg-rose-50 border-rose-200 text-rose-900'
+          }`}
+        >
+          <CheckCircle2 size={15} />
+          <span>{settingsMsg.text}</span>
+        </div>
+      )}
+
+      {/* Appearance & Accessibility (Light / Dark / System • Dynamic Type • Reduce Motion) */}
+      <div
+        data-testid="settings_appearance_card"
+        className="glass-card p-4 space-y-3 border border-slate-200/95"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Sun size={17} className="text-amber-500" />
+            ظاهر سیستم، Dynamic Type و Reduce Motion
+          </h3>
+          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200">
+            {appearance.resolvedTheme === 'dark' ? 'تیره فعال' : 'روشن فعال'}
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-[11px] font-extrabold text-slate-600 dark:text-slate-300 block">
+            حالت نمایش (Light / Dark / System)
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                { id: 'light' as ThemeMode, label: 'روشن', Icon: Sun },
+                { id: 'dark' as ThemeMode, label: 'تیره', Icon: Moon },
+                { id: 'system' as ThemeMode, label: 'سیستم', Icon: Monitor },
+              ] as const
+            ).map(({ id, label, Icon }) => {
+              const active = appearance.themeMode === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  data-testid={`appearance_theme_${id}`}
+                  onClick={() => {
+                    HapticEngine.selection();
+                    setThemeMode(id);
+                  }}
+                  className={`py-2 px-2.5 rounded-2xl border text-xs font-black flex items-center justify-center gap-1.5 min-h-[44px] transition-all ${
+                    active
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <Icon size={14} />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-[11px] font-extrabold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+            <Type size={13} /> اندازه متن (Dynamic Type)
+          </span>
+          <div className="grid grid-cols-4 gap-1.5">
+            {(
+              [
+                { id: 'compact' as FontScaleMode, label: 'فشرده' },
+                { id: 'default' as FontScaleMode, label: 'پیش‌فرض' },
+                { id: 'large' as FontScaleMode, label: 'درشت' },
+                { id: 'xlarge' as FontScaleMode, label: 'بسیار درشت' },
+              ] as const
+            ).map(({ id, label }) => {
+              const active = appearance.fontScale === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  data-testid={`appearance_font_${id}`}
+                  onClick={() => {
+                    HapticEngine.selection();
+                    setFontScaleMode(id);
+                  }}
+                  className={`py-2 px-1.5 rounded-xl border text-[11px] font-extrabold min-h-[42px] transition-all ${
+                    active
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-[11px] font-extrabold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+            <Gauge size={13} /> انیمیشن و Reduce Motion
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                { id: 'system' as MotionMode, label: 'مطابق سیستم' },
+                { id: 'reduce' as MotionMode, label: 'کاهش حرکت' },
+                { id: 'full' as MotionMode, label: 'کامل' },
+              ] as const
+            ).map(({ id, label }) => {
+              const active = appearance.motionMode === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  data-testid={`appearance_motion_${id}`}
+                  onClick={() => {
+                    HapticEngine.selection();
+                    setMotionMode(id);
+                  }}
+                  className={`py-2 px-2 rounded-xl border text-[11px] font-extrabold min-h-[42px] transition-all ${
+                    active
+                      ? 'bg-violet-600 text-white border-violet-600 shadow-sm'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Honest Platform Capabilities Matrix */}
+      <div
+        data-testid="settings_platform_capabilities_card"
+        className="glass-card p-4 space-y-2.5 border border-slate-200/95"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Cpu size={16} className="text-indigo-600" />
+            قابلیت‌های واقعی پلتفرم فعلی
+          </h3>
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+            {platformCaps.runtimeKind}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5 text-[10.5px]">
+          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <span>Android Native Haptics</span>
+            <strong className={platformCaps.androidNativeHapticsBridge ? 'text-emerald-700' : 'text-slate-500'}>
+              {platformCaps.androidNativeHapticsBridge ? 'فعال' : 'غیرفعال'}
+            </strong>
+          </div>
+          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <span>Web Vibration / Audio</span>
+            <strong className={platformCaps.webVibrationApi || platformCaps.webAudioTactileSynth ? 'text-emerald-700' : 'text-slate-500'}>
+              {platformCaps.webVibrationApi || platformCaps.webAudioTactileSynth ? 'پشتیبانی' : 'ندارد'}
+            </strong>
+          </div>
+          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <span>Apple Liquid Glass</span>
+            <strong className="text-amber-700">
+              {platformCaps.nativeLiquidGlassAvailable ? 'فعال' : 'فقط iOS بومی'}
+            </strong>
+          </div>
+          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <span>Apple CoreHaptics</span>
+            <strong className="text-amber-700">
+              {platformCaps.nativeCoreHapticsAvailable ? 'فعال' : 'فقط iOS بومی'}
+            </strong>
+          </div>
+        </div>
+        <p className="text-[10.5px] font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
+          {platformCaps.honestPlatformNoteFa}
+        </p>
+      </div>
+
       {/* Single Unified World-Class Automatic & Manual Atomic Update Center (60-30-10 Daylight Card) */}
       <div
         data-testid="settings_unified_update_center"
@@ -527,10 +751,35 @@ function ClinicSettingsTab({
       />
 
       <div className="glass-card p-4 space-y-3">
-        <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-          <Building2 size={16} className="text-slate-500" />
-          اطلاعات و ساعات کاری کلینیک
-        </h3>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h3 className="text-xs font-bold text-[#14283B] dark:text-slate-100 flex items-center gap-1.5">
+            <Building2 size={16} className="text-[#087C76]" />
+            شعبه فعال، اهداف درآمد و ساعات کاری کلینیک
+          </h3>
+          <div className="flex items-center gap-1.5">
+            {CLINIC_BRANCHES.map((br) => {
+              const activeBr = branchId === br.id;
+              return (
+                <button
+                  key={br.id}
+                  type="button"
+                  data-testid={`branch_switch_${br.id}`}
+                  onClick={() => {
+                    HapticEngine.selection();
+                    setBranchId(setActiveBranchId(br.id));
+                  }}
+                  className={`px-2.5 py-1.5 rounded-[12px] text-[11px] font-bold border transition-colors ${
+                    activeBr
+                      ? 'bg-[#087C76] text-white border-[#087C76]'
+                      : 'bg-[#F4F7F9] dark:bg-slate-800 text-[#526779] dark:text-slate-300 border-[#D8E2EA] dark:border-slate-700'
+                  }`}
+                >
+                  {br.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {fields.map(f => (
           <Field key={f.key} label={f.label}>
             <div className="relative">
@@ -539,7 +788,7 @@ function ClinicSettingsTab({
             </div>
           </Field>
         ))}
-        <Button color="#64748B" disabled={saving} className="w-full" onClick={save} icon={<Save size={16} />}>{saving ? 'در حال ذخیره...' : 'ذخیره تنظیمات کلینیک'}</Button>
+        <Button color="#087C76" disabled={saving} className="w-full" onClick={save} icon={<Save size={16} />}>{saving ? 'در حال ذخیره...' : 'ذخیره تنظیمات کلینیک'}</Button>
       </div>
 
       {/* Clean Multi-Platform Hub (Moved from Dashboard Top into Settings) */}
@@ -1597,13 +1846,20 @@ function AdsTab({ ads }: { ads: Advertisement[] }) {
   const save = async () => {
     if (!form.title.trim()) return;
     setSaving(true);
-    await supabase.from('advertisements').insert({
+    const res = await supabase.from('advertisements').insert({
       title: form.title, content: form.content || null,
       image_url: form.image_url || null, link_url: form.link_url || null,
       target_audience: form.target_audience, status: 'active',
       start_date: form.start_date, end_date: form.end_date || null,
     });
-    setSaving(false); setShowForm(false);
+    setSaving(false);
+    if (res.error) {
+      HapticEngine.error();
+      return;
+    }
+    if (verifyServerMutation(res)) HapticEngine.success();
+    else HapticEngine.warning();
+    setShowForm(false);
     setForm({ title: '', content: '', image_url: '', link_url: '', target_audience: 'all', start_date: todayGregorian(), end_date: '' });
   };
 

@@ -10,6 +10,8 @@ import {
 import { Sheet, ConfirmDialog } from '@/components/ui/Sheet';
 import { Field, Input, Textarea, Select, Button, Badge, EmptyState } from '@/components/ui/Form';
 import { toJalaliStr } from '@/lib/jalali';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
+import { HapticEngine } from '@/lib/hapticsAudio';
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   low: { label: 'کم', color: '#9CA3AF', bg: '#F3F4F6' },
@@ -91,7 +93,7 @@ export function Messages() {
   const send = async () => {
     if (!form.to_staff_id || !form.subject.trim()) return;
     setSaving(true);
-    await supabase.from('messages').insert({
+    const res = await supabase.from('messages').insert({
       from_staff_id: currentStaffId,
       to_staff_id: form.to_staff_id,
       subject: form.subject,
@@ -100,15 +102,27 @@ export function Messages() {
       is_read: false,
     });
     setSaving(false);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error') {
+      HapticEngine.error();
+      return;
+    }
+    if (outcome === 'confirmed') HapticEngine.success();
+    else HapticEngine.warning();
     setComposeOpen(false);
     setForm({ to_staff_id: '', subject: '', body: '', priority: 'normal' });
   };
 
   const markRead = async (id: string) => {
     await supabase.from('messages').update({ is_read: true }).eq('id', id);
+    HapticEngine.selection();
   };
   const del = async (id: string) => {
-    await supabase.from('messages').delete().eq('id', id);
+    const res = await supabase.from('messages').delete().eq('id', id);
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
   };
 
   const triggerPatientSms = async (patient: Patient, templateBody: string, channel: 'sms' | 'whatsapp') => {
@@ -119,7 +133,7 @@ export function Messages() {
       .replace(/\{تاریخ\}/g, dateText);
 
     // Log in internal messages as audit trail
-    await supabase.from('messages').insert({
+    const res = await supabase.from('messages').insert({
       from_staff_id: currentStaffId,
       to_staff_id: currentStaffId,
       subject: `ارسال ${channel === 'sms' ? 'پیامک' : 'واتساپ'} به ${patient.first_name} ${patient.last_name}`,
@@ -127,6 +141,10 @@ export function Messages() {
       priority: 'normal',
       is_read: true,
     });
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'confirmed') HapticEngine.success();
+    else if (outcome === 'queued_offline') HapticEngine.warning();
+    else HapticEngine.error();
 
     setSentNotice(`پیام برای ${patient.first_name} ${patient.last_name} آماده ارسال شد`);
     setTimeout(() => setSentNotice(null), 3500);

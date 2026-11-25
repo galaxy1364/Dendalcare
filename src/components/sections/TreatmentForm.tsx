@@ -4,9 +4,10 @@ import { Field, Input, Textarea, Select, Button } from '@/components/ui/Form';
 import { ServicesEditor } from '@/components/sections/TreatmentServicesEditor';
 import type { Patient, Treatment, TreatmentService } from '@/lib/supabase';
 import {
-  saveTreatmentRecord, toServiceDraft, serviceLineTotal,
+  saveTreatmentRecordDetailed, toServiceDraft, serviceLineTotal,
   type ServiceDraft,
 } from '@/lib/treatmentServices';
+import { HapticEngine } from '@/lib/hapticsAudio';
 import { loadActiveUser } from '@/lib/cloudSyncEngine';
 
 const fmt = (n: number) => Number(n).toLocaleString('fa-IR');
@@ -55,12 +56,13 @@ export function TreatmentForm({ treatment, treatmentServices, patients, onSaved 
 
   const submit = async () => {
     if (!patientId) {
+      HapticEngine.warning();
       setError('لطفاً بیمار را انتخاب کنید.');
       return;
     }
     setSaving(true);
     setError(null);
-    const ok = await saveTreatmentRecord({
+    const res = await saveTreatmentRecordDetailed({
       treatmentId: treatment?.id ?? null,
       payload: {
         patient_id: patientId,
@@ -78,9 +80,15 @@ export function TreatmentForm({ treatment, treatmentServices, patients, onSaved 
       originalServiceIds,
     });
     setSaving(false);
-    if (!ok) {
+    if (!res.ok) {
+      HapticEngine.error();
       setError('ذخیره انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
+    }
+    if (res.serverConfirmed) {
+      HapticEngine.success();
+    } else if (res.queuedOffline) {
+      HapticEngine.warning();
     }
     onSaved();
   };
