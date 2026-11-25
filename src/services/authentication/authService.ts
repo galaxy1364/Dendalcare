@@ -16,6 +16,11 @@ export const CLINIC_BRANCHES: ClinicBranch[] = [
 
 export const ACTIVE_BRANCH_KEY = getBackendNamespaceKey('minadental_active_branch_v1');
 export const ACTIVE_TENANT_ID = 'minadental_clinic';
+let verifiedSessionTenantId: string | null = null;
+
+export function getActiveTenantId(): string {
+  return verifiedSessionTenantId || ACTIVE_TENANT_ID;
+}
 
 export type AuthStatus = 'authenticated' | 'unauthenticated' | 'unauthorized';
 
@@ -121,8 +126,93 @@ export async function verifySaltedSecret(
 
 const AUTH_SESSION_TIMEOUT_MS = 6_000;
 
-export async function getVerifiedSupabaseSession(): Promise<VerifiedSessionState> {
-  const branchId = getActiveBranchId();
+export type AuthoritativeClinicRole = 'manager' | 'dentist' | 'secretary' | 'assistant';
+
+export interface ClinicMembershipRow {
+  tenant_id?: string | null;
+  branch_id?: string | null;
+  role?: string | null;
+  active?: boolean | null;
+  all_branches?: boolean | null;
+}
+
+const VALID_CLINIC_ROLES = new Set<AuthoritativeClinicRole>([
+  'manager',
+  'dentist',
+  'secretary',
+  'assistant',
+]);
+
+const ROLE_PRECEDENCE: Record<AuthoritativeClinicRole, number> = {
+  manager: 1,
+  dentist: 2,
+  secretary: 3,
+  assistant: 4,
+};
+
+export function resolveMembershipSession(params: {
+  userId: string;
+  email: string | null;
+  requestedBranchId: string;
+  memberships: ClinicMembershipRow[] | null | undefined;
+  membershipError?: unknown;
+}): VerifiedSessionState {
+  const unauthorizedFallback: VerifiedSessionState = {
+    status: 'unauthorized',
+    supabaseUserId: params.userId,
+    supabaseEmail: params.email,
+    serverVerifiedRole: null,
+    tenantId: '',
+    branchId: params.requestedBranchId,
+  };
+
+  if (params.membershipError || !Array.isArray(params.memberships) || params.memberships.length === 0) {
+    return unauthorizedFallback;
+  }
+
+  const validActive = params.memberships.filter((m) => {
+    if (!m || m.active !== true) return false;
+    const role = typeof m.role === 'string' ? m.role.trim() : '';
+    const tenantId = typeof m.tenant_id === 'string' ? m.tenant_id.trim() : '';
+    const branchId = typeof m.branch_id === 'string' ? m.branch_id.trim() : '';
+    if (!VALID_CLINIC_ROLES.has(role as AuthoritativeClinicRole)) return false;
+    if (!tenantId || !branchId) return false;
+    if (m.all_branches === true && role !== 'manager') return false;
+    return true;
+  });
+
+  const scopedMatches = validActive.filter(
+    (m) =>
+      m.branch_id === params.requestedBranchId ||
+      (m.role === 'manager' && m.all_branches === true)
+  );
+
+  if (scopedMatches.length === 0) {
+    return unauthorizedFallback;
+  }
+
+  scopedMatches.sort((a, b) => {
+    const rankA = ROLE_PRECEDENCE[String(a.role).trim() as AuthoritativeClinicRole] ?? 99;
+    const rankB = ROLE_PRECEDENCE[String(b.role).trim() as AuthoritativeClinicRole] ?? 99;
+    return rankA - rankB;
+  });
+
+  const matched = scopedMatches[0];
+  return {
+    status: 'authenticated',
+    supabaseUserId: params.userId,
+    supabaseEmail: params.email,
+    serverVerifiedRole: String(matched.role).trim(),
+    tenantId: String(matched.tenant_id).trim(),
+    branchId: params.requestedBranchId,
+  };
+}
+
+export async function getVerifiedSupabaseSession(
+  explicitBranchId?: string,
+  client: typeof rawSupabase = rawSupabase
+): Promise<VerifiedSessionState> {
+  const branchId = explicitBranchId || getActiveBranchId();
   const unauthenticatedFallback: VerifiedSessionState = {
     status: 'unauthenticated',
     supabaseUserId: null,
@@ -132,56 +222,73 @@ export async function getVerifiedSupabaseSession(): Promise<VerifiedSessionState
     branchId,
   };
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let currentUnauthorizedFallback: VerifiedSessionState | null = null;
   try {
-    const sessionPromise = rawSupabase.auth.getSession();
+    const sessionPromise = client.auth.getSession();
     const timeoutPromise = new Promise<null>((resolve) => {
       timer = setTimeout(() => resolve(null), AUTH_SESSION_TIMEOUT_MS);
     });
     const result = await Promise.race([sessionPromise, timeoutPromise]);
     if (!result || result.error || !result.data?.session?.user) {
+      verifiedSessionTenantId = null;
       return unauthenticatedFallback;
     }
     const user = result.data.session.user;
-    // Security: ONLY trust server-authoritative clinic_memberships and server-signed app_metadata
-    // (NEVER client-writable user_metadata or localStorage roles)
-    let resolvedRole = (user.app_metadata?.clinic_role as string | undefined) || null;
-    let resolvedTenant = (user.app_metadata?.tenant_id as string | undefined) || ACTIVE_TENANT_ID;
-    let resolvedBranch = branchId;
-
-    try {
-      const { data: memberships, error: memErr } = await rawSupabase
-        .from('clinic_memberships')
-        .select('tenant_id,branch_id,role,all_branches')
-        .eq('user_id', user.id)
-        .eq('active', true);
-
-      if (!memErr && Array.isArray(memberships) && memberships.length > 0) {
-        const matched =
-          memberships.find((m: any) => m.branch_id === branchId) ||
-          memberships.find((m: any) => m.role === 'manager' && m.all_branches === true) ||
-          memberships[0];
-        if (matched?.role) {
-          resolvedRole = String(matched.role);
-          if (matched.tenant_id) resolvedTenant = String(matched.tenant_id);
-          if (matched.branch_id && !(matched.role === 'manager' && matched.all_branches)) {
-            resolvedBranch = String(matched.branch_id);
-          }
-        }
-      }
-    } catch {
-      // Keep app_metadata-derived role if clinic_memberships is not yet migrated or unreachable
-    }
-
-    return {
-      status: 'authenticated',
+    const unauthorizedFallback: VerifiedSessionState = {
+      status: 'unauthorized',
       supabaseUserId: user.id,
       supabaseEmail: user.email ?? null,
-      serverVerifiedRole: resolvedRole,
-      tenantId: resolvedTenant,
-      branchId: resolvedBranch,
+      serverVerifiedRole: null,
+      tenantId: '',
+      branchId,
     };
+    currentUnauthorizedFallback = unauthorizedFallback;
+
+    // Security (V12): Membership-only server role resolution.
+    // Never fall back to client/token app_metadata when clinic_memberships is missing, revoked, or unreachable.
+    const { data: memberships, error: memErr } = await client
+      .from('clinic_memberships')
+      .select('tenant_id,branch_id,role,active,all_branches')
+      .eq('user_id', user.id)
+      .eq('active', true);
+
+    const resolved = resolveMembershipSession({
+      userId: user.id,
+      email: user.email ?? null,
+      requestedBranchId: branchId,
+      memberships: memberships as ClinicMembershipRow[] | null | undefined,
+      membershipError: memErr,
+    });
+
+    if (resolved.status !== 'authenticated' || !resolved.tenantId) {
+      verifiedSessionTenantId = null;
+      return unauthorizedFallback;
+    }
+
+    // Cross-verify against authoritative Postgres membership-only role resolver when rpc is available
+    const rpcFn = (client as unknown as { rpc?: (fn: string, args: Record<string, unknown>) => Promise<{ data?: unknown; error?: unknown }> }).rpc;
+    if (typeof rpcFn === 'function') {
+      const rpcRes = await rpcFn.call(client, 'app_resolve_verified_role', {
+        target_tenant: resolved.tenantId,
+        target_branch: resolved.branchId,
+      });
+      const rpcRole = typeof rpcRes?.data === 'string' ? rpcRes.data.trim() : '';
+      if (rpcRes?.error || !VALID_CLINIC_ROLES.has(rpcRole as AuthoritativeClinicRole)) {
+        verifiedSessionTenantId = null;
+        return unauthorizedFallback;
+      }
+      verifiedSessionTenantId = resolved.tenantId;
+      return {
+        ...resolved,
+        serverVerifiedRole: rpcRole,
+      };
+    }
+
+    verifiedSessionTenantId = resolved.tenantId;
+    return resolved;
   } catch {
-    return unauthenticatedFallback;
+    verifiedSessionTenantId = null;
+    return currentUnauthorizedFallback ?? unauthenticatedFallback;
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -189,17 +296,25 @@ export async function getVerifiedSupabaseSession(): Promise<VerifiedSessionState
 
 export async function signInWithSupabaseEmail(
   email: string,
-  password: string
+  password: string,
+  client: typeof rawSupabase = rawSupabase
 ): Promise<{ ok: boolean; message: string; session?: VerifiedSessionState }> {
   try {
-    const { data, error } = await rawSupabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error || !data?.user) {
       return {
         ok: false,
         message: error?.message || 'احراز هویت سرور ناموفق بود. ایمیل یا رمز عبور را بررسی کنید.',
       };
     }
-    const session = await getVerifiedSupabaseSession();
+    const session = await getVerifiedSupabaseSession(undefined, client);
+    if (session.status !== 'authenticated') {
+      return {
+        ok: false,
+        message: 'حساب احراز هویت شد، اما عضویت فعال کلینیک برای این شعبه وجود ندارد یا دسترسی لغو شده است.',
+        session,
+      };
+    }
     return {
       ok: true,
       message: `ورود تاییدشده سرور برای ${data.user.email || email} انجام شد.`,
@@ -212,6 +327,7 @@ export async function signInWithSupabaseEmail(
 }
 
 export async function signOutSupabaseSession(): Promise<void> {
+  verifiedSessionTenantId = null;
   try {
     await rawSupabase.auth.signOut();
   } catch {

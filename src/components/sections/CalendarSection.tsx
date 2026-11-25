@@ -19,8 +19,10 @@ import {
 } from '@/lib/jalali';
 import { Sheet } from '@/components/ui/Sheet';
 import { Field, Input, Select, Button, Badge, Loading } from '@/components/ui/Form';
-import { AppointmentForm } from './AppointmentForm';
+import { AppointmentForm, type AppointmentPayload } from './AppointmentForm';
 import type { SectionId } from '@/lib/sections';
+import { saveAppointmentCommand } from '@/features/appointments/appointmentCommandService';
+import { useClinicShell } from '@/app/AppProviders';
 
 type CalendarViewMode = 'month' | 'week' | 'day' | 'year';
 
@@ -37,6 +39,7 @@ export type DayAggregatedEvent = {
 };
 
 export function CalendarSection({ onNavigate }: { onNavigate?: (id: SectionId) => void }) {
+  const { effectiveRole } = useClinicShell();
   const { data: patients, loading: lp } = useRealtimeTable<Patient>('patients');
   const { data: appointments, loading: la, refresh: refreshAppts } = useRealtimeTable<Appointment>('appointments');
   const { data: treatments } = useRealtimeTable<Treatment>('treatments');
@@ -305,11 +308,15 @@ export function CalendarSection({ onNavigate }: { onNavigate?: (id: SectionId) =
     setSelectedDate(todayStr);
   };
 
-  const handleSaveQuickAppt = async (data: Partial<Appointment>): Promise<boolean> => {
+  const handleSaveQuickAppt = async (data: AppointmentPayload): Promise<boolean> => {
     setSavingQuick(true);
-    const { error } = await supabase.from('appointments').insert(data);
+    const cmd = await saveAppointmentCommand({
+      actorRole: effectiveRole,
+      existingAppointments: appointments,
+      draft: data,
+    });
     setSavingQuick(false);
-    if (error) return false;
+    if (!cmd.ok) return false;
     setQuickApptOpen(false);
     refreshAppts();
     return true;

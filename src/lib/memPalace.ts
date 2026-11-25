@@ -342,6 +342,24 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'نام‌گذاری IndexedDB Vault، AAD رمزنگاری AES-GCM، صف آفلاین، کش محلی و نشست شعبه بر اساس SUPABASE_PROJECT_REF با مسدودسازی کامل بازپخش بین‌دیتابیسی',
     ],
   },
+  {
+    id: 'milestone-14',
+    traceId: 'TRC-MINA-UX-AUDIT-V1-9014-N',
+    phaseNumber: 14,
+    title: 'سند جامع تجربه کاربری و معماری کلینیکی (Design Audit V1): یکپارچه‌سازی موتور نوبت‌دهی و مسدودسازی Fail-Closed نقش‌های نامعتبر',
+    titleEn: 'Global UX & Architecture Audit V1 (Phase A): Shared Appointment Domain Command Engine & Strict Fail-Closed RBAC Denial',
+    description: 'ذخیره دائمی مشخصات مرجع جهانی UX/معماری (docs/architecture/MINADENTAL-GLOBAL-UX-ARCHITECTURE-AUDIT-V1.md و ADR-002)، حذف کامل fallback به نقش secretary در canAccessRoute/canPerformAction و یکپارچه‌سازی تمام مسیرهای ثبت، ویرایش و تغییر وضعیت نوبت از طریق appointmentCommandService با اعتبارسنجی دقیق مدت‌زمان، تشخیص تداخل، کلید یکتایی و گذارهای قانونی وضعیت بدون دستکاری QBank و Aurora.',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/05',
+    checksum: 'n140uxauditv1',
+    deliverables: [
+      'ثبت دائم مشخصات مرجع در docs/architecture/MINADENTAL-GLOBAL-UX-ARCHITECTURE-AUDIT-V1.md و docs/adr/ADR-002-global-ux-and-appointments-contract.md',
+      'مسدودسازی قطعی دسترسی در accessControl.ts برای نقش‌های نامعتبر، خالی یا unauthorized بدون fallback به secretary',
+      'موتور فرمان واحد نوبت‌دهی (src/features/appointments/appointmentCommandService.ts) برای فرم تمام‌صفحه، لیست نوبت، تقویم و کالر آیدی با حذف تبدیل خاموش مدت نوبت',
+      'اعمال ماتریس گذارهای قانونی وضعیت نوبت (scheduled/confirmed/arrived/waiting/in_progress/completed/cancelled/no_show) در منو و دکمه‌ها همراه با تست‌های واحد و E2E',
+    ],
+  },
 ]);
 
 export interface ModuleBenchmarkPhase {

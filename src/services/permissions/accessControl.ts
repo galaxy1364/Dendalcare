@@ -86,30 +86,77 @@ export function resolveEffectiveRole(params: {
     return serverRole;
   }
 
+  if (params.sessionStatus === 'unauthorized') {
+    return 'assistant';
+  }
+
   if (serverRole) return serverRole;
   if (localRole) return localRole;
   return 'secretary';
 }
 
-export function canAccessRoute(role: ClinicUserRole | string | undefined, route: AppRouteId): boolean {
-  const safeRole: ClinicUserRole =
-    role && VALID_ROLES.has(role as ClinicUserRole) ? (role as ClinicUserRole) : 'secretary';
+export type EffectiveClinicRole = ClinicUserRole | 'unauthorized';
+
+export function isAuthorizedRole(role: ClinicUserRole | EffectiveClinicRole | string | undefined | null): role is ClinicUserRole {
+  return Boolean(role && VALID_ROLES.has(role as ClinicUserRole));
+}
+
+/**
+ * Strict fail-closed membership resolver returning explicit `'unauthorized'` when
+ * sessionStatus is `'unauthorized'` or an authenticated session lacks a verified role.
+ */
+export function resolveStrictMembershipRole(params: {
+  serverVerifiedRole?: string | null;
+  localRole?: string | null;
+  sessionStatus?: 'authenticated' | 'unauthenticated' | 'unauthorized';
+}): EffectiveClinicRole {
+  const serverRole =
+    params.serverVerifiedRole && VALID_ROLES.has(params.serverVerifiedRole as ClinicUserRole)
+      ? (params.serverVerifiedRole as ClinicUserRole)
+      : null;
+  const localRole =
+    params.localRole && VALID_ROLES.has(params.localRole as ClinicUserRole)
+      ? (params.localRole as ClinicUserRole)
+      : null;
+
+  if (params.sessionStatus === 'unauthorized') {
+    return 'unauthorized';
+  }
+  if (params.sessionStatus === 'authenticated') {
+    if (!serverRole) return 'unauthorized';
+    if (localRole && ROLE_PRIVILEGE_RANK[localRole] < ROLE_PRIVILEGE_RANK[serverRole]) {
+      return localRole;
+    }
+    return serverRole;
+  }
+  if (serverRole) return serverRole;
+  if (localRole) return localRole;
+  return 'unauthorized';
+}
+
+export function canAccessRoute(
+  role: ClinicUserRole | EffectiveClinicRole | string | undefined,
+  route: AppRouteId
+): boolean {
+  if (!isAuthorizedRole(role)) return false;
   const allowed = ROUTE_ALLOWED_ROLES[route];
   if (!allowed) return false;
-  return allowed.includes(safeRole);
+  return allowed.includes(role);
 }
 
 export function canPerformAction(
-  role: ClinicUserRole | string | undefined,
+  role: ClinicUserRole | EffectiveClinicRole | string | undefined,
   action: ClinicAction
 ): boolean {
-  const safeRole: ClinicUserRole =
-    role && VALID_ROLES.has(role as ClinicUserRole) ? (role as ClinicUserRole) : 'secretary';
+  if (!isAuthorizedRole(role)) return false;
   const allowed = ACTION_ALLOWED_ROLES[action];
   if (!allowed) return false;
-  return allowed.includes(safeRole);
+  return allowed.includes(role);
 }
 
-export function getAuthorizedRoutesForRole(role: ClinicUserRole | string | undefined): AppRouteId[] {
+export function getAuthorizedRoutesForRole(
+  role: ClinicUserRole | EffectiveClinicRole | string | undefined
+): AppRouteId[] {
+  if (!isAuthorizedRole(role)) return [];
   return (Object.keys(ROUTE_ALLOWED_ROLES) as AppRouteId[]).filter((r) => canAccessRoute(role, r));
 }

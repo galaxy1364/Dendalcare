@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "verify:assets": "node tests/verify-asset-graph.mjs",
     "verify:rls": "node scripts/verify-staging-rls.mjs",
+    "verify:v12": "node scripts/v12-verify-remote-db.mjs",
     "test": "node --test tests/clinic-audit.test.mjs tests/v10-sw-navigation.test.mjs && node tests/run-production-tests.mjs",
     "test:e2e": "playwright test"
   },

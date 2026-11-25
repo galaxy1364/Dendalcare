@@ -34,6 +34,7 @@ import { getMutationOutcome, verifyServerMutation } from '@/lib/supabaseGuardian
 import { PlatformHapticAdapter, HapticEngine } from '@/platform/haptics';
 import { CLINIC_BRANCHES } from '@/services/authentication/authService';
 import { canAccessRoute } from '@/services/permissions/accessControl';
+import { saveAppointmentCommand } from '@/features/appointments/appointmentCommandService';
 import { useNavigation } from '@/navigation/NavigationStack';
 import { Badge, Button, Field, Input, Select } from '@/components/ui/Form';
 import { InstallAppModal } from '@/components/ui/InstallAppModal';
@@ -49,6 +50,7 @@ export function OverlayManager() {
   const {
     users,
     currentUser,
+    effectiveRole,
     verifiedSession,
     authBusy,
     authFeedback,
@@ -236,7 +238,11 @@ export function OverlayManager() {
                 </div>
               </div>
               <Badge color="#FFFFFF" bg="rgba(255,255,255,0.2)">
-                {verifiedSession.status === 'authenticated' ? 'تایید سرور' : 'محلی'}
+                {verifiedSession.status === 'authenticated'
+                  ? 'تایید سرور'
+                  : verifiedSession.status === 'unauthorized'
+                    ? 'فاقد عضویت فعال'
+                    : 'محلی'}
               </Badge>
             </div>
             <div className="mt-3 pt-2.5 border-t border-white/15 flex flex-wrap gap-1.5">
@@ -282,11 +288,13 @@ export function OverlayManager() {
               <span className="text-[11px] font-bold text-[#526779] dark:text-[#9FB1C1]">
                 {verifiedSession.status === 'authenticated'
                   ? verifiedSession.supabaseEmail || 'نشست فعال'
-                  : 'بدون نشست سرور'}
+                  : verifiedSession.status === 'unauthorized'
+                    ? `${verifiedSession.supabaseEmail || 'حساب'} (بدون عضویت فعال)`
+                    : 'بدون نشست سرور'}
               </span>
             </div>
 
-            {verifiedSession.status === 'authenticated' ? (
+            {verifiedSession.status === 'authenticated' || verifiedSession.status === 'unauthorized' ? (
               <button
                 type="button"
                 disabled={authBusy}
@@ -717,23 +725,27 @@ export function OverlayManager() {
 
           const handleQuickBookExisting = async (pat: Patient) => {
             setCallerBookingBusy(true);
-            const res = await supabase.from('appointments').insert({
-              patient_id: pat.id,
-              title: `نوبت تلفنی: ${pat.first_name} ${pat.last_name}`,
-              appointment_date: todayGregorian(),
-              appointment_time: callerApptTime || '17:00',
-              duration_min: 30,
-              type: 'checkup',
-              status: 'confirmed',
-              notes: 'ثبت از طریق کالر آیدی تماس ورودی',
+            const cmd = await saveAppointmentCommand({
+              actorRole: effectiveRole,
+              draft: {
+                patient_id: pat.id,
+                title: `نوبت تلفنی: ${pat.first_name} ${pat.last_name}`,
+                appointment_date: todayGregorian(),
+                appointment_time: callerApptTime || '17:00',
+                duration_min: 30,
+                type: 'checkup',
+                status: 'confirmed',
+                notes: 'ثبت از طریق کالر آیدی تماس ورودی',
+                skipConflictCheck: true,
+              },
             });
             setCallerBookingBusy(false);
-            const outcome = getMutationOutcome(res);
-            if (outcome === 'error') {
+            if (!cmd.ok) {
               HapticEngine.error();
+              if (cmd.errorMessage) showSyncToast(cmd.errorMessage, 3200);
               return;
             }
-            if (outcome === 'confirmed') {
+            if (cmd.outcome === 'confirmed') {
               HapticEngine.success();
               showSyncToast(
                 `نوبت فوری برای ${pat.first_name} ${pat.last_name} در ساعت ${callerApptTime} در سرور ثبت شد`,
@@ -764,24 +776,29 @@ export function OverlayManager() {
               .select('id,first_name,last_name');
             const createdList = patRes.data;
             const newPat = Array.isArray(createdList) ? createdList[0] : null;
-            const apptRes = await supabase.from('appointments').insert({
-              patient_id: newPat?.id ?? null,
-              title: `نوبت اول: ${callerNewFirstName.trim()} ${callerNewLastName.trim()}`,
-              appointment_date: todayGregorian(),
-              appointment_time: callerApptTime || '17:00',
-              duration_min: 30,
-              type: 'consultation',
-              status: 'confirmed',
-              notes: `تماس ورودی شماره ${cleanPhone}`,
+            const apptCmd = await saveAppointmentCommand({
+              actorRole: effectiveRole,
+              draft: {
+                patient_id: newPat?.id ?? null,
+                allowMissingPatient: !newPat?.id,
+                title: `نوبت اول: ${callerNewFirstName.trim()} ${callerNewLastName.trim()}`,
+                appointment_date: todayGregorian(),
+                appointment_time: callerApptTime || '17:00',
+                duration_min: 30,
+                type: 'consultation',
+                status: 'confirmed',
+                notes: `تماس ورودی شماره ${cleanPhone}`,
+                skipConflictCheck: true,
+              },
             });
             setCallerBookingBusy(false);
             const patOk = verifyServerMutation(patRes);
-            const apptOutcome = getMutationOutcome(apptRes);
-            if (apptOutcome === 'error') {
+            if (!apptCmd.ok) {
               HapticEngine.error();
+              if (apptCmd.errorMessage) showSyncToast(apptCmd.errorMessage, 3200);
               return;
             }
-            if (patOk && apptOutcome === 'confirmed') {
+            if (patOk && apptCmd.outcome === 'confirmed') {
               HapticEngine.success();
               showSyncToast(`پرونده و نوبت فوری برای ${callerNewFirstName} در سرور ثبت شد`, 3500);
             } else {

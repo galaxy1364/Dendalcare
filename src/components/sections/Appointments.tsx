@@ -22,15 +22,35 @@ import { subscribeGlobalFocus } from '@/lib/globalFocus';
 import { getMutationOutcome } from '@/lib/supabaseGuardian';
 import { HapticEngine } from '@/lib/hapticsAudio';
 import { ContextMenuTrigger } from '@/components/ui/ContextMenu';
+import { useClinicShell } from '@/app/AppProviders';
+import { canPerformAction } from '@/services/permissions/accessControl';
+import {
+  canTransitionAppointmentStatus,
+  deleteAppointmentCommand,
+  saveAppointmentCommand,
+  transitionAppointmentStatusCommand,
+} from '@/features/appointments/appointmentCommandService';
 
 const STATUS_ACTIONS: Record<string, { status: string; label: string; icon: React.ReactNode; className: string }[]> = {
   scheduled: [
     { status: 'confirmed', label: 'تایید', icon: <BadgeCheck size={13} />, className: 'bg-emerald-50 text-emerald-600' },
+    { status: 'arrived', label: 'حضور بیمار', icon: <Clock size={13} />, className: 'bg-teal-50 text-teal-700' },
     { status: 'cancelled', label: 'لغو', icon: <XCircle size={13} />, className: 'bg-red-50 text-red-500' },
   ],
   confirmed: [
+    { status: 'arrived', label: 'حضور بیمار', icon: <Clock size={13} />, className: 'bg-teal-50 text-teal-700' },
     { status: 'in_progress', label: 'شروع درمان', icon: <Play size={13} />, className: 'bg-blue-50 text-blue-600' },
     { status: 'no_show', label: 'غیبت', icon: <UserX size={13} />, className: 'bg-gray-100 text-gray-500' },
+    { status: 'cancelled', label: 'لغو', icon: <XCircle size={13} />, className: 'bg-red-50 text-red-500' },
+  ],
+  arrived: [
+    { status: 'waiting', label: 'انتظار یونیت', icon: <Clock size={13} />, className: 'bg-amber-50 text-amber-700' },
+    { status: 'in_progress', label: 'شروع درمان', icon: <Play size={13} />, className: 'bg-blue-50 text-blue-600' },
+    { status: 'no_show', label: 'غیبت', icon: <UserX size={13} />, className: 'bg-gray-100 text-gray-500' },
+    { status: 'cancelled', label: 'لغو', icon: <XCircle size={13} />, className: 'bg-red-50 text-red-500' },
+  ],
+  waiting: [
+    { status: 'in_progress', label: 'شروع درمان', icon: <Play size={13} />, className: 'bg-blue-50 text-blue-600' },
     { status: 'cancelled', label: 'لغو', icon: <XCircle size={13} />, className: 'bg-red-50 text-red-500' },
   ],
   in_progress: [
@@ -42,6 +62,7 @@ const STATUS_ACTIONS: Record<string, { status: string; label: string; icon: Reac
 type ApptTabMode = 'daily' | 'units' | 'caller_id' | 'free_slots';
 
 export function Appointments() {
+  const { effectiveRole } = useClinicShell();
   const { data: appointments, loading, refresh } = useRealtimeTable<Appointment>('appointments');
   const { data: patients, refresh: refreshPatients } = useRealtimeTable<Patient>('patients');
 
@@ -167,16 +188,20 @@ export function Appointments() {
   };
 
   const handleSave = async (payload: AppointmentPayload): Promise<boolean> => {
-    const result = editing
-      ? await supabase.from('appointments').update(payload).eq('id', editing.id)
-      : await supabase.from('appointments').insert(payload);
-    const outcome = getMutationOutcome(result);
-    if (outcome === 'error') {
+    const cmd = await saveAppointmentCommand({
+      actorRole: effectiveRole,
+      existingAppointments: appointments,
+      draft: {
+        ...payload,
+        id: editing?.id ?? null,
+      },
+    });
+    if (!cmd.ok) {
       HapticEngine.error();
-      setActionError('ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
+      setActionError(cmd.errorMessage || 'ثبت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
       return false;
     }
-    if (outcome === 'confirmed') {
+    if (cmd.outcome === 'confirmed') {
       HapticEngine.success();
       setActionError(null);
     } else {
@@ -222,15 +247,19 @@ export function Appointments() {
     openNew(created.id);
   };
 
-  const handleStatusChange = async (id: string, status: string) => {
-    const res = await supabase.from('appointments').update({ status }).eq('id', id);
-    const outcome = getMutationOutcome(res);
-    if (outcome === 'error') {
+  const handleStatusChange = async (apt: Appointment, nextStatus: string) => {
+    const cmd = await transitionAppointmentStatusCommand({
+      actorRole: effectiveRole,
+      appointmentId: apt.id,
+      currentStatus: apt.status,
+      nextStatus,
+    });
+    if (!cmd.ok) {
       HapticEngine.error();
-      setActionError('تغییر وضعیت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
+      setActionError(cmd.errorMessage || 'تغییر وضعیت نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
     }
-    if (outcome === 'confirmed') {
+    if (cmd.outcome === 'confirmed') {
       HapticEngine.success();
       setActionError(null);
     } else {
@@ -242,15 +271,17 @@ export function Appointments() {
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    const res = await supabase.from('appointments').delete().eq('id', deleteId);
+    const cmd = await deleteAppointmentCommand({
+      actorRole: effectiveRole,
+      appointmentId: deleteId,
+    });
     setDeleteId(null);
-    const outcome = getMutationOutcome(res);
-    if (outcome === 'error') {
+    if (!cmd.ok) {
       HapticEngine.error();
-      setActionError('حذف نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
+      setActionError(cmd.errorMessage || 'حذف نوبت انجام نشد. لطفاً دوباره تلاش کنید.');
       return;
     }
-    if (outcome === 'confirmed') {
+    if (cmd.outcome === 'confirmed') {
       HapticEngine.success();
       setActionError(null);
     } else {
@@ -693,25 +724,57 @@ export function Appointments() {
                     icon: <Clock size={15} />,
                     onSelect: () => openEdit(apt),
                   },
-                  {
-                    id: 'confirm_apt',
-                    label: 'تایید نوبت',
-                    icon: <BadgeCheck size={15} />,
-                    onSelect: () => handleStatusChange(apt.id, 'confirmed'),
-                  },
-                  {
-                    id: 'complete_apt',
-                    label: 'ثبت تکمیل درمان',
-                    icon: <CheckCircle2 size={15} />,
-                    onSelect: () => handleStatusChange(apt.id, 'completed'),
-                  },
-                  {
-                    id: 'delete_apt',
-                    label: 'حذف / لغو نوبت',
-                    destructive: true,
-                    icon: <XCircle size={15} />,
-                    onSelect: () => setDeleteId(apt.id),
-                  },
+                  ...(canTransitionAppointmentStatus(apt.status, 'confirmed')
+                    ? [
+                        {
+                          id: 'confirm_apt',
+                          label: 'تایید نوبت',
+                          icon: <BadgeCheck size={15} />,
+                          onSelect: () => handleStatusChange(apt, 'confirmed'),
+                        },
+                      ]
+                    : []),
+                  ...(canTransitionAppointmentStatus(apt.status, 'arrived')
+                    ? [
+                        {
+                          id: 'arrive_apt',
+                          label: 'ثبت حضور در مطب',
+                          icon: <Clock size={15} />,
+                          onSelect: () => handleStatusChange(apt, 'arrived'),
+                        },
+                      ]
+                    : []),
+                  ...(canTransitionAppointmentStatus(apt.status, 'in_progress')
+                    ? [
+                        {
+                          id: 'start_apt',
+                          label: 'شروع درمان',
+                          icon: <Play size={15} />,
+                          onSelect: () => handleStatusChange(apt, 'in_progress'),
+                        },
+                      ]
+                    : []),
+                  ...(canTransitionAppointmentStatus(apt.status, 'completed')
+                    ? [
+                        {
+                          id: 'complete_apt',
+                          label: 'ثبت تکمیل درمان',
+                          icon: <CheckCircle2 size={15} />,
+                          onSelect: () => handleStatusChange(apt, 'completed'),
+                        },
+                      ]
+                    : []),
+                  ...(canPerformAction(effectiveRole, 'delete_critical_records')
+                    ? [
+                        {
+                          id: 'delete_apt',
+                          label: 'حذف / لغو نوبت',
+                          destructive: true,
+                          icon: <XCircle size={15} />,
+                          onSelect: () => setDeleteId(apt.id),
+                        },
+                      ]
+                    : []),
                 ]}
               >
               <div
@@ -757,15 +820,17 @@ export function Appointments() {
                   </div>
                 </button>
                 <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-gray-100">
-                  {actions.map((a) => (
-                    <button
-                      key={a.status}
-                      onClick={() => handleStatusChange(apt.id, a.status)}
-                      className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-bold haptic ${a.className}`}
-                    >
-                      {a.icon} {a.label}
-                    </button>
-                  ))}
+                  {actions
+                    .filter((a) => canTransitionAppointmentStatus(apt.status, a.status))
+                    .map((a) => (
+                      <button
+                        key={a.status}
+                        onClick={() => handleStatusChange(apt, a.status)}
+                        className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-bold haptic ${a.className}`}
+                      >
+                        {a.icon} {a.label}
+                      </button>
+                    ))}
                   {patient?.phone && (
                     <a
                       href={`sms:${patient.phone}?body=${encodeURIComponent(
@@ -779,12 +844,14 @@ export function Appointments() {
                       پیامک
                     </a>
                   )}
-                  <button
-                    onClick={() => setDeleteId(apt.id)}
-                    className="px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-400 text-[11px] font-bold haptic"
-                  >
-                    حذف
-                  </button>
+                  {canPerformAction(effectiveRole, 'delete_critical_records') && (
+                    <button
+                      onClick={() => setDeleteId(apt.id)}
+                      className="px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-400 text-[11px] font-bold haptic"
+                    >
+                      حذف
+                    </button>
+                  )}
                 </div>
               </div>
               </ContextMenuTrigger>

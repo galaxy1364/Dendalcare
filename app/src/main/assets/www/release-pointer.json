@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "channel": "stable",
+  "channel": "staging",
   "platform": "web",
-  "currentReleaseId": "v4.9.6-b76116a18a",
-  "releaseSequence": 99,
-  "manifestUrl": "./releases/v4.9.6-b76116a18a/release-manifest.json",
-  "updatedAt": "2026-11-25T21:24:33.867Z",
+  "currentReleaseId": "v4.9.6-3cd00c9c6d",
+  "releaseSequence": 9000,
+  "manifestUrl": "./releases/v4.9.6-3cd00c9c6d/release-manifest.json",
+  "updatedAt": "2026-11-25T21:58:17.944Z",
   "revokedReleaseIds": [],
   "minSupportedSequence": 1
 }

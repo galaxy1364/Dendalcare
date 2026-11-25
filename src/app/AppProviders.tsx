@@ -495,10 +495,13 @@ function ClinicShellProviders({
     syncSmartAlertsToDeviceNotifications(unifiedGlobalAlerts).catch(() => {});
   }, [appearance.deviceNotifOn, unifiedGlobalAlerts]);
 
+  useEffect(() => {
+    if (verifiedSession.status !== 'authenticated') return;
+    activateCloudSqlAndGoogleDrive(currentUser.email || 'mehdi.amiri19851364@gmail.com').catch(() => {});
+  }, [verifiedSession.status, currentUser.email]);
+
   // Cloud SQL & Real-Time Sync Channel (Realtime OTA events are HINT-ONLY — never release authority)
   useEffect(() => {
-    activateCloudSqlAndGoogleDrive(currentUser.email || 'mehdi.amiri19851364@gmail.com').catch(() => {});
-
     const cleanup = initCloudSyncChannel({
       onSyncEvent: (ev) => {
         setSyncPulse(true);
@@ -709,6 +712,19 @@ function ClinicShellProviders({
     (id: string) => {
       const next = setActiveBranchId(id);
       setBranchId(next);
+      getVerifiedSupabaseSession(next)
+        .then((session) => {
+          setVerifiedSession(session);
+          if (session.status === 'authenticated') {
+            appBootstrap.transition('READY');
+          } else {
+            appBootstrap.transition('DEGRADED', {
+              code: session.status === 'unauthenticated' ? 'UNAUTHENTICATED' : 'AUTH_DEGRADED',
+              message: 'عضویت فعال کلینیک برای شعبه انتخاب‌شده تایید نشد.',
+            });
+          }
+        })
+        .catch(() => {});
       HapticEngine.selection();
       showSyncToast(`شعبه فعال تغییر یافت`, 2500);
     },
@@ -781,8 +797,18 @@ function ClinicShellProviders({
     const res = await signInWithSupabaseEmail(email, password);
     setAuthBusy(false);
     setAuthFeedback({ ok: res.ok, text: res.message });
-    if (res.ok && res.session) {
+    if (res.session) {
       setVerifiedSession(res.session);
+      if (res.session.status === 'authenticated') {
+        appBootstrap.transition('READY');
+      } else {
+        appBootstrap.transition('DEGRADED', {
+          code: 'AUTH_DEGRADED',
+          message: 'عضویت فعال کلینیک برای این حساب تایید نشد.',
+        });
+      }
+    }
+    if (res.ok && res.session?.status === 'authenticated') {
       HapticEngine.success();
     } else {
       HapticEngine.error();

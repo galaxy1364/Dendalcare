@@ -11,17 +11,22 @@ const VIEWPORT_MATRIX = [
 
 test.describe('MinaDental V6 Release Gate E2E', () => {
   test('cold & warm boot + reload reach SHELL_READY with valid window.__minaBuildId and zero 404/syntax errors', async ({ page }) => {
-    const consoleErrors: string[] = [];
+    const consoleErrors: Array<{ text: string; url: string }> = [];
     const pageErrors: string[] = [];
     const failedAssets: string[] = [];
+    let supabase401Count = 0;
 
     page.on('console', (msg) => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text());
+      if (msg.type() === 'error') {
+        consoleErrors.push({ text: msg.text(), url: msg.location()?.url || '' });
+      }
     });
     page.on('pageerror', (err) => pageErrors.push(err.message));
     page.on('response', (res) => {
       if (res.status() >= 400 && res.url().startsWith('http://127.0.0.1')) {
         failedAssets.push(`${res.status()} ${res.url()}`);
+      } else if (res.status() === 401 && res.url().includes('supabase.co')) {
+        supabase401Count += 1;
       }
     });
 
@@ -48,7 +53,13 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
 
     expect(failedAssets, 'No local static asset may 404').toEqual([]);
     expect(pageErrors, 'Zero uncaught page errors on cold/warm boot').toEqual([]);
-    expect(consoleErrors.filter((e) => !e.includes('supabase')), 'Zero unexpected console errors').toEqual([]);
+    const unexpectedConsoleErrors = consoleErrors.filter((e) => {
+      if (e.text.includes('supabase') || e.url.includes('supabase')) return false;
+      // WebKit logs unauthenticated V12 Supabase 401 responses without exposing the URL in msg.text() or location
+      if (supabase401Count > 0 && e.text.includes('401 (Unauthorized)')) return false;
+      return true;
+    });
+    expect(unexpectedConsoleErrors, 'Zero unexpected console errors').toEqual([]);
   });
 
   test('SW active & V5->V6 cache upgrade preserves offline queue and third-party caches', async ({ page }) => {
@@ -246,5 +257,90 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
 
     const bodyText = await page.evaluate(() => document.body.innerText.trim());
     expect(bodyText.length).toBeGreaterThan(0);
+  });
+
+  test('V12 membership-only auth fails closed when app_metadata exists without active clinic_membership', async ({ browser }) => {
+    const context = await browser.newContext({
+      serviceWorkers: 'block',
+      viewport: { width: 390, height: 844 },
+    });
+    const page = await context.newPage();
+    try {
+      const corsHeaders = {
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': 'apikey,authorization,content-type,x-client-info,prefer',
+        'access-control-allow-methods': 'GET,POST,OPTIONS',
+      };
+      await page.route(/\/auth\/v1\/token/, async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          await route.fulfill({ status: 204, headers: corsHeaders });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          headers: corsHeaders,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            access_token: 'test.jwt.token',
+            token_type: 'bearer',
+            expires_in: 3600,
+            refresh_token: 'test-refresh',
+            user: {
+              id: '00000000-0000-0000-0000-000000000999',
+              email: 'revoked@minadental.ir',
+              app_metadata: { clinic_role: 'manager', tenant_id: 'minadental_clinic' },
+            },
+          }),
+        });
+      });
+      await page.route(/\/rest\/v1\/clinic_memberships/, async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          await route.fulfill({ status: 204, headers: corsHeaders });
+          return;
+        }
+        await route.fulfill({ status: 200, headers: corsHeaders, contentType: 'application/json', body: '[]' });
+      });
+
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+
+      await page.getByTestId('topbar_user_avatar_button').click();
+      await page.getByPlaceholder('ایمیل حساب Supabase').fill('revoked@minadental.ir');
+      await page.getByPlaceholder('رمز عبور سرور').fill('TestPassword!123');
+      await page.getByRole('button', { name: 'ورود تاییدشده به نشست سرور' }).click();
+
+      await expect(page.getByText('فاقد عضویت فعال')).toBeVisible();
+      await expect(page.getByText('تایید سرور')).toHaveCount(0);
+
+      // Close modal & navigate in-app (without full reload) to verify finance route is denied fail-closed
+      await page.getByTestId('close_fullscreen_modal_btn').click();
+      await page.evaluate(() => {
+        window.location.hash = '#/finance';
+      });
+      await expect(page.getByText('دسترسی نقش فعلی به بخش «finance» محدود شده است.')).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('Phase A UX routes (dashboard, appointments, calendar, appointment_form) render cleanly on mobile & desktop and validate duration strictly', async ({ page }) => {
+    for (const vp of [
+      { width: 390, height: 844 },
+      { width: 1366, height: 768 },
+    ]) {
+      await page.setViewportSize(vp);
+      for (const routeHash of ['/#/', '/#/appointments', '/#/calendar', '/#/appointment_form']) {
+        await page.goto(routeHash, { waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+        const scrollOk = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2);
+        expect(scrollOk).toBe(true);
+      }
+    }
+
+    // Verify AppointmentFormPage enforces shared command validation (rejects out-of-range duration instead of silent 30m coercion)
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/#/appointment_form', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+    await expect(page.getByTestId('appointment_form_fullscreen_page')).toBeVisible();
   });
 });

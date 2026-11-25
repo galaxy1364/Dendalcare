@@ -24,6 +24,8 @@ export const CLINIC_UNITS = [
 export const APPOINTMENT_STATUS: Record<string, { label: string; color: string; bg: string }> = {
   scheduled: { label: 'در انتظار', color: '#F59E0B', bg: '#FEF3C7' },
   confirmed: { label: 'تاییدشده', color: '#10B981', bg: '#D1FAE5' },
+  arrived: { label: 'حاضر در مطب', color: '#087C76', bg: '#E6F4F3' },
+  waiting: { label: 'در سالن انتظار', color: '#D97706', bg: '#FEF3C7' },
   in_progress: { label: 'در حال انجام', color: '#3B82F6', bg: '#DBEAFE' },
   completed: { label: 'تکمیل', color: '#22C55E', bg: '#DCFCE7' },
   cancelled: { label: 'لغو', color: '#EF4444', bg: '#FEE2E2' },

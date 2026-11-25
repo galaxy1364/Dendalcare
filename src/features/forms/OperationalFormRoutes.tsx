@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CalendarPlus, CheckCircle2, FilePlus2, Stethoscope } from 'lucide-react';
-import { supabase, type Patient } from '@/lib/supabase';
+import { supabase, type Appointment, type Patient } from '@/lib/supabase';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { getMutationOutcome } from '@/lib/supabaseGuardian';
 import { todayGregorian } from '@/lib/jalali';
+import { CLINIC_UNITS } from '@/lib/appointments';
+import { saveAppointmentCommand } from '@/features/appointments/appointmentCommandService';
 import { ACTIVE_TENANT_ID, getActiveBranchId } from '@/services/authentication/authService';
 import { HapticEngine } from '@/platform/haptics';
 import { clearRouteDraft, getRouteDraft, saveRouteDraft, useNavigation } from '@/navigation/NavigationStack';
@@ -219,8 +221,12 @@ export function PatientFormPage() {
 
 export function AppointmentFormPage() {
   const { goBack, navigate } = useNavigation();
-  const { showSyncToast, currentUser } = useClinicShell();
+  const { showSyncToast, currentUser, effectiveRole } = useClinicShell();
   const { data: patients } = useRealtimeTable<Patient>('patients', 'id,first_name,last_name,phone');
+  const { data: appointments } = useRealtimeTable<Appointment>(
+    'appointments',
+    'id,patient_id,staff_id,appointment_date,appointment_time,duration_min,room,status'
+  );
 
   const draft = getRouteDraft<Record<string, string>>('appointment_form');
   const [patientId, setPatientId] = useState(draft?.patientId ?? '');
@@ -229,6 +235,7 @@ export function AppointmentFormPage() {
   const [time, setTime] = useState(draft?.time ?? '17:00');
   const [duration, setDuration] = useState(draft?.duration ?? '30');
   const [type, setType] = useState(draft?.type ?? 'checkup');
+  const [room, setRoom] = useState(draft?.room ?? CLINIC_UNITS[0].value);
   const [notes, setNotes] = useState(draft?.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -242,8 +249,8 @@ export function AppointmentFormPage() {
   );
 
   useEffect(() => {
-    saveRouteDraft('appointment_form', { patientId, title, date, time, duration, type, notes });
-  }, [patientId, title, date, time, duration, type, notes]);
+    saveRouteDraft('appointment_form', { patientId, title, date, time, duration, type, room, notes });
+  }, [patientId, title, date, time, duration, type, room, notes]);
 
   const handleRequestCancel = () => {
     if (isDirty) {
@@ -255,33 +262,37 @@ export function AppointmentFormPage() {
   };
 
   const handleSave = async () => {
-    if (!title.trim() || !date) {
-      setErrorMsg('عنوان نوبت و تاریخ الزامی است.');
+    if (!title.trim()) {
+      setErrorMsg('عنوان نوبت الزامی است.');
       HapticEngine.warning();
       return;
     }
     setSaving(true);
     setErrorMsg(null);
-    const res = await supabase.from('appointments').insert({
-      tenant_id: currentUser.tenantId || ACTIVE_TENANT_ID,
-      branch_id: getActiveBranchId(),
-      patient_id: patientId || null,
-      title: title.trim(),
-      appointment_date: date,
-      appointment_time: time,
-      duration_min: Math.max(10, Number(duration) || 30),
-      type,
-      status: 'confirmed',
-      notes: notes.trim() || null,
+    const cmd = await saveAppointmentCommand({
+      actorRole: effectiveRole,
+      existingAppointments: appointments,
+      draft: {
+        tenant_id: currentUser.tenantId || ACTIVE_TENANT_ID,
+        branch_id: getActiveBranchId(),
+        patient_id: patientId,
+        title: title.trim(),
+        appointment_date: date,
+        appointment_time: time,
+        duration_min: duration,
+        type,
+        status: 'confirmed',
+        room,
+        notes: notes.trim() || null,
+      },
     });
     setSaving(false);
-    const outcome = getMutationOutcome(res);
-    if (outcome === 'error') {
+    if (!cmd.ok) {
       HapticEngine.error();
-      setErrorMsg(res.error?.message || 'خطا در ثبت نوبت');
+      setErrorMsg(cmd.errorMessage || 'خطا در ثبت نوبت');
       return;
     }
-    if (outcome === 'confirmed') {
+    if (cmd.outcome === 'confirmed') {
       HapticEngine.success();
       showSyncToast('نوبت بیمار با موفقیت در سرور ثبت شد', 3200);
     } else {
@@ -305,7 +316,7 @@ export function AppointmentFormPage() {
           </div>
         </div>
 
-        <Field label="انتخاب بیمار">
+        <Field label="انتخاب بیمار *">
           <Select
             value={patientId}
             onChange={(e) => setPatientId(e.target.value)}
@@ -336,6 +347,13 @@ export function AppointmentFormPage() {
               ]}
             />
           </Field>
+          <Field label="یونیت / اتاق درمان">
+            <Select
+              value={room}
+              onChange={(e) => setRoom(e.target.value)}
+              options={CLINIC_UNITS}
+            />
+          </Field>
           <Field label="تاریخ شمسی">
             <JalaliDatePicker value={date} onChange={setDate} />
           </Field>
@@ -344,7 +362,7 @@ export function AppointmentFormPage() {
               <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="font-mono" />
             </Field>
             <Field label="مدت (دقیقه)">
-              <Input type="number" value={duration} onChange={(e) => setDuration(e.target.value)} className="font-mono" />
+              <Input type="number" min={5} max={480} value={duration} onChange={(e) => setDuration(e.target.value)} className="font-mono" />
             </Field>
           </div>
         </div>
