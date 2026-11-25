@@ -1,0 +1,174 @@
+name: MinaDental V7 Verified Release Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Target release channel (staging first, then stable)'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - stable
+      release_sequence:
+        description: 'Monotonic release sequence override (optional; defaults to 65 + github.run_number)'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: minadental-release-${{ inputs.channel || 'staging' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-verify-and-package:
+    name: Deterministic Build, Secret Scan, SBOM & SHA-256 Asset Graph Gate
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.meta.outputs.release_id }}
+      release_sequence: ${{ steps.meta.outputs.release_sequence }}
+      semver: ${{ steps.meta.outputs.semver }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Clean dependency install
+        run: npm ci
+
+      - name: Secret & private-key leak scan
+        run: |
+          if grep -rnE "BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|service_role|SUPABASE_SERVICE_ROLE_KEY\s*=\s*['\"][^'\"]+['\"]" src/ public/ index.html; then
+            echo "ERROR: Potential secret or private key detected in client source!"
+            exit 1
+          fi
+
+      - name: Compute CI monotonic release sequence
+        id: seq
+        run: |
+          BASE_SEQ=65
+          INPUT_SEQ="${{ inputs.release_sequence }}"
+          if [ -n "$INPUT_SEQ" ]; then
+            SEQ="$INPUT_SEQ"
+          else
+            SEQ=$((BASE_SEQ + GITHUB_RUN_NUMBER))
+          fi
+          echo "value=$SEQ" >> "$GITHUB_OUTPUT"
+          echo "MINA_RELEASE_SEQUENCE=$SEQ"
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Deterministic production build with CI release identity
+        env:
+          MINA_RELEASE_SEQUENCE: ${{ steps.seq.outputs.value }}
+          MINA_RELEASE_CHANNEL: ${{ inputs.channel }}
+          MINA_GIT_COMMIT: ${{ github.sha }}
+        run: npm run build
+
+      - name: Stage immutable versioned release directory BEFORE pointer update
+        id: meta
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const manifest = JSON.parse(fs.readFileSync("dist/release-manifest.json", "utf8"));
+            const relDir = path.join("dist", "releases", manifest.releaseId);
+            fs.mkdirSync(relDir, { recursive: true });
+            fs.copyFileSync("dist/release-manifest.json", path.join(relDir, "release-manifest.json"));
+            const out = process.env.GITHUB_OUTPUT;
+            fs.appendFileSync(out, `release_id=${manifest.releaseId}\n`);
+            fs.appendFileSync(out, `release_sequence=${manifest.releaseSequence}\n`);
+            fs.appendFileSync(out, `semver=${manifest.semver}\n`);
+          '
+
+      - name: Generate dependency SBOM & audit report
+        run: |
+          npm sbom --sbom-format=cyclonedx > dist/sbom.cdx.json || npm ls --all --json > dist/sbom-fallback.json
+
+      - name: Verify inline JS syntax, asset graph, and SHA-256 manifest integrity
+        run: npm run verify:assets
+
+      - name: Run Audit + V4 + V5 + V7 Verified Update Engine tests
+        run: npm test
+
+      - name: Install Playwright browsers & run release gate E2E
+        run: |
+          npx playwright install --with-deps chromium webkit
+          npm run test:e2e
+
+      - name: Upload verified immutable release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: minadental-release-${{ steps.meta.outputs.release_id }}
+          path: |
+            dist/
+            gh-pages-dist/
+          retention-days: 30
+
+  staging-promotion-and-health-gate:
+    name: Staging Deployment & Health Verification
+    runs-on: ubuntu-latest
+    needs: build-verify-and-package
+    environment:
+      name: staging
+    steps:
+      - name: Download verified release bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: minadental-release-${{ needs.build-verify-and-package.outputs.release_id }}
+          path: release-bundle
+
+      - name: Verify staged pointer and manifest coherence before promotion
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const assert = require("node:assert/strict");
+            const pointer = JSON.parse(fs.readFileSync("release-bundle/dist/release-pointer.json", "utf8"));
+            const manifest = JSON.parse(fs.readFileSync("release-bundle/dist/release-manifest.json", "utf8"));
+            assert.equal(pointer.schemaVersion, 2);
+            assert.equal(manifest.schemaVersion, 2);
+            assert.equal(pointer.currentReleaseId, manifest.releaseId);
+            assert.equal(pointer.releaseSequence, manifest.releaseSequence);
+            console.log("Staging health gate passed:", manifest.releaseId, "seq #" + manifest.releaseSequence);
+          '
+
+  production-promotion:
+    name: Production Promotion (Manual Environment Approval Required)
+    runs-on: ubuntu-latest
+    needs:
+      - build-verify-and-package
+      - staging-promotion-and-health-gate
+    if: ${{ inputs.channel == 'stable' }}
+    environment:
+      name: production
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download verified release bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: minadental-release-${{ needs.build-verify-and-package.outputs.release_id }}
+          path: release-bundle
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact (versioned assets + pointer published atomically)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: release-bundle/dist
+
+      - name: Deploy verified release to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

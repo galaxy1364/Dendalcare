@@ -42,10 +42,9 @@ import {
 import { MemPalace } from '@/lib/memPalace';
 import {
   applyAppUpdateAtomically,
-  checkForAppUpdates,
-  getInstalledReleaseInfo,
-  isAutoUpdateEnabled,
+  updateCoordinator,
   type AtomicUpdateProgress,
+  type UpdateSnapshot,
 } from '@/lib/updateManager';
 import { activateCloudSqlAndGoogleDrive } from '@/lib/integrationsEngine';
 import { clearOfflineQueue, getOfflineQueue, processOfflineQueue } from '@/lib/offlineQueue';
@@ -150,11 +149,15 @@ interface ClinicShellContextValue {
   flushOfflineQueue: () => Promise<void>;
   clearQueue: () => void;
 
+  updateSnapshot: UpdateSnapshot;
   updateAvailable: boolean;
-  otaUpdateInfo: { version: string; build?: number; releaseNotes: string; publishedBy: string } | null;
+  otaUpdateInfo: { version: string; build?: number; releaseId?: string; releaseNotes: string; publishedBy: string } | null;
   installingUpdate: boolean;
   atomicProgress: AtomicUpdateProgress | null;
-  applyUpdate: (v?: string, b?: number, notes?: string) => Promise<void>;
+  applyUpdate: (forceEvenIfBusy?: boolean) => Promise<void>;
+  deferUpdate: (minutes?: number) => void;
+  checkUpdatesNow: () => Promise<void>;
+  openNativeUpdateStore: () => void;
 
   liveSyncToast: string | null;
   showSyncToast: (msg: string, ms?: number) => void;
@@ -255,14 +258,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [offlineQueueCount, setOfflineQueueCount] = useState(() => getOfflineQueue().length);
   const [flushingQueue, setFlushingQueue] = useState(false);
 
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [otaUpdateInfo, setOtaUpdateInfo] = useState<{
-    version: string;
-    build?: number;
-    releaseNotes: string;
-    publishedBy: string;
-  } | null>(null);
-  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [updateSnapshot, setUpdateSnapshot] = useState<UpdateSnapshot>(() =>
+    updateCoordinator.getSnapshot()
+  );
   const [atomicProgress, setAtomicProgress] = useState<AtomicUpdateProgress | null>(null);
 
   const [liveSyncToast, setLiveSyncToast] = useState<string | null>(null);
@@ -333,18 +331,18 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
     purgeExpiredVaultMirrors().catch(() => {});
 
-    const onSwUpdateAvailable = (ev: Event) => {
-      const detail = (ev as CustomEvent)?.detail;
-      const installed = getInstalledReleaseInfo();
-      setOtaUpdateInfo({
-        version: detail?.buildId || installed.version,
-        build: installed.build + 1,
-        releaseNotes: 'نسخه جدید پوسته سامانه دریافت شد و آماده فعال‌سازی کنترل‌شده است.',
-        publishedBy: 'سامانه بروزرسانی مینادنتال',
-      });
-      setUpdateAvailable(true);
-    };
-    window.addEventListener('minadental:sw-update-available', onSwUpdateAvailable);
+    // V7 Single UpdateCoordinator: starts strictly AFTER post-commit shell handshake
+    const unsubUpdate = updateCoordinator.subscribe((snap) => {
+      setUpdateSnapshot(snap);
+      if (snap.state === 'INSTALLED') {
+        HapticEngine.success();
+        showSyncToast(
+          `نسخه v${snap.installed.semver} (${snap.installed.releaseId}) پس از تأیید بوت با موفقیت فعال شد`,
+          4500
+        );
+      }
+    });
+    const stopUpdateCoordinator = updateCoordinator.start();
 
     MemPalace.recordAudit({
       traceId: 'TRC-MINA-CORE-9001-A',
@@ -356,7 +354,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      window.removeEventListener('minadental:sw-update-available', onSwUpdateAvailable);
+      unsubUpdate();
+      stopUpdateCoordinator();
       cleanupAppearance();
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     };
@@ -530,42 +529,75 @@ export function AppProviders({ children }: { children: ReactNode }) {
     syncSmartAlertsToDeviceNotifications(unifiedGlobalAlerts).catch(() => {});
   }, [deviceNotifOn, unifiedGlobalAlerts]);
 
-  const applyUpdate = useCallback(
-    async (targetVersionOverride?: string, targetBuildOverride?: number, releaseNotesOverride?: string) => {
-      if (installingUpdate) return;
-      setInstallingUpdate(true);
-      try {
-        const installed = getInstalledReleaseInfo();
-        const targetBuild = targetBuildOverride || otaUpdateInfo?.build || installed.build + 1;
-        const targetVersion = targetVersionOverride || otaUpdateInfo?.version || `6.6.${targetBuild}`;
-        const releaseNotes =
-          releaseNotesOverride ||
-          otaUpdateInfo?.releaseNotes ||
-          `ارتقای اتمیک به نسخه ${targetVersion} (Build #${targetBuild})`;
+  const installingUpdate =
+    updateSnapshot.state === 'DOWNLOADING' ||
+    updateSnapshot.state === 'VERIFYING' ||
+    updateSnapshot.state === 'ACTIVATING';
 
-        const upgraded = await applyAppUpdateAtomically({
-          targetVersion,
-          targetBuild,
-          releaseNotes,
-          reloadPage: false,
+  const updateAvailable = Boolean(
+    updateSnapshot.candidate &&
+      (updateSnapshot.state === 'AVAILABLE' ||
+        updateSnapshot.state === 'DOWNLOADING' ||
+        updateSnapshot.state === 'VERIFYING' ||
+        updateSnapshot.state === 'READY_TO_ACTIVATE' ||
+        updateSnapshot.state === 'WAITING_FOR_SAFE_POINT' ||
+        updateSnapshot.state === 'NATIVE_STORE_REQUIRED')
+  );
+
+  const otaUpdateInfo = useMemo(() => {
+    if (!updateSnapshot.candidate) return null;
+    const m = updateSnapshot.candidate.manifest;
+    return {
+      version: m.semver,
+      build: m.releaseSequence,
+      releaseId: m.releaseId,
+      releaseNotes: m.releaseNotes,
+      publishedBy: m.origin === 'ci_pipeline' ? 'انتشار رسمی مینادنتال' : 'بیلد محلی',
+    };
+  }, [updateSnapshot.candidate]);
+
+  const applyUpdate = useCallback(
+    async (forceEvenIfBusy = false) => {
+      try {
+        const snap = await applyAppUpdateAtomically({
+          forceEvenIfBusy,
+          reloadPage: true,
           onProgress: (p) => setAtomicProgress(p),
         });
-
-        HapticEngine.success();
-        setUpdateAvailable(false);
-        setOtaUpdateInfo(null);
-        showSyncToast(`بیلد #${upgraded.build} (${upgraded.version}) با موفقیت نصب و قفل شد`, 4000);
+        if (snap.state === 'FAILED' || snap.state === 'CHECK_FAILED') {
+          HapticEngine.error();
+          if (snap.error?.messageFa) {
+            showSyncToast(snap.error.messageFa, 4500);
+          }
+        } else if (snap.state === 'WAITING_FOR_SAFE_POINT') {
+          HapticEngine.warning();
+          showSyncToast(
+            'به‌روزرسانی تأیید شد و پس از تکمیل فرم‌ها و ارسال صف آفلاین فعال می‌شود.',
+            4200
+          );
+        }
       } catch {
         HapticEngine.error();
       } finally {
-        setInstallingUpdate(false);
-        setTimeout(() => setAtomicProgress(null), 1500);
+        setTimeout(() => setAtomicProgress(null), 1200);
       }
     },
-    [installingUpdate, otaUpdateInfo, showSyncToast]
+    [showSyncToast]
   );
 
-  // Cloud SQL & Real-Time Sync Channel
+  const deferUpdate = useCallback((minutes = 30) => {
+    updateCoordinator.deferCandidate(minutes);
+  }, []);
+
+  const checkUpdatesNow = useCallback(async () => {
+    await updateCoordinator.checkForUpdates('manual');
+  }, []);
+
+  const openNativeUpdateStore = useCallback(() => {
+    updateCoordinator.openNativeStoreAction();
+  }, []);
+
+  // Cloud SQL & Real-Time Sync Channel (Realtime OTA events are HINT-ONLY — never release authority)
   useEffect(() => {
     activateCloudSqlAndGoogleDrive(currentUser.email || 'mehdi.amiri19851364@gmail.com').catch(() => {});
 
@@ -584,72 +616,25 @@ export function AppProviders({ children }: { children: ReactNode }) {
         }
       },
       onOtaUpdate: (ota) => {
-        const installed = getInstalledReleaseInfo();
-        const incomingBuild = Number((ota as { build?: number }).build || installed.build + 1);
-        if (ota.version && (incomingBuild > installed.build || ota.version !== installed.version)) {
-          const nextInfo = {
-            version: ota.version,
-            build: incomingBuild,
-            releaseNotes: ota.releaseNotes,
-            publishedBy: ota.publishedBy || 'مدیریت کلینیک',
-          };
-          setOtaUpdateInfo(nextInfo);
-          setUpdateAvailable(true);
-          if (isAutoUpdateEnabled()) {
-            void applyUpdate(nextInfo.version, nextInfo.build, nextInfo.releaseNotes);
-          } else {
-            showSyncToast(`بیلد جدید (#${incomingBuild} • ${ota.version}) آماده نصب است`);
-          }
+        let parsedReleaseId: string | undefined;
+        try {
+          const parsed = JSON.parse(ota.releaseNotes || '{}') as { releaseId?: string };
+          parsedReleaseId = parsed.releaseId;
+        } catch {
+          parsedReleaseId = (ota as { releaseId?: string }).releaseId;
         }
+        // Strictly treat Realtime push as an untrusted hint; coordinator validates releaseId & fetches manifest
+        void updateCoordinator.handleRealtimeHint({
+          releaseId: parsedReleaseId,
+          version: ota.version,
+        });
       },
       onPresenceChange: (onlineUsers) => {
         setOnlinePeersCount(Math.max(1, onlineUsers.length));
       },
     });
     return cleanup;
-  }, [currentUser.fullName, currentUser.name, currentUser.email, applyUpdate, showSyncToast]);
-
-  // Periodic Update Check
-  useEffect(() => {
-    const onReleaseUpgraded = () => {
-      setUpdateAvailable(false);
-      setOtaUpdateInfo(null);
-      setInstallingUpdate(false);
-      setAtomicProgress(null);
-    };
-    window.addEventListener('minadental-release-upgraded', onReleaseUpgraded);
-
-    const runCheck = async () => {
-      try {
-        const installed = getInstalledReleaseInfo();
-        const res = await checkForAppUpdates();
-        if (res.updateAvailable && res.latestBuild > installed.build) {
-          const nextInfo = {
-            version: res.latestVersion,
-            build: res.latestBuild,
-            releaseNotes: res.releaseNotes,
-            publishedBy: 'مدیریت کلینیک',
-          };
-          setOtaUpdateInfo(nextInfo);
-          setUpdateAvailable(true);
-          if (isAutoUpdateEnabled()) {
-            void applyUpdate(nextInfo.version, nextInfo.build, nextInfo.releaseNotes);
-          }
-        } else {
-          setUpdateAvailable(false);
-        }
-      } catch {
-        // ignore
-      }
-    };
-
-    void runCheck();
-    const checkTimer = setInterval(runCheck, 30000);
-    return () => {
-      clearInterval(checkTimer);
-      window.removeEventListener('minadental-release-upgraded', onReleaseUpgraded);
-    };
-  }, [applyUpdate]);
+  }, [currentUser.fullName, currentUser.name, currentUser.email, showSyncToast]);
 
   // Guardian Toasts, Offline Queue & Table Workflow Popups
   useEffect(() => {
@@ -1031,11 +1016,15 @@ export function AppProviders({ children }: { children: ReactNode }) {
     flushingQueue,
     flushOfflineQueue,
     clearQueue,
+    updateSnapshot,
     updateAvailable,
     otaUpdateInfo,
     installingUpdate,
     atomicProgress,
     applyUpdate,
+    deferUpdate,
+    checkUpdatesNow,
+    openNativeUpdateStore,
     liveSyncToast,
     showSyncToast,
     guardianToast,

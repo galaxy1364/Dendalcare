@@ -1,6 +1,6 @@
 // MinaDental Unified Service Worker (V6 Boot Hotfix)
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
-const BUILD_ID = "v4.9.5-3f9fda3e19";
+const BUILD_ID = "v4.9.6-da2fb3a244";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
@@ -9,15 +9,15 @@ const NAVIGATION_TIMEOUT_MS = 4500;
 const CRITICAL_PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-LBKdRReX.js",
-  "./assets/index-CaXE2HbZ.css"
+  "./assets/index-CMSV-C2I.js",
+  "./assets/index-GiHbXGuz.css"
 ];
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-LBKdRReX.js",
-  "./assets/index-CaXE2HbZ.css",
+  "./assets/index-CMSV-C2I.js",
+  "./assets/index-GiHbXGuz.css",
   "./manifest.json",
   "./favicon.svg",
   "./logo.png",
@@ -179,33 +179,42 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate: prune ONLY obsolete minadental-* caches (strict namespace isolation)
+// Activate: keep current cache intact; obsolete minadental-shell-* caches are pruned
+// safely ONLY when no open client depends on them (or on explicit PRUNE_OBSOLETE_CACHES after boot verify).
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys.map((key) => {
-            if (isMinadentalCacheKey(key) && key !== CACHE_NAME) {
-              return caches.delete(key);
-            }
-            return Promise.resolve(false);
-          })
-        )
-      )
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil(self.clients.claim());
 });
 
-// Controlled update activation via explicit client message
+async function pruneObsoleteMinadentalCaches(keepBuildId) {
+  const keepCacheName = CACHE_PREFIX + (keepBuildId || RESOLVED_BUILD_ID);
+  const keys = await caches.keys();
+  await Promise.all(
+    keys.map((key) => {
+      if (isMinadentalCacheKey(key) && key !== CACHE_NAME && key !== keepCacheName) {
+        return caches.delete(key);
+      }
+      return Promise.resolve(false);
+    })
+  );
+}
+
+// Controlled update activation & post-boot cache cleanup via UpdateCoordinator messages
 self.addEventListener('message', (event) => {
   const data = event.data;
   if (!data || typeof data !== 'object') return;
   if (data.type === 'SKIP_WAITING' || data.type === 'FORCE_UPDATE') {
+    if (data.targetReleaseId && data.targetReleaseId !== RESOLVED_BUILD_ID && RESOLVED_BUILD_ID !== 'dev-local') {
+      return;
+    }
     self.skipWaiting();
+  } else if (data.type === 'PRUNE_OBSOLETE_CACHES') {
+    event.waitUntil(pruneObsoleteMinadentalCaches(data.activeBuildId));
   } else if (data.type === 'GET_BUILD_ID' && event.ports && event.ports[0]) {
-    event.ports[0].postMessage({ buildId: RESOLVED_BUILD_ID, cacheName: CACHE_NAME });
+    event.ports[0].postMessage({
+      buildId: RESOLVED_BUILD_ID,
+      cacheName: CACHE_NAME,
+      criticalAssets: CRITICAL_PRECACHE_ASSETS,
+    });
   }
 });
 
@@ -224,8 +233,14 @@ async function handleNavigationRequest(request, url) {
       NAVIGATION_TIMEOUT_MS
     );
     if (isCacheableResponse(request, networkResponse, url.pathname)) {
-      const clone = networkResponse.clone();
-      caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', clone)).catch(() => {});
+      const htmlProbe = await networkResponse.clone().text().catch(() => '');
+      const metaMatch = htmlProbe.match(/<meta\s+name="minadental-build-id"\s+content="([^"]+)"/i);
+      const responseBuildId = metaMatch ? metaMatch[1] : null;
+      // V7: NEVER cache a navigation HTML belonging to a DIFFERENT release into this worker's cache
+      if (!responseBuildId || RESOLVED_BUILD_ID === 'dev-local' || responseBuildId === RESOLVED_BUILD_ID) {
+        const clone = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', clone)).catch(() => {});
+      }
     }
     return networkResponse;
   } catch {
@@ -278,8 +293,10 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (isSensitiveOrApiPath(url.pathname)) return;
 
-  // Never cache mutable release manifests
+  // Never cache mutable release pointers or manifests
   if (
+    url.pathname.endsWith('release-pointer.json') ||
+    url.pathname.endsWith('release-manifest.json') ||
     url.pathname.endsWith('version.json') ||
     url.pathname.endsWith('build-manifest.json') ||
     url.pathname.endsWith('chunks.json')

@@ -2,6 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 
@@ -269,11 +270,21 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
     assert.ok(!indexHtml.includes('src/main.tsx'), `[${label}] Built index.html must NOT execute raw src/main.tsx`);
     assert.ok(!indexHtml.includes('gh-pages-dist/app.js'), `[${label}] Built index.html must NOT inject deprecated gh-pages-dist/app.js`);
     assert.ok(!indexHtml.includes('__MINA_BUILD_ID'), `[${label}] Unresolved __MINA_BUILD_ID placeholder found in index.html`);
+    assert.ok(!indexHtml.includes('__MINA_RELEASE_SEQ'), `[${label}] Unresolved __MINA_RELEASE_SEQ placeholder found in index.html`);
+    assert.ok(!indexHtml.includes('__MINA_SEMVER'), `[${label}] Unresolved __MINA_SEMVER placeholder found in index.html`);
 
     const buildIdMatch = indexHtml.match(/<meta\s+name="minadental-build-id"\s+content="([^"]+)"/i);
     assert.ok(buildIdMatch && buildIdMatch[1], `[${label}] index.html missing stamped minadental-build-id`);
     const htmlBuildId = buildIdMatch[1];
     assert.match(htmlBuildId, BUILD_ID_PATTERN, `[${label}] Invalid BUILD_ID format: ${htmlBuildId}`);
+
+    const seqMatch = indexHtml.match(/<meta\s+name="minadental-release-seq"\s+content="([^"]+)"/i);
+    assert.ok(seqMatch && /^\d+$/.test(seqMatch[1]) && Number(seqMatch[1]) > 0, `[${label}] index.html missing valid minadental-release-seq`);
+    const htmlReleaseSeq = Number(seqMatch[1]);
+
+    const semverMatch = indexHtml.match(/<meta\s+name="minadental-semver"\s+content="([^"]+)"/i);
+    assert.ok(semverMatch && /^\d+\.\d+\.\d+$/.test(semverMatch[1]), `[${label}] index.html missing valid minadental-semver`);
+    const htmlSemver = semverMatch[1];
 
     // Regression guard for V6 P0 bug: window.<buildId> = buildId MUST NEVER happen
     assert.ok(
@@ -285,12 +296,52 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
       `[${label}] Corrupted JS syntax detected: window.${htmlBuildId}`
     );
 
-    // 2. Verify coherent BUILD_ID across version.json, build-manifest.json, chunks.json, and sw.js
+    // 2. Verify coherent V7 release-pointer.json & release-manifest.json (Schema v2 + per-file SHA-256)
+    const pointerUrl = new URL('release-pointer.json', baseUrl).toString();
+    const pointerRes = await fetch(pointerUrl);
+    assert.equal(pointerRes.status, 200, `[${label}] release-pointer.json must return HTTP 200`);
+    assertValidMime(pointerUrl, pointerRes.headers.get('content-type'));
+    const pointerJson = await pointerRes.json();
+    assert.equal(pointerJson.schemaVersion, 2, `[${label}] release-pointer.json schemaVersion must be 2`);
+    assert.equal(pointerJson.currentReleaseId, htmlBuildId, `[${label}] release-pointer.json currentReleaseId must match index.html`);
+    assert.equal(pointerJson.releaseSequence, htmlReleaseSeq, `[${label}] release-pointer.json releaseSequence must match index.html`);
+
+    const releaseManifestUrl = new URL(pointerJson.manifestUrl || 'release-manifest.json', pointerUrl).toString();
+    const releaseManifestRes = await fetch(releaseManifestUrl);
+    assert.equal(releaseManifestRes.status, 200, `[${label}] release-manifest.json must return HTTP 200`);
+    assertValidMime(releaseManifestUrl, releaseManifestRes.headers.get('content-type'));
+    const releaseManifest = await releaseManifestRes.json();
+    assert.equal(releaseManifest.schemaVersion, 2, `[${label}] release-manifest.json schemaVersion must be 2`);
+    assert.equal(releaseManifest.releaseId, htmlBuildId, `[${label}] release-manifest.json releaseId must match index.html`);
+    assert.equal(releaseManifest.releaseSequence, htmlReleaseSeq, `[${label}] release-manifest.json releaseSequence must match index.html`);
+    assert.equal(releaseManifest.semver, htmlSemver, `[${label}] release-manifest.json semver must match index.html`);
+    assert.ok(Array.isArray(releaseManifest.assets) && releaseManifest.assets.length > 0, `[${label}] release-manifest.json must list hashed assets`);
+    assert.ok(releaseManifest.rollbackPolicy && releaseManifest.rollbackPolicy.strategy === 'forward_release', `[${label}] release-manifest.json missing valid rollbackPolicy`);
+
+    let verifiedManifestAssets = 0;
+    for (const entry of releaseManifest.assets) {
+      assert.ok(!String(entry.path).includes('aistudio'), `[${label}] release-manifest.json leaked aistudio asset: ${entry.path}`);
+      assert.match(String(entry.sha256 || ''), /^[a-f0-9]{64}$/, `[${label}] Invalid SHA-256 in release-manifest.json for ${entry.path}`);
+      const assetHttpUrl = new URL(entry.path, releaseManifestUrl).toString();
+      const assetRes = await fetch(assetHttpUrl);
+      assert.equal(assetRes.status, 200, `[${label}] Manifest asset HTTP error: ${entry.path} -> ${assetRes.status}`);
+      assertValidMime(assetHttpUrl, assetRes.headers.get('content-type'));
+      const rawBuf = Buffer.from(await assetRes.arrayBuffer());
+      assert.equal(rawBuf.byteLength, entry.size, `[${label}] Manifest asset byte size mismatch for ${entry.path}: expected ${entry.size}, got ${rawBuf.byteLength}`);
+      const actualSha = crypto.createHash('sha256').update(rawBuf).digest('hex');
+      assert.equal(actualSha, entry.sha256, `[${label}] Manifest asset SHA-256 mismatch for ${entry.path}`);
+      verifiedManifestAssets += 1;
+    }
+
+    // 2b. Verify coherent BUILD_ID across version.json, build-manifest.json, chunks.json, and sw.js
     const versionRes = await fetch(new URL('version.json', baseUrl));
     assert.equal(versionRes.status, 200, `[${label}] version.json must return HTTP 200`);
     assertValidMime(new URL('version.json', baseUrl).toString(), versionRes.headers.get('content-type'));
     const versionJson = await versionRes.json();
     assert.equal(versionJson.buildId, htmlBuildId, `[${label}] version.json buildId must match index.html`);
+    assert.equal(versionJson.releaseId, htmlBuildId, `[${label}] version.json releaseId must match index.html`);
+    assert.equal(versionJson.releaseSequence, htmlReleaseSeq, `[${label}] version.json releaseSequence must match index.html`);
+    assert.equal(versionJson.semver, htmlSemver, `[${label}] version.json semver must match index.html`);
 
     const manifestBuildRes = await fetch(new URL('build-manifest.json', baseUrl));
     assert.equal(manifestBuildRes.status, 200, `[${label}] build-manifest.json must return HTTP 200`);
@@ -405,8 +456,9 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
     }
 
     console.log(
-      `✔ [${label} @ ${mountPrefix}] Asset graph + ${totalParsedInlineScripts} inline script(s) verified: ${checkedCount} local URLs HTTP 200 with valid MIME (BUILD_ID=${htmlBuildId})`
+      `✔ [${label} @ ${mountPrefix}] Asset graph + ${totalParsedInlineScripts} inline script(s) + ${verifiedManifestAssets} SHA-256 manifest assets verified: ${checkedCount} local URLs HTTP 200 (BUILD_ID=${htmlBuildId}, seq=#${htmlReleaseSeq})`
     );
+    return { releaseId: htmlBuildId, releaseSequence: htmlReleaseSeq, semver: htmlSemver };
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -423,8 +475,23 @@ async function main() {
     targets.push(['android-www', 'app/src/main/assets/www', '/']);
   }
 
+  let referenceRelease = null;
   for (const [label, relDir, mountPrefix] of targets) {
-    await verifyTargetDirectory(label, relDir, mountPrefix);
+    const verified = await verifyTargetDirectory(label, relDir, mountPrefix);
+    if (!referenceRelease) {
+      referenceRelease = verified;
+    } else {
+      assert.equal(
+        verified.releaseId,
+        referenceRelease.releaseId,
+        `Cross-target releaseId mismatch on ${label}@${mountPrefix}: ${verified.releaseId} !== ${referenceRelease.releaseId}`
+      );
+      assert.equal(
+        verified.releaseSequence,
+        referenceRelease.releaseSequence,
+        `Cross-target releaseSequence mismatch on ${label}@${mountPrefix}: ${verified.releaseSequence} !== ${referenceRelease.releaseSequence}`
+      );
+    }
   }
 }
 

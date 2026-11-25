@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "channel": "stable",
+  "platform": "web",
+  "currentReleaseId": "v4.9.6-da2fb3a244",
+  "releaseSequence": 65,
+  "manifestUrl": "./release-manifest.json",
+  "updatedAt": "2026-11-25T10:31:51.270Z",
+  "revokedReleaseIds": [],
+  "minSupportedSequence": 1
+}

@@ -1,6 +1,8 @@
 {
-  "version": "64.0",
-  "build": 64,
-  "timestamp": 1795662800000,
-  "releaseNotes": "نسخه v64.0 (بیلد #64) — رفع ریشه‌ای مشکل کش و گیر کردن بیلد ۶۲ در GitHub Pages (سینک خودکار gh-pages-dist/app.js و app.css)، رفع هم‌پوشانی بنر صف آفلاین با تب‌ها، نصب و فعال‌سازی همزمان ۸ کتابخانه برتر UI (Manus 2.0, daisyUI, HeroUI, Smooth UI, Vengeance UI, Kokonut UI, Skiper UI, Animmaster Lib) و تمام اسکیل‌های پروژه"
+  "version": "4.9.6",
+  "semver": "4.9.6",
+  "build": 65,
+  "releaseSequence": 65,
+  "channel": "stable",
+  "releaseNotes": "نسخه v4.9.6 (انتشار #65) — موتور به‌روزرسانی تأییدشده V7 با مانیفست رسمی، اعتبارسنجی SHA-256/امضا، هماهنگ‌کننده واحد بین‌تبی، حفظ داده‌ها در نقطه امن و بررسی واقعی پس از راه‌اندازی"
 }

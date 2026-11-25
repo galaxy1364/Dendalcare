@@ -35,8 +35,10 @@ import {
   broadcastNewAppBuild,
   getInstalledReleaseInfo,
   applyAppUpdateAtomically,
+  updateCoordinator,
   type AtomicUpdateProgress,
   type InstalledReleaseInfo,
+  type UpdateSnapshot,
 } from '@/lib/updateManager';
 import { activateCloudSqlAndGoogleDrive } from '@/lib/integrationsEngine';
 import { getOfflineQueue, processOfflineQueue, type OfflineMutationItem } from '@/lib/offlineQueue';
@@ -212,6 +214,7 @@ function ClinicSettingsTab({
   const [downloadingApk, setDownloadingApk] = useState(false);
   const [apkDownloadProgress, setApkDownloadProgress] = useState(0);
   const [apk403Alert, setApk403Alert] = useState(false);
+  const [updateSnap, setUpdateSnap] = useState<UpdateSnapshot>(() => updateCoordinator.getSnapshot());
   const [autoUpdate, setAutoUpdate] = useState(isAutoUpdateEnabled());
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installedRelease, setInstalledRelease] = useState<InstalledReleaseInfo>(() => getInstalledReleaseInfo());
@@ -220,19 +223,22 @@ function ClinicSettingsTab({
   const [defsModalOpen, setDefsModalOpen] = useState(false);
 
   useEffect(() => {
-    const onReleaseUpgraded = () => setInstalledRelease(getInstalledReleaseInfo());
-    window.addEventListener('minadental-release-upgraded', onReleaseUpgraded);
-    return () => window.removeEventListener('minadental-release-upgraded', onReleaseUpgraded);
+    const unsub = updateCoordinator.subscribe((snap) => {
+      setUpdateSnap(snap);
+      setInstalledRelease(getInstalledReleaseInfo());
+      setAutoUpdate(snap.autoUpdateEnabled);
+    });
+    return unsub;
   }, []);
 
   const handleToggleAutoUpdate = (enabled: boolean) => {
     setAutoUpdate(enabled);
     setAutoUpdateEnabled(enabled);
     setUpdateMessage({
-      type: 'success',
+      type: 'info',
       text: enabled
-        ? 'بروزرسانی اتوماتیک هوشمند فعال شد؛ بیلدهای جدید به‌صورت خودکار نصب و قفل می‌شوند.'
-        : 'بروزرسانی به حالت دستی تغییر یافت.'
+        ? 'دریافت و فعال‌سازی خودکار فقط در نقطه امن (بدون فرم باز یا صف آفلاین) فعال شد.'
+        : 'به‌روزرسانی خودکار غیرفعال شد؛ بررسی و فعال‌سازی به‌صورت دستی انجام می‌شود.',
     });
   };
 
@@ -242,57 +248,69 @@ function ClinicSettingsTab({
     setAtomicProgress(null);
     try {
       const res = await checkForAppUpdates();
-      const targetBuild = res.updateAvailable ? res.latestBuild : installedRelease.build;
-      const targetVersion = res.updateAvailable ? res.latestVersion : installedRelease.version;
-      const notes = res.updateAvailable
-        ? res.releaseNotes
-        : 'همگام‌سازی هسته، پاکسازی کش قدیمی و تایید آخرین بیلد رسمی';
+      if (res.source === 'offline' || res.source === 'check_failed') {
+        setUpdateMessage({
+          type: 'error',
+          text: res.errorMessage || 'بررسی نسخه جدید ناموفق بود؛ وضعیت شبکه یا سرور انتشار را بررسی کنید.',
+        });
+        return;
+      }
+      if (res.source === 'native_store_required') {
+        setUpdateMessage({
+          type: 'info',
+          text: `نسخه جدید v${res.latestVersion} (#${res.latestBuild}) نیازمند ارتقا از طریق فروشگاه رسمی پلتفرم است.`,
+        });
+        return;
+      }
+      if (!res.updateAvailable) {
+        setUpdateMessage({
+          type: 'success',
+          text: `نسخه در حال اجرا v${res.currentVersion} (${res.currentReleaseId}) با آخرین انتشار معتبر سرور برابر است.`,
+        });
+        return;
+      }
 
-      const upgraded = await applyAppUpdateAtomically({
-        targetVersion,
-        targetBuild,
-        releaseNotes: notes,
-        reloadPage: false,
+      const nextSnap = await applyAppUpdateAtomically({
+        reloadPage: true,
         onProgress: (p) => setAtomicProgress(p),
       });
-      setInstalledRelease(upgraded);
-      setUpdateMessage({
-        type: 'success',
-        text: res.updateAvailable
-          ? `نسخه جدید v${upgraded.version} (بیلد #${upgraded.build}) با موفقیت نصب و در سیستم قفل شد.`
-          : `برنامه شما به آخرین بیلد رسمی #${upgraded.build} (نسخه v${upgraded.version}) مجهز، پاکسازی و قفل است.`,
-      });
+      if (nextSnap.state === 'FAILED' || nextSnap.state === 'CHECK_FAILED') {
+        setUpdateMessage({
+          type: 'error',
+          text: nextSnap.error?.messageFa || 'تأیید یا فعال‌سازی نسخه جدید ناموفق بود.',
+        });
+      } else if (nextSnap.state === 'WAITING_FOR_SAFE_POINT') {
+        setUpdateMessage({
+          type: 'info',
+          text: 'نسخه جدید دریافت و با SHA-256 تأیید شد؛ به محض تکمیل فرم‌های باز یا ارسال صف آفلاین فعال می‌شود.',
+        });
+      } else {
+        setUpdateMessage({
+          type: 'info',
+          text: `نسخه v${res.latestVersion} تأیید شد و در حال ورود به مرحله بازنشانی و اثبات بوت است.`,
+        });
+      }
     } finally {
       setCheckingUpdates(false);
-      setTimeout(() => setAtomicProgress(null), 2200);
+      setTimeout(() => setAtomicProgress(null), 2000);
     }
   };
 
   const handlePublishAndInstallNextBuild = async () => {
     setCheckingUpdates(true);
     setUpdateMessage(null);
-    setAtomicProgress(null);
     try {
-      const nextBuild = installedRelease.build + 1;
-      const nextVersion = `64.${Math.max(0, nextBuild - 64)}`;
-      const notes = `ارتقای سراسری بیلد #${nextBuild} و همگام‌سازی Cloud SQL و Google Drive`;
-
-      await broadcastNewAppBuild(nextVersion, nextBuild, notes);
-      const upgraded = await applyAppUpdateAtomically({
-        targetVersion: nextVersion,
-        targetBuild: nextBuild,
-        releaseNotes: notes,
-        reloadPage: false,
-        onProgress: (p) => setAtomicProgress(p),
-      });
-      setInstalledRelease(upgraded);
+      const result = await broadcastNewAppBuild(
+        installedRelease.version,
+        installedRelease.build,
+        'اعلان بررسی مانیفست رسمی مینادنتال برای دستگاه‌های آنلاین کلینیک'
+      );
       setUpdateMessage({
-        type: 'success',
-        text: `بیلد جدید #${upgraded.build} (نسخه v${upgraded.version}) با موفقیت منتشر، روی این دستگاه نصب و برای تمام کاربران کلینیک ارسال شد.`,
+        type: result.ok ? 'info' : 'error',
+        text: result.message,
       });
     } finally {
       setCheckingUpdates(false);
-      setTimeout(() => setAtomicProgress(null), 2200);
     }
   };
 
@@ -658,7 +676,7 @@ function ClinicSettingsTab({
         </p>
       </div>
 
-      {/* Single Unified World-Class Automatic & Manual Atomic Update Center (60-30-10 Daylight Card) */}
+      {/* Single Verified Release & Update Center (V7 UpdateCoordinator) */}
       <div
         data-testid="settings_unified_update_center"
         className="p-4 rounded-3xl bg-white text-slate-900 border border-slate-200/95 shadow-sm space-y-3"
@@ -667,30 +685,69 @@ function ClinicSettingsTab({
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shadow-sm">
-              <RefreshCw size={20} className={checkingUpdates ? 'animate-spin' : ''} />
+              <RefreshCw size={20} className={checkingUpdates || updateSnap.state === 'CHECKING' ? 'animate-spin' : ''} />
             </div>
             <div>
               <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                مرکز یکپارچه بروزرسانی اتوماتیک و دستی مینادنتال
+                به‌روزرسانی تأییدشده برنامه مینادنتال
               </h3>
               <p className="text-[11px] text-slate-600 font-semibold">
-                نسخه نصب‌شده: <strong className="text-slate-900 font-mono">v{installedRelease.version}</strong> • بیلد فعال: <strong className="text-emerald-700 font-mono" data-testid="installed_build_badge">Build #{installedRelease.build}</strong>
+                نسخه در حال اجرا: <strong className="text-slate-900 font-mono">v{updateSnap.installed.semver}</strong> • انتشار: <strong className="text-emerald-700 font-mono" data-testid="installed_build_badge">#{updateSnap.installed.releaseSequence} ({updateSnap.installed.releaseId})</strong>
               </p>
             </div>
           </div>
           <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-extrabold">
-            Atomic Installer v64
+            {updateSnap.channel.toUpperCase()} • {updateSnap.state}
           </span>
         </div>
 
-        {/* Auto Update Toggle */}
+        {/* Real Status Metadata Grid (Zero Fake Build/Install Dates) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10.5px] bg-white/90 p-2.5 rounded-2xl border border-slate-200">
+          <div>
+            <span className="text-slate-500 block">وضعیت شبکه</span>
+            <strong className={updateSnap.isOnline ? 'text-emerald-700' : 'text-amber-700'}>
+              {updateSnap.isOnline ? 'آنلاین' : 'آفلاین'}
+            </strong>
+          </div>
+          <div>
+            <span className="text-slate-500 block">آخرین بررسی</span>
+            <strong className="text-slate-800 font-mono">
+              {updateSnap.lastCheck?.checkedAt
+                ? new Date(updateSnap.lastCheck.checkedAt).toLocaleTimeString('fa-IR')
+                : 'هنوز بررسی نشده'}
+            </strong>
+          </div>
+          <div>
+            <span className="text-slate-500 block">نتیجه آخرین بررسی</span>
+            <strong className="text-slate-800">
+              {updateSnap.lastCheck?.outcome || '—'}
+            </strong>
+          </div>
+          <div>
+            <span className="text-slate-500 block">نسخه آماده</span>
+            <strong className="text-indigo-700 font-mono">
+              {updateSnap.candidate
+                ? `v${updateSnap.candidate.manifest.semver} (#${updateSnap.candidate.manifest.releaseSequence})`
+                : 'ندارد'}
+            </strong>
+          </div>
+        </div>
+
+        {/* Platform Honest Limitation Notice */}
+        {updateSnap.capabilities.honestLimitationFa && (
+          <p className="text-[10.5px] text-slate-600 leading-relaxed bg-white/70 px-3 py-2 rounded-xl border border-slate-200/80">
+            {updateSnap.capabilities.honestLimitationFa}
+          </p>
+        )}
+
+        {/* Auto Update at Safe Point Toggle */}
         <div className="p-3 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-sm">
           <div>
             <span className="text-xs font-extrabold text-slate-900 block">
-              نصب و ارتقای خودکار بیلدهای جدید (Atomic Auto-Update)
+              به‌روزرسانی خودکار در نقطه امن (Safe-Point Auto-Update)
             </span>
             <span className="text-[10.5px] text-slate-600">
-              دریافت و نصب اتمیک بیلد جدید بدون نیاز به رفرش تکراری یا از دست رفتن دیتا
+              بررسی دوره‌ای هنگام باز بودن برنامه و فعال‌سازی فقط در نبود فرم باز یا صف آفلاین
             </span>
           </div>
           <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -705,36 +762,74 @@ function ClinicSettingsTab({
           </label>
         </div>
 
-        {/* Live 4-Stage Atomic Update Progress Bar */}
-        {atomicProgress && (
+        {/* Safe-Point Blockers Notice */}
+        {!updateSnap.safePoint.isSafe && (
+          <div className="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold">
+            فعال‌سازی به‌روزرسانی به دلیل حفاظت از داده‌ها در صف انتظار است: {updateSnap.safePoint.blockers.map((b) => b.reason).join(' • ')}
+          </div>
+        )}
+
+        {/* Real Byte-Based or Indeterminate Progress Bar (Zero Fake Percent) */}
+        {(atomicProgress || updateSnap.progress) && (
           <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 space-y-1.5" data-testid="atomic_update_progress_box">
             <div className="flex items-center justify-between text-xs font-extrabold">
-              <span className="text-sky-900">{atomicProgress.label}</span>
-              <span className="font-mono text-emerald-700">{atomicProgress.percent}%</span>
+              <span className="text-sky-900">{(updateSnap.progress || atomicProgress)?.label}</span>
+              <span className="font-mono text-emerald-700">
+                {(updateSnap.progress || atomicProgress)?.determinate &&
+                (updateSnap.progress || atomicProgress)?.percent !== null
+                  ? `${(updateSnap.progress || atomicProgress)?.percent}%`
+                  : 'در حال پردازش...'}
+              </span>
             </div>
             <div className="w-full h-2 rounded-full bg-sky-200 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-sky-600 transition-all duration-200"
-                style={{ width: `${atomicProgress.percent}%` }}
-              />
+              {(updateSnap.progress || atomicProgress)?.determinate &&
+              (updateSnap.progress || atomicProgress)?.percent !== null ? (
+                <div
+                  className="h-full rounded-full bg-sky-600 transition-all duration-200"
+                  style={{ width: `${(updateSnap.progress || atomicProgress)?.percent}%` }}
+                />
+              ) : (
+                <div className="h-full w-1/3 rounded-full bg-sky-600 animate-pulse" />
+              )}
             </div>
           </div>
         )}
 
-        {/* Manual Check/Install & Manager New Build Release Actions */}
+        {/* Candidate Release Notes */}
+        {updateSnap.candidate?.manifest.releaseNotes && (
+          <div className="p-2.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-[11px] text-indigo-950 font-semibold">
+            یادداشت نسخه آماده: {updateSnap.candidate.manifest.releaseNotes}
+          </div>
+        )}
+
+        {/* Manual Check / Store Action / Non-Authoritative Refresh Hint */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <button
             type="button"
             onClick={handleManualCheckUpdate}
-            disabled={checkingUpdates}
+            disabled={checkingUpdates || updateSnap.state === 'CHECKING'}
             data-testid="manual_check_and_install_update_btn"
             className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-sm active:scale-95 transition-all disabled:opacity-50"
           >
             <RefreshCw size={14} className={checkingUpdates ? 'animate-spin' : ''} />
-            {checkingUpdates ? 'در حال نصب و ارتقای اتمیک...' : 'بررسی و نصب دستی بروزرسانی'}
+            {checkingUpdates
+              ? 'در حال بررسی و تأیید مانیفست...'
+              : updateSnap.state === 'READY_TO_ACTIVATE'
+              ? 'فعال‌سازی نسخه تأییدشده'
+              : 'بررسی دستی انتشار جدید'}
           </button>
 
-          {loadActiveUser().role === 'manager' ? (
+          {updateSnap.state === 'NATIVE_STORE_REQUIRED' ? (
+            <button
+              type="button"
+              onClick={() => updateCoordinator.openNativeStoreAction()}
+              data-testid="native_store_update_btn"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm active:scale-95 transition-all"
+            >
+              <Download size={14} />
+              به‌روزرسانی از فروشگاه رسمی
+            </button>
+          ) : loadActiveUser().role === 'manager' ? (
             <button
               type="button"
               onClick={handlePublishAndInstallNextBuild}
@@ -743,7 +838,7 @@ function ClinicSettingsTab({
               className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white hover:bg-violet-50 border border-violet-300 text-violet-900 text-xs font-extrabold shadow-sm active:scale-95 transition-all disabled:opacity-50"
             >
               <Zap size={14} className="text-amber-600" />
-              انتشار و نصب بیلد جدید (#{(installedRelease.build + 1).toLocaleString('fa-IR')})
+              ارسال اعلان بررسی به دستگاه‌های کلینیک
             </button>
           ) : (
             <button
@@ -752,10 +847,34 @@ function ClinicSettingsTab({
               className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-extrabold active:scale-95 transition-all"
             >
               <RotateCcw size={14} />
-              بازنشانی کش و بارگذاری مجدد
+              پاک‌سازی کش پوسته و بارگذاری مجدد
             </button>
           )}
         </div>
+
+        {/* Distinct Typed Error State Box */}
+        {updateSnap.error && (
+          <div
+            data-testid="update_error_box"
+            className="p-2.5 rounded-xl text-xs font-bold bg-rose-50 text-rose-900 border border-rose-200 space-y-1"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span>{updateSnap.error.messageFa}</span>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-100">
+                {updateSnap.error.code}
+              </span>
+            </div>
+            {updateSnap.state === 'ROLLBACK_PENDING' && (
+              <button
+                type="button"
+                onClick={() => updateCoordinator.acknowledgeRollbackToLastKnownGood()}
+                className="mt-1 px-2.5 py-1 rounded-lg bg-rose-700 text-white text-[11px] font-bold"
+              >
+                تأیید ادامه کار با نسخه سالم قبلی
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Update feedback message */}
         {updateMessage && (
@@ -1567,24 +1686,17 @@ function DiagnosticsPanel({ onOpenInstallModal }: { onOpenInstallModal: () => vo
 
   const handleUpdateServiceWorker = async () => {
     try {
-      if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (reg) {
-          await reg.update();
-          if (reg.waiting) {
-            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          }
-          setActionMessage('سرویس‌ورکر با موفقیت بررسی و به آخرین نسخه (Network-First) همگام شد.');
-        } else {
-          await navigator.serviceWorker.register('./sw.js');
-          setActionMessage('سرویس‌ورکر مجدداً ثبت و فعال‌سازی شد.');
-        }
+      const snap = await updateCoordinator.checkForUpdates('manual');
+      if (snap.state === 'AVAILABLE' || snap.state === 'READY_TO_ACTIVATE') {
+        setActionMessage('انتشار معتبر جدید یافت شد؛ برای فعال‌سازی ایمن از بخش به‌روزرسانی اقدام کنید.');
+      } else if (snap.state === 'CHECK_FAILED' || snap.state === 'OFFLINE') {
+        setActionMessage(snap.error?.messageFa || 'بررسی سرویس‌ورکر با خطا مواجه شد.');
       } else {
-        setActionMessage('در محیط APK بومی، فایل‌ها مستقیماً بدون کش قدیمی از سرور داخلی بارگذاری می‌شوند.');
+        setActionMessage('سرویس‌ورکر و مانیفست رسمی بررسی شدند؛ نسخه فعلی به‌روز است.');
       }
       runDiagnostics();
     } catch {
-      setActionMessage('بررسی سرویس‌ورکر انجام شد.');
+      setActionMessage('خطا در بررسی سرویس‌ورکر.');
     }
   };
 

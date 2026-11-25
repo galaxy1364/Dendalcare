@@ -61,6 +61,41 @@ private class AndroidHapticBridge(private val webView: WebView) {
             webView.performHapticFeedback(code)
         }
     }
+
+    @JavascriptInterface
+    fun getNativeAppInfo(): String {
+        val ctx = webView.context
+        val pkgName = ctx.packageName
+        var versionName = "4.9.6"
+        var versionCode = 65L
+        var installerPkg: String? = null
+        try {
+            val pm = ctx.packageManager
+            val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageInfo(pkgName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(pkgName, 0)
+            }
+            versionName = pInfo.versionName ?: versionName
+            versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pInfo.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                pInfo.versionCode.toLong()
+            }
+            installerPkg = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                pm.getInstallSourceInfo(pkgName).installingPackageName
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getInstallerPackageName(pkgName)
+            }
+        } catch (_: Exception) {
+            // fallback to compiled defaults
+        }
+        val safeInstaller = installerPkg?.replace("\"", "") ?: ""
+        return """{"packageName":"$pkgName","versionName":"$versionName","versionCode":$versionCode,"installerPackageName":"$safeInstaller","playInAppUpdateAvailable":false,"bundledWebView":true}"""
+    }
 }
 
 @SuppressLint("SetJavaScriptEnabled")

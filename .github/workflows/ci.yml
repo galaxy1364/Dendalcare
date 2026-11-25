@@ -1,4 +1,4 @@
-name: MinaDental V6 Release Gate CI
+name: MinaDental V7 Release Gate CI
 
 on:
   push:
@@ -29,10 +29,10 @@ jobs:
       - name: Production deterministic Vite build
         run: npm run build
 
-      - name: Verify inline JS syntax, hygiene, and root + /Dendalcare/ HTTP/MIME asset graph
+      - name: Verify inline JS syntax, hygiene, SHA-256 manifest, and root + /Dendalcare/ HTTP/MIME asset graph
         run: npm run verify:assets
 
-      - name: Run audit & V4/V5/V6 production-import unit tests
+      - name: Run audit & V4/V5/V6/V7 production-import unit tests
         run: npm test
 
       - name: Verify SQL migrations exist and preserve SECURITY INVOKER
