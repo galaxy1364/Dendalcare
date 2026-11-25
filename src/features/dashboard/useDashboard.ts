@@ -65,6 +65,7 @@ export function useDashboard() {
         branchId,
         tenantId: activeUser.tenantId || ACTIVE_TENANT_ID,
         userRole: activeUser.role,
+        financialDataComplete: sources.status.financialDataComplete,
       }),
     [
       sources.patients,
@@ -81,6 +82,7 @@ export function useDashboard() {
       sources.safteh,
       sources.clinicSettings,
       sources.staff,
+      sources.status.financialDataComplete,
       units,
       branchId,
       activeUser.tenantId,
@@ -114,6 +116,7 @@ export function useDashboard() {
 
   return {
     metrics,
+    sources,
     status: sources.status,
     refreshAll: sources.refreshAll,
     selectedServices: selectedServices.slice(0, 4),

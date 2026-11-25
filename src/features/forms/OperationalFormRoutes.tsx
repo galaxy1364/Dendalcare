@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CalendarPlus, CheckCircle2, FilePlus2, Stethoscope } from 'lucide-react';
 import { supabase, type Patient } from '@/lib/supabase';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
@@ -6,7 +6,7 @@ import { getMutationOutcome } from '@/lib/supabaseGuardian';
 import { todayGregorian } from '@/lib/jalali';
 import { ACTIVE_TENANT_ID, getActiveBranchId } from '@/services/authentication/authService';
 import { HapticEngine } from '@/platform/haptics';
-import { useNavigation } from '@/navigation/NavigationStack';
+import { clearRouteDraft, getRouteDraft, saveRouteDraft, useNavigation } from '@/navigation/NavigationStack';
 import { useClinicShell } from '@/app/AppProviders';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui/Form';
 import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
@@ -22,14 +22,19 @@ import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
 export function PatientFormPage() {
   const { goBack, navigate } = useNavigation();
   const { showSyncToast, currentUser } = useClinicShell();
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [nationalId, setNationalId] = useState('');
-  const [fileNo, setFileNo] = useState('');
-  const [notes, setNotes] = useState('');
+  const draft = getRouteDraft<Record<string, string>>('patient_form');
+  const [firstName, setFirstName] = useState(draft?.firstName ?? '');
+  const [lastName, setLastName] = useState(draft?.lastName ?? '');
+  const [phone, setPhone] = useState(draft?.phone ?? '');
+  const [nationalId, setNationalId] = useState(draft?.nationalId ?? '');
+  const [fileNo, setFileNo] = useState(draft?.fileNo ?? '');
+  const [notes, setNotes] = useState(draft?.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    saveRouteDraft('patient_form', { firstName, lastName, phone, nationalId, fileNo, notes });
+  }, [firstName, lastName, phone, nationalId, fileNo, notes]);
 
   const handleSave = async () => {
     if (!firstName.trim() || !lastName.trim()) {
@@ -64,6 +69,7 @@ export function PatientFormPage() {
       HapticEngine.warning();
       showSyncToast('پرونده در صف آفلاین ذخیره شد و پس از اتصال تایید می‌شود', 3200);
     }
+    clearRouteDraft('patient_form');
     navigate('patients');
   };
 
@@ -131,15 +137,20 @@ export function AppointmentFormPage() {
   const { showSyncToast, currentUser } = useClinicShell();
   const { data: patients } = useRealtimeTable<Patient>('patients', 'id,first_name,last_name,phone');
 
-  const [patientId, setPatientId] = useState('');
-  const [title, setTitle] = useState('ویزیت و معاینه تخصصی');
-  const [date, setDate] = useState(todayGregorian());
-  const [time, setTime] = useState('17:00');
-  const [duration, setDuration] = useState('30');
-  const [type, setType] = useState('checkup');
-  const [notes, setNotes] = useState('');
+  const draft = getRouteDraft<Record<string, string>>('appointment_form');
+  const [patientId, setPatientId] = useState(draft?.patientId ?? '');
+  const [title, setTitle] = useState(draft?.title ?? 'ویزیت و معاینه تخصصی');
+  const [date, setDate] = useState(draft?.date ?? todayGregorian());
+  const [time, setTime] = useState(draft?.time ?? '17:00');
+  const [duration, setDuration] = useState(draft?.duration ?? '30');
+  const [type, setType] = useState(draft?.type ?? 'checkup');
+  const [notes, setNotes] = useState(draft?.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    saveRouteDraft('appointment_form', { patientId, title, date, time, duration, type, notes });
+  }, [patientId, title, date, time, duration, type, notes]);
 
   const handleSave = async () => {
     if (!title.trim() || !date) {
@@ -175,6 +186,7 @@ export function AppointmentFormPage() {
       HapticEngine.warning();
       showSyncToast('نوبت در صف آفلاین ذخیره شد و پس از اتصال تایید می‌شود', 3200);
     }
+    clearRouteDraft('appointment_form');
     navigate('appointments', { date });
   };
 
@@ -268,15 +280,28 @@ export function TreatmentFormPage() {
   const { showSyncToast, currentUser } = useClinicShell();
   const { data: patients } = useRealtimeTable<Patient>('patients', 'id,first_name,last_name,phone');
 
-  const [patientId, setPatientId] = useState('');
-  const [diagnosis, setDiagnosis] = useState('');
-  const [treatmentPlan, setTreatmentPlan] = useState('');
-  const [toothNumbers, setToothNumbers] = useState('');
-  const [totalCost, setTotalCost] = useState('');
-  const [discount, setDiscount] = useState('0');
-  const [status, setStatus] = useState('planned');
+  const draft = getRouteDraft<Record<string, string>>('treatment_form');
+  const [patientId, setPatientId] = useState(draft?.patientId ?? '');
+  const [diagnosis, setDiagnosis] = useState(draft?.diagnosis ?? '');
+  const [treatmentPlan, setTreatmentPlan] = useState(draft?.treatmentPlan ?? '');
+  const [toothNumbers, setToothNumbers] = useState(draft?.toothNumbers ?? '');
+  const [totalCost, setTotalCost] = useState(draft?.totalCost ?? '');
+  const [discount, setDiscount] = useState(draft?.discount ?? '0');
+  const [status, setStatus] = useState(draft?.status ?? 'planned');
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    saveRouteDraft('treatment_form', {
+      patientId,
+      diagnosis,
+      treatmentPlan,
+      toothNumbers,
+      totalCost,
+      discount,
+      status,
+    });
+  }, [patientId, diagnosis, treatmentPlan, toothNumbers, totalCost, discount, status]);
 
   const handleSave = async () => {
     if (!treatmentPlan.trim()) {
@@ -316,6 +341,7 @@ export function TreatmentFormPage() {
       HapticEngine.warning();
       showSyncToast('طرح درمان در صف آفلاین ذخیره شد و پس از اتصال تایید می‌شود', 3200);
     }
+    clearRouteDraft('treatment_form');
     navigate('treatments');
   };
 

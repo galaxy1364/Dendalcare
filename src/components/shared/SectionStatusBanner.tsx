@@ -1,4 +1,4 @@
-import { AlertTriangle, Lock, RefreshCw, WifiOff, Inbox } from 'lucide-react';
+import { AlertCircle, Database, Lock, RefreshCw, WifiOff, Inbox } from 'lucide-react';
 import type { TableDataStatus } from '@/lib/useRealtimeTable';
 
 interface SectionStatusBannerProps {
@@ -6,6 +6,7 @@ interface SectionStatusBannerProps {
   isStale?: boolean;
   errorMessage?: string | null;
   emptyText?: string;
+  migrationTables?: string[];
   onRetry?: () => void;
 }
 
@@ -13,7 +14,8 @@ export function SectionStatusBanner({
   status,
   isStale = false,
   errorMessage,
-  emptyText = 'داده‌ای برای نمایش ثبت نشده است.',
+  emptyText = 'هنوز رکوردی ثبت نشده است.',
+  migrationTables,
   onRetry,
 }: SectionStatusBannerProps) {
   if (status === 'ready' && !isStale) return null;
@@ -22,11 +24,44 @@ export function SectionStatusBanner({
     return (
       <div
         role="status"
+        aria-live="polite"
         data-testid="section_status_loading"
-        className="rounded-btn px-3 py-2 bg-[#EEF3F7] dark:bg-slate-800 border border-[#D8E2EA] dark:border-slate-700 text-xs font-semibold text-[#526779] dark:text-slate-300 flex items-center gap-2"
+        className="rounded-card px-3.5 py-2.5 bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] flex items-center gap-2.5 text-xs font-semibold text-[#526779] dark:text-[#9FB1C1]"
       >
-        <RefreshCw size={14} className="animate-spin text-[#087C76] shrink-0" />
-        <span>در حال همگام‌سازی داده‌ها از سرور...</span>
+        <span className="w-4 h-4 rounded-full border-2 border-[#087C76] border-t-transparent animate-spin shrink-0" />
+        <span>در حال دریافت اطلاعات به‌روز از سرور کلینیک...</span>
+      </div>
+    );
+  }
+
+  if (status === 'migration_required') {
+    const tablesText =
+      migrationTables && migrationTables.length > 0
+        ? ` (${migrationTables.slice(0, 4).join('، ')}${migrationTables.length > 4 ? ' و ...' : ''})`
+        : '';
+    return (
+      <div
+        role="alert"
+        data-testid="section_status_migration_required"
+        className="rounded-card px-3.5 py-2.5 bg-[#FFF1F2] dark:bg-[#2A1218] border border-[#FECDD3] dark:border-[#7F1D1D] flex items-center justify-between gap-2 text-xs font-bold text-[#AD293C] dark:text-[#FDA4AF]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <Database size={16} className="shrink-0" />
+          <span className="leading-snug">
+            {errorMessage ||
+              `به‌روزرسانی ساختار دیتابیس (Migration امنیتی tenant_id/branch_id) پیش از نمایش آمار الزامی است${tablesText}.`}
+          </span>
+        </div>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="min-h-[40px] px-3 py-1 rounded-btn bg-white dark:bg-[#11202E] border border-[#FECDD3] dark:border-[#7F1D1D] text-[#AD293C] dark:text-[#FDA4AF] font-bold flex items-center gap-1 shrink-0"
+          >
+            <RefreshCw size={13} />
+            <span>بررسی مجدد</span>
+          </button>
+        )}
       </div>
     );
   }
@@ -36,36 +71,36 @@ export function SectionStatusBanner({
       <div
         role="alert"
         data-testid="section_status_unauthorized"
-        className="rounded-btn px-3 py-2.5 bg-[#FFF1F2] border border-[#FECDD3] text-[#AD293C] text-xs font-bold flex items-center justify-between gap-2"
+        className="rounded-card px-3.5 py-2.5 bg-[#FFF1F2] dark:bg-[#2A1218] border border-[#FECDD3] dark:border-[#7F1D1D] flex items-center justify-between gap-2 text-xs font-bold text-[#AD293C] dark:text-[#FDA4AF]"
       >
-        <span className="flex items-center gap-2">
-          <Lock size={15} className="shrink-0" />
-          <span>دسترسی این حساب کاربری به بخش یا داده‌های سرور محدود شده است.</span>
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          <Lock size={16} className="shrink-0" />
+          <span className="truncate">
+            {errorMessage || 'دسترسی این نقش به اطلاعات این بخش محدود است. لطفاً با حساب مجاز وارد شوید.'}
+          </span>
+        </div>
       </div>
     );
   }
 
-  if (status === 'offline' || isStale) {
+  if (status === 'offline') {
     return (
       <div
         role="status"
-        data-testid="section_status_offline_stale"
-        className="rounded-btn px-3 py-2 bg-[#FFFBEB] border border-[#FDE68A] text-[#92510C] text-xs font-bold flex items-center justify-between gap-2"
+        data-testid="section_status_offline"
+        className="rounded-card px-3.5 py-2.5 bg-[#FFFBEB] dark:bg-[#291E0B] border border-[#FDE68A] dark:border-[#78350F] flex items-center justify-between gap-2 text-xs font-bold text-[#92510C] dark:text-[#FCD34D]"
       >
-        <span className="flex items-center gap-2">
-          <WifiOff size={15} className="shrink-0" />
-          <span>
-            {status === 'offline'
-              ? 'حالت آفلاین: نمایش آخرین وضعیت ذخیره‌شده محلی (ممکن است به‌روز نباشد).'
-              : 'ارتباط با سرور کامل نشد؛ اطلاعات نمایش‌داده‌شده ممکن است به‌روز نباشند.'}
+        <div className="flex items-center gap-2 min-w-0">
+          <WifiOff size={16} className="shrink-0" />
+          <span className="truncate">
+            حالت آفلاین — نمایش نسخه رمزنگاری‌شده محلی (داده‌ها ممکن است به‌روز نباشند)
           </span>
-        </span>
+        </div>
         {onRetry && (
           <button
             type="button"
             onClick={onRetry}
-            className="px-2.5 py-1 rounded-lg bg-white border border-[#FDE68A] text-[#92510C] text-[11px] font-bold shrink-0 min-h-[36px]"
+            className="min-h-[40px] px-3 py-1 rounded-btn bg-white dark:bg-[#11202E] border border-[#FDE68A] text-[#92510C] font-bold shrink-0"
           >
             تلاش مجدد
           </button>
@@ -74,24 +109,27 @@ export function SectionStatusBanner({
     );
   }
 
-  if (status === 'error') {
+  if (status === 'error' || isStale) {
     return (
       <div
         role="alert"
         data-testid="section_status_error"
-        className="rounded-btn px-3 py-2.5 bg-[#FFF1F2] border border-[#FECDD3] text-[#AD293C] text-xs font-bold flex items-center justify-between gap-2"
+        className="rounded-card px-3.5 py-2.5 bg-[#FFF1F2] dark:bg-[#2A1218] border border-[#FECDD3] dark:border-[#7F1D1D] flex items-center justify-between gap-2 text-xs font-bold text-[#AD293C] dark:text-[#FDA4AF]"
       >
-        <span className="flex items-center gap-2">
-          <AlertTriangle size={15} className="shrink-0" />
-          <span>{errorMessage || 'خطا در دریافت اطلاعات از سرور.'}</span>
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          <AlertCircle size={16} className="shrink-0" />
+          <span className="truncate">
+            {errorMessage || 'خطا در ارتباط با سرور کلینیک. داده‌های نمایش‌داده‌شده ممکن است ناقص باشند.'}
+          </span>
+        </div>
         {onRetry && (
           <button
             type="button"
             onClick={onRetry}
-            className="px-2.5 py-1 rounded-lg bg-white border border-[#FECDD3] text-[#AD293C] text-[11px] font-bold shrink-0 min-h-[36px]"
+            className="min-h-[40px] px-3 py-1 rounded-btn bg-white dark:bg-[#11202E] border border-[#FECDD3] text-[#AD293C] font-bold flex items-center gap-1 shrink-0"
           >
-            تلاش مجدد
+            <RefreshCw size={13} />
+            <span>تلاش مجدد</span>
           </button>
         )}
       </div>
@@ -103,9 +141,9 @@ export function SectionStatusBanner({
       <div
         role="status"
         data-testid="section_status_empty"
-        className="rounded-btn px-3 py-2 bg-[#F4F7F9] dark:bg-slate-800 border border-[#D8E2EA] dark:border-slate-700 text-[#526779] dark:text-slate-300 text-xs font-semibold flex items-center gap-2"
+        className="rounded-card px-3.5 py-3 bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] flex items-center gap-2.5 text-xs font-semibold text-[#526779] dark:text-[#9FB1C1]"
       >
-        <Inbox size={15} className="shrink-0" />
+        <Inbox size={16} className="shrink-0 text-[#087C76]" />
         <span>{emptyText}</span>
       </div>
     );

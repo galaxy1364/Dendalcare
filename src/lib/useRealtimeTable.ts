@@ -30,10 +30,17 @@ export type TableDataStatus =
   | 'empty'
   | 'error'
   | 'offline'
-  | 'unauthorized';
+  | 'unauthorized'
+  | 'migration_required';
+
+export interface RealtimeTableOptions {
+  limit?: number;
+  offset?: number;
+}
 
 const REQUEST_TIMEOUT_MS = 6500;
 const MAX_RETRY_ATTEMPTS = 2;
+const DEFAULT_QUERY_LIMIT = 500;
 
 function isUnauthorizedResponse(err: { code?: string; status?: number; message?: string } | null): boolean {
   if (!err) return false;
@@ -50,8 +57,45 @@ function isUnauthorizedResponse(err: { code?: string; status?: number; message?:
 }
 
 /**
- * Pure server-reconciliation helper (exported for Phase 02 & Phase 10 unit testing).
- * Ensures an empty array `[]` from the server clears state & cache rather than preserving stale rows.
+ * FIX 02: Detect missing required schema columns (PostgreSQL 42703 / PostgREST PGRST204).
+ * We NEVER strip `tenant_id` / `branch_id` or fall back to unscoped queries.
+ */
+export function isSchemaMigrationRequiredError(
+  err: { code?: string; status?: number; message?: string } | null
+): boolean {
+  if (!err) return false;
+  const code = String(err.code || '').toUpperCase();
+  const msg = String(err.message || '').toLowerCase();
+  return (
+    code === '42703' ||
+    code === 'PGRST204' ||
+    (msg.includes('column') && msg.includes('does not exist'))
+  );
+}
+
+/**
+ * Pure monotonic request guard (FIX 01 & FIX 09):
+ * Rejects stale/late/aborted responses from a superseded request or previous user/branch scope.
+ */
+export function shouldAcceptTableResponse(params: {
+  requestSeq: number;
+  currentSeq: number;
+  requestScopeKey: string;
+  activeScopeKey: string;
+  aborted: boolean;
+  mounted: boolean;
+}): boolean {
+  if (!params.mounted || params.aborted) return false;
+  if (params.requestSeq !== params.currentSeq) return false;
+  if (params.requestScopeKey !== params.activeScopeKey) return false;
+  return true;
+}
+
+/**
+ * Pure server-reconciliation helper (exported for unit testing).
+ * - Empty `[]` clears state & cache.
+ * - `42703` / schema mismatch returns explicit `migration_required` and clears local cache.
+ * - `401/403/42501` returns explicit `unauthorized` and clears local cache.
  */
 export function reconcileServerRows<T>(params: {
   serverRows: T[] | null | undefined;
@@ -70,6 +114,9 @@ export function reconcileServerRows<T>(params: {
     }
     return { rows: serverRows, status: 'ready', clearCache: false, isStale: false };
   }
+  if (isSchemaMigrationRequiredError(error)) {
+    return { rows: [], status: 'migration_required', clearCache: true, isStale: false };
+  }
   if (isUnauthorizedResponse(error)) {
     return { rows: [], status: 'unauthorized', clearCache: true, isStale: false };
   }
@@ -79,29 +126,39 @@ export function reconcileServerRows<T>(params: {
   return { rows: null, status: 'error', clearCache: false, isStale: true };
 }
 
+function resolveCurrentScope(table: TableName, filter?: { column: string; value: string | null } | null) {
+  const activeUser = getActiveClinicUser();
+  const branchId = getActiveBranchId();
+  const tenantId = activeUser.tenantId || ACTIVE_TENANT_ID;
+  const userId = activeUser.id;
+  return {
+    tenantId,
+    branchId,
+    userId,
+    table,
+    filter,
+    scopeKey: `${tenantId}::${branchId}::${userId}`,
+  };
+}
+
 /**
- * Phase 02 & Phase 09 hardened realtime table hook:
- * - Zero production seed data fallback
- * - Empty `[]` server response clears state and local mirrors
- * - Scoped caching by tenantId, branchId, userId, table, filter (never stores sensitive PII in localStorage)
- * - Deduplicated single Realtime channel per table via realtimeHub
- * - AbortController + retry backoff instead of fixed timeout Promise.race
- * - Explicit loading / ready / empty / error / offline / unauthorized + isStale states
+ * Hardened realtime table hook (Third Audit FIX 01, FIX 02, FIX 09):
+ * - Zero `42703` column-stripping fallback: surfaces `migration_required` explicitly
+ * - Immediate abort + state wipe on user/branch switch
+ * - Monotonic `requestSeqRef` + `activeScopeKeyRef` prevent stale previous-user data entering state
+ * - Supports explicit pagination (`limit`, `offset`) for scalability on large datasets
+ * - Uses encrypted, session-isolated IndexedDB Vault for offline resilience
  */
 export function useRealtimeTable<T extends { id: string }>(
   table: TableName,
   select?: string,
-  filter?: { column: string; value: string | null } | null
+  filter?: { column: string; value: string | null } | null,
+  options?: RealtimeTableOptions
 ) {
-  const activeUser = getActiveClinicUser();
-  const branchId = getActiveBranchId();
-  const scope = {
-    tenantId: activeUser.tenantId || ACTIVE_TENANT_ID,
-    branchId,
-    userId: activeUser.id,
-    table,
-    filter,
-  };
+  const [scopeVersion, setScopeVersion] = useState(0);
+  const scope = resolveCurrentScope(table, filter);
+  const queryLimit = options?.limit ?? DEFAULT_QUERY_LIMIT;
+  const queryOffset = options?.offset ?? 0;
 
   const [data, setData] = useState<T[]>(() => {
     const cached = readScopedNonSensitiveCache<T>(scope);
@@ -117,50 +174,73 @@ export function useRealtimeTable<T extends { id: string }>(
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState<boolean>(false);
+
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
-
-  const vaultScope = {
-    tenantId: scope.tenantId,
-    branchId: scope.branchId,
-    userId: scope.userId,
-  };
+  const requestSeqRef = useRef(0);
+  const activeScopeKeyRef = useRef(scope.scopeKey);
+  activeScopeKeyRef.current = scope.scopeKey;
 
   const persistLocalMirror = useCallback(
-    (rows: T[]) => {
+    (rows: T[], currentScope = resolveCurrentScope(table, filter)) => {
       if (rows.length === 0) {
-        clearScopedCacheEntry(scope);
+        clearScopedCacheEntry(currentScope);
       } else {
-        writeScopedNonSensitiveCache(scope, rows);
+        writeScopedNonSensitiveCache(currentScope, rows);
       }
       if (!filter?.value) {
-        saveTableMirrorToVault(table, rows, vaultScope).catch(() => {});
+        saveTableMirrorToVault(table, rows, {
+          tenantId: currentScope.tenantId,
+          branchId: currentScope.branchId,
+          userId: currentScope.userId,
+        }).catch(() => {});
       }
     },
-    [table, scope.tenantId, scope.branchId, scope.userId, filter?.column, filter?.value]
+    [table, filter?.column, filter?.value]
   );
 
   const fetchData = useCallback(async () => {
+    // Cancel any previous in-flight request and advance monotonic sequence
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+
+    const currentScope = resolveCurrentScope(table, filter);
+    const requestScopeKey = currentScope.scopeKey;
+    activeScopeKeyRef.current = requestScopeKey;
+    const reqSeq = ++requestSeqRef.current;
+
+    const vaultScope = {
+      tenantId: currentScope.tenantId,
+      branchId: currentScope.branchId,
+      userId: currentScope.userId,
+    };
 
     const offlineNow = typeof navigator !== 'undefined' && navigator.onLine === false;
     setLoading(true);
     setStatus((prev) => (prev === 'ready' ? 'ready' : offlineNow ? 'offline' : 'loading'));
 
-    // Hydrate from scoped IndexedDB Vault as fallback ONLY when offline
+    // Hydrate from encrypted scoped IndexedDB Vault ONLY when offline
     if (offlineNow && !filter?.value) {
       try {
         const vaultRows = await loadTableMirrorFromVault<T>(table, vaultScope);
-        if (mountedRef.current && !controller.signal.aborted) {
+        if (
+          shouldAcceptTableResponse({
+            requestSeq: reqSeq,
+            currentSeq: requestSeqRef.current,
+            requestScopeKey,
+            activeScopeKey: activeScopeKeyRef.current,
+            aborted: controller.signal.aborted,
+            mounted: mountedRef.current,
+          })
+        ) {
           setData(vaultRows);
           setStatus(vaultRows.length > 0 ? 'offline' : 'empty');
           setIsStale(vaultRows.length > 0);
           setLoading(false);
         }
       } catch {
-        if (mountedRef.current) {
+        if (mountedRef.current && reqSeq === requestSeqRef.current) {
           setStatus('offline');
           setLoading(false);
         }
@@ -169,7 +249,7 @@ export function useRealtimeTable<T extends { id: string }>(
     }
 
     let attempt = 0;
-    let activeSelect = select ?? '*';
+    const activeSelect = select ?? '*';
     let lastError: { message?: string; code?: string; status?: number } | null = null;
     let resolvedRows: T[] | null = null;
 
@@ -183,9 +263,13 @@ export function useRealtimeTable<T extends { id: string }>(
         if (typeof (query as any).abortSignal === 'function') {
           query = (query as any).abortSignal(controller.signal);
         }
-        const { data: rows, error: err, status: httpStatus } = await query.order('created_at', {
-          ascending: false,
-        });
+        let ordered = query.order('created_at', { ascending: false });
+        if (typeof (ordered as any).range === 'function' && queryLimit > 0) {
+          ordered = (ordered as any).range(queryOffset, queryOffset + queryLimit - 1);
+        } else if (typeof (ordered as any).limit === 'function' && queryLimit > 0) {
+          ordered = (ordered as any).limit(queryLimit);
+        }
+        const { data: rows, error: err, status: httpStatus } = await ordered;
         clearTimeout(timeoutHandle);
 
         if (!err && Array.isArray(rows)) {
@@ -198,22 +282,9 @@ export function useRealtimeTable<T extends { id: string }>(
           code: err?.code,
           status: httpStatus,
         };
-        if (isUnauthorizedResponse(lastError)) break;
-        // Graceful fallback if remote Supabase hasn't applied optional migration columns yet (PostgreSQL 42703)
-        if (err?.code === '42703' && activeSelect !== '*') {
-          activeSelect = activeSelect
-            .split(',')
-            .map((c) => c.trim())
-            .filter(
-              (c) =>
-                c &&
-                c !== 'tenant_id' &&
-                c !== 'branch_id' &&
-                c !== 'payment_id' &&
-                c !== 'is_guarantee' &&
-                c !== 'installment_id'
-            )
-            .join(',');
+        // FIX 02: Never strip tenant_id/branch_id on 42703; fail explicitly with migration_required
+        if (isSchemaMigrationRequiredError(lastError) || isUnauthorizedResponse(lastError)) {
+          break;
         }
       } catch (e: unknown) {
         clearTimeout(timeoutHandle);
@@ -228,7 +299,18 @@ export function useRealtimeTable<T extends { id: string }>(
       }
     }
 
-    if (!mountedRef.current) return;
+    if (
+      !shouldAcceptTableResponse({
+        requestSeq: reqSeq,
+        currentSeq: requestSeqRef.current,
+        requestScopeKey,
+        activeScopeKey: activeScopeKeyRef.current,
+        aborted: controller.signal.aborted,
+        mounted: mountedRef.current,
+      })
+    ) {
+      return;
+    }
 
     const reconciled = reconcileServerRows<T>({
       serverRows: resolvedRows,
@@ -238,23 +320,38 @@ export function useRealtimeTable<T extends { id: string }>(
 
     if (reconciled.rows !== null) {
       setData(reconciled.rows);
-      setError(reconciled.status === 'unauthorized' ? lastError?.message || 'دسترسی غیرمجاز' : null);
+      setError(
+        reconciled.status === 'migration_required'
+          ? `ساختار جدول ${table} با نسخه امنیتی همخوانی ندارد. اجرای Migration الزامی است.`
+          : reconciled.status === 'unauthorized'
+          ? lastError?.message || 'دسترسی غیرمجاز'
+          : null
+      );
       setStatus(reconciled.status);
       setIsStale(reconciled.isStale);
       if (reconciled.clearCache) {
-        clearScopedCacheEntry(scope);
+        clearScopedCacheEntry(currentScope);
         if (!filter?.value) {
           saveTableMirrorToVault(table, [], vaultScope).catch(() => {});
         }
       } else {
-        persistLocalMirror(reconciled.rows);
+        persistLocalMirror(reconciled.rows, currentScope);
       }
     } else {
-      // Server temporarily unreachable — recover scoped local mirror ONLY for resilience and mark stale
       if (!filter?.value) {
         try {
           const vaultRows = await loadTableMirrorFromVault<T>(table, vaultScope);
-          if (mountedRef.current && vaultRows.length > 0) {
+          if (
+            shouldAcceptTableResponse({
+              requestSeq: reqSeq,
+              currentSeq: requestSeqRef.current,
+              requestScopeKey,
+              activeScopeKey: activeScopeKeyRef.current,
+              aborted: controller.signal.aborted,
+              mounted: mountedRef.current,
+            }) &&
+            vaultRows.length > 0
+          ) {
             setData(vaultRows);
           }
         } catch {
@@ -266,10 +363,10 @@ export function useRealtimeTable<T extends { id: string }>(
       setIsStale(true);
     }
 
-    if (mountedRef.current) {
+    if (mountedRef.current && reqSeq === requestSeqRef.current) {
       setLoading(false);
     }
-  }, [table, select, filter?.column, filter?.value, persistLocalMirror]);
+  }, [table, select, filter?.column, filter?.value, queryLimit, queryOffset, persistLocalMirror]);
 
   const refreshAndBroadcast = useCallback(async () => {
     await fetchData();
@@ -292,8 +389,18 @@ export function useRealtimeTable<T extends { id: string }>(
       }
     };
 
+    // FIX 01: On user or branch switch, IMMEDIATELY abort in-flight requests and wipe prior user's UI state
     const handleScopeSwitch = () => {
-      void fetchData();
+      abortRef.current?.abort();
+      requestSeqRef.current += 1;
+      const nextScope = resolveCurrentScope(table, filter);
+      activeScopeKeyRef.current = nextScope.scopeKey;
+      setData([]);
+      setError(null);
+      setIsStale(false);
+      setStatus('loading');
+      setLoading(true);
+      setScopeVersion((v) => v + 1);
     };
 
     window.addEventListener('minadental-sync-event', handleSyncEvent);
@@ -303,29 +410,35 @@ export function useRealtimeTable<T extends { id: string }>(
     const unsubscribeRealtime = subscribeToTableRealtime<T>(table, {
       filter,
       onInsert: (newRow) => {
+        const currentScope = resolveCurrentScope(table, filter);
+        if (currentScope.scopeKey !== activeScopeKeyRef.current) return;
         setData((prev) => {
           if (prev.some((item) => item.id === newRow.id)) return prev;
           const updated = [newRow, ...prev];
-          persistLocalMirror(updated);
+          persistLocalMirror(updated, currentScope);
           setStatus('ready');
           setIsStale(false);
           return updated;
         });
       },
       onUpdate: (updatedRow) => {
+        const currentScope = resolveCurrentScope(table, filter);
+        if (currentScope.scopeKey !== activeScopeKeyRef.current) return;
         setData((prev) => {
           const updated = prev.map((item) => (item.id === updatedRow.id ? updatedRow : item));
-          persistLocalMirror(updated);
+          persistLocalMirror(updated, currentScope);
           return updated;
         });
       },
       onDelete: (oldRow) => {
+        const currentScope = resolveCurrentScope(table, filter);
+        if (currentScope.scopeKey !== activeScopeKeyRef.current) return;
         setData((prev) => {
           const fullRecord = prev.find((item) => item.id === oldRow.id) ?? (oldRow as Record<string, unknown>);
           const actor = getActiveClinicUser().fullName;
           archiveDeletedRecord(table, fullRecord, actor, 'بایگانی خودکار ضدحذف هنگام حذف از جدول').catch(() => {});
           const updated = prev.filter((item) => item.id !== oldRow.id);
-          persistLocalMirror(updated);
+          persistLocalMirror(updated, currentScope);
           setStatus(updated.length === 0 ? 'empty' : 'ready');
           return updated;
         });
@@ -340,7 +453,7 @@ export function useRealtimeTable<T extends { id: string }>(
       window.removeEventListener('minadental-branch-changed', handleScopeSwitch);
       unsubscribeRealtime();
     };
-  }, [table, select, filter?.column, filter?.value, fetchData, persistLocalMirror]);
+  }, [table, select, filter?.column, filter?.value, scopeVersion, fetchData, persistLocalMirror]);
 
   return { data, loading, status, isStale, error, refresh: refreshAndBroadcast };
 }

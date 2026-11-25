@@ -661,9 +661,11 @@ html[data-theme="dark"] .ios27-sheet-navbar {
   border-color: #25394D !important;
 }
 
-html[data-theme="dark"] .qbank-notch-card p,
-html[data-theme="dark"] .qbank-notch-card span {
-  color: #14283B;
+html[data-theme="dark"] .qbank-notch-card {
+  --qbt-fill-start: #132334;
+  --qbt-fill-mid: #16283B;
+  --qbt-fill-end: #1B3046;
+  --qbt-stroke: #2B4258;
 }
 
 /* ===== Reduce Motion (OS preference + manual toggle) ===== */

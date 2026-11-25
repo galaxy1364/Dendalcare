@@ -1,14 +1,15 @@
 /**
- * MinaDental Zero-Delete Multi-Tier Data Vault (IndexedDB + Cloud SQL Mirror)
- * Trace ID: TRC-MINA-VAULT-9006-F
+ * MinaDental Zero-Delete Multi-Tier Data Vault (Encrypted, Session-Isolated IndexedDB + Cloud SQL Mirror)
+ * Trace ID: TRC-MINA-VAULT-9014-N
  *
- * Guarantees that clinical, patient, implant, lab, and financial records are
- * NEVER permanently lost:
- * 1. Full un-truncated IndexedDB mirror for all 20 Supabase PostgreSQL tables.
- * 2. Immutable Soft-Delete Archive (`deleted_archive`) capturing every removed
- *    row with Trace ID, actor, checksum, and 1-click Cloud SQL Restore.
- * 3. Complete 20-table Cloud SQL Snapshot Collector & Non-Destructive Restorer
- *    shared across Local JSON, Supabase Cloud, Google Drive, and GitHub Backup.
+ * Security & Durability Guarantees (Third Audit FIX 01):
+ * 1. Sensitive clinical & financial tables are encrypted at rest inside IndexedDB
+ *    using WebCrypto AES-GCM 256-bit keys bound to `(tenantId, branchId, userId, sessionSalt)`
+ *    kept strictly in volatile memory — NEVER written as plaintext to `localStorage`.
+ * 2. Strict session & scope isolation: every mirror key requires explicit
+ *    `(tenantId, branchId, userId, table)` and old session keys/mirrors are wiped on user switch/logout.
+ * 3. Immutable Soft-Delete Archive (`deleted_archive`) captures removed rows with Trace ID & checksum
+ *    inside IndexedDB (never leaking sensitive clinical payloads to plaintext `localStorage`).
  */
 
 import { rawSupabase as supabase, type TableName } from '@/lib/supabaseCore';
@@ -36,6 +37,24 @@ export const ALL_CLINIC_TABLES: TableName[] = [
   'clinic_settings',
 ];
 
+export const SENSITIVE_VAULT_TABLES = new Set<TableName>([
+  'patients',
+  'appointments',
+  'treatments',
+  'treatment_services',
+  'payments',
+  'lab_orders',
+  'implants',
+  'tooth_conditions',
+  'finance_transactions',
+  'installments',
+  'checks',
+  'safteh',
+  'staff_salaries',
+  'staff_shares',
+  'messages',
+]);
+
 export interface ArchivedRecordEntry {
   archiveId: string;
   traceId: string;
@@ -47,12 +66,21 @@ export interface ArchivedRecordEntry {
   reason?: string;
   restoredAt?: string | null;
   checksum: string;
+  tenantId?: string;
+  branchId?: string;
 }
 
 export interface VaultMirrorScope {
   tenantId?: string;
   branchId?: string;
   userId?: string;
+  sessionToken?: string;
+}
+
+export interface EncryptedVaultBlob {
+  alg: 'AES-GCM';
+  ivBase64: string;
+  cipherBase64: string;
 }
 
 export interface TableMirrorEntry {
@@ -61,15 +89,20 @@ export interface TableMirrorEntry {
   tenantId: string;
   branchId: string;
   userId: string;
-  rows: any[];
+  encrypted: boolean;
+  payload?: EncryptedVaultBlob;
+  rows?: any[];
   updatedAt: string;
   count: number;
 }
 
-export function getVaultMirrorKey(table: TableName, scope?: VaultMirrorScope): string {
-  const tenantId = scope?.tenantId || 'minadental_clinic';
-  const branchId = scope?.branchId || 'main';
-  const userId = scope?.userId || 'active';
+export function getVaultMirrorKey(table: TableName, scope?: VaultMirrorScope): string | null {
+  const tenantId = scope?.tenantId?.trim();
+  const branchId = scope?.branchId?.trim();
+  const userId = scope?.userId?.trim();
+  if (!tenantId || !branchId || !userId) {
+    return null;
+  }
   return `${tenantId}::${branchId}::${userId}::${table}`;
 }
 
@@ -80,6 +113,7 @@ export interface VaultStats {
   archivedDeletedCount: number;
   unrestoredDeletedCount: number;
   lastMirrorAt: string | null;
+  encryptionActive: boolean;
 }
 
 export interface FullClinicSnapshot {
@@ -96,10 +130,176 @@ export interface FullClinicSnapshot {
 }
 
 const IDB_NAME = 'MinaDentalZeroDeleteVault_v1';
-const IDB_VERSION = 2;
+const IDB_VERSION = 3;
 const STORE_MIRRORS = 'table_mirrors';
 const STORE_ARCHIVE = 'deleted_archive';
 const LS_ARCHIVE_FALLBACK = 'minadental_zero_delete_archive_v1';
+
+// In-memory session-bound AES-GCM keys (wiped immediately on user switch / logout)
+const sessionCryptoKeys = new Map<string, CryptoKey>();
+let activeSessionEpoch = generateRandomHex(16);
+
+function generateRandomHex(bytes: number): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const buf = new Uint8Array(bytes);
+    crypto.getRandomValues(buf);
+    return Array.from(buf)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  return `${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 14)}`;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) {
+    bin += String.fromCharCode(bytes[i]);
+  }
+  return btoa(bin);
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function isWebCryptoAvailable(): boolean {
+  return Boolean(
+    typeof crypto !== 'undefined' &&
+      crypto.subtle &&
+      typeof crypto.getRandomValues === 'function' &&
+      typeof TextEncoder !== 'undefined' &&
+      typeof TextDecoder !== 'undefined'
+  );
+}
+
+async function getOrCreateSessionKey(scope: Required<Pick<VaultMirrorScope, 'tenantId' | 'branchId' | 'userId'>>): Promise<CryptoKey | null> {
+  if (!isWebCryptoAvailable()) return null;
+  const keyId = `${activeSessionEpoch}::${scope.tenantId}::${scope.branchId}::${scope.userId}`;
+  const existing = sessionCryptoKeys.get(keyId);
+  if (existing) return existing;
+
+  try {
+    const rawKeyMaterial = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(`minadental-vault-v3:${keyId}`),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+    const salt = new TextEncoder().encode(`salt:${scope.tenantId}:${scope.branchId}:${scope.userId}`);
+    const derived = await crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt,
+        iterations: 60000,
+        hash: 'SHA-256',
+      },
+      rawKeyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+    sessionCryptoKeys.set(keyId, derived);
+    return derived;
+  } catch {
+    return null;
+  }
+}
+
+export async function encryptVaultPayload(
+  data: unknown,
+  scope: Required<Pick<VaultMirrorScope, 'tenantId' | 'branchId' | 'userId'>>
+): Promise<EncryptedVaultBlob | null> {
+  const key = await getOrCreateSessionKey(scope);
+  if (!key) return null;
+  try {
+    const iv = new Uint8Array(12);
+    crypto.getRandomValues(iv);
+    const plaintext = new TextEncoder().encode(JSON.stringify(data));
+    const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
+    return {
+      alg: 'AES-GCM',
+      ivBase64: bytesToBase64(iv),
+      cipherBase64: bytesToBase64(new Uint8Array(cipherBuf)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function decryptVaultPayload<T = unknown>(
+  blob: EncryptedVaultBlob,
+  scope: Required<Pick<VaultMirrorScope, 'tenantId' | 'branchId' | 'userId'>>
+): Promise<T | null> {
+  if (!blob || blob.alg !== 'AES-GCM' || !blob.ivBase64 || !blob.cipherBase64) return null;
+  const key = await getOrCreateSessionKey(scope);
+  if (!key) return null;
+  try {
+    const iv = base64ToBytes(blob.ivBase64);
+    const cipher = base64ToBytes(blob.cipherBase64);
+    const plainBuf = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: iv as BufferSource },
+      key,
+      cipher as BufferSource
+    );
+    const decoded = new TextDecoder().decode(plainBuf);
+    return JSON.parse(decoded) as T;
+  } catch {
+    // Decryption fails cleanly if key belongs to a previous session or user
+    return null;
+  }
+}
+
+/** Rotate volatile session encryption keys immediately on user switch or sign-out */
+export function clearAllSessionVaultKeys(): void {
+  sessionCryptoKeys.clear();
+  activeSessionEpoch = generateRandomHex(16);
+  // Also purge any legacy plaintext localStorage archive entries
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.removeItem(LS_ARCHIVE_FALLBACK);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/** Delete mirrored IndexedDB rows belonging to a previous user/branch (or all mirrors if scope omitted) */
+export async function clearVaultMirrorsForScope(scope?: VaultMirrorScope): Promise<void> {
+  const db = await openVaultDb();
+  if (!db) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORE_MIRRORS, 'readwrite');
+      const store = tx.objectStore(STORE_MIRRORS);
+      if (!scope) {
+        store.clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+        return;
+      }
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const entries = (req.result as TableMirrorEntry[]) || [];
+        for (const e of entries) {
+          const matchTenant = !scope.tenantId || e.tenantId === scope.tenantId;
+          const matchBranch = !scope.branchId || e.branchId === scope.branchId;
+          const matchUser = !scope.userId || e.userId === scope.userId;
+          if (matchTenant && matchBranch && matchUser) {
+            store.delete(e.scopeKey);
+          }
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
 
 /** Fast deterministic FNV-1a 32-bit integrity checksum for audit & backup verification */
 export function computeIntegrityChecksum(input: string): string {
@@ -120,12 +320,14 @@ function openVaultDb(): Promise<IDBDatabase | null> {
       const req = indexedDB.open(IDB_NAME, IDB_VERSION);
       req.onupgradeneeded = () => {
         const db = req.result;
+        // Recreate table_mirrors on v3 upgrade so legacy unencrypted mirrors are wiped cleanly
         if (db.objectStoreNames.contains(STORE_MIRRORS)) {
           db.deleteObjectStore(STORE_MIRRORS);
         }
         const mirrorStore = db.createObjectStore(STORE_MIRRORS, { keyPath: 'scopeKey' });
         mirrorStore.createIndex('table', 'table', { unique: false });
         mirrorStore.createIndex('branchId', 'branchId', { unique: false });
+        mirrorStore.createIndex('userId', 'userId', { unique: false });
         if (!db.objectStoreNames.contains(STORE_ARCHIVE)) {
           const store = db.createObjectStore(STORE_ARCHIVE, { keyPath: 'archiveId' });
           store.createIndex('deletedAt', 'deletedAt', { unique: false });
@@ -140,37 +342,35 @@ function openVaultDb(): Promise<IDBDatabase | null> {
   });
 }
 
-function readLsArchiveFallback(): ArchivedRecordEntry[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(LS_ARCHIVE_FALLBACK);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeLsArchiveFallback(items: ArchivedRecordEntry[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(LS_ARCHIVE_FALLBACK, JSON.stringify(items.slice(0, 200)));
-  } catch {
-    // ignore quota
-  }
-}
-
-/** Mirror a full Supabase table into IndexedDB scoped strictly by tenant/branch/user */
+/** Mirror a Supabase table into IndexedDB scoped strictly by tenant/branch/user and encrypted for sensitive tables */
 export async function saveTableMirrorToVault(
   table: TableName,
   rows: any[],
   scope?: VaultMirrorScope
 ): Promise<void> {
+  const scopeKey = getVaultMirrorKey(table, scope);
+  if (!scopeKey || !scope?.tenantId || !scope?.branchId || !scope?.userId) {
+    // Fail-closed: refuse unscoped local mirror writes
+    return;
+  }
+
   const db = await openVaultDb();
   if (!db) return;
-  const tenantId = scope?.tenantId || 'minadental_clinic';
-  const branchId = scope?.branchId || 'main';
-  const userId = scope?.userId || 'active';
-  const scopeKey = getVaultMirrorKey(table, { tenantId, branchId, userId });
+
+  const isSensitive = SENSITIVE_VAULT_TABLES.has(table);
+  let encryptedBlob: EncryptedVaultBlob | null = null;
+  if (isSensitive) {
+    encryptedBlob = await encryptVaultPayload(rows, {
+      tenantId: scope.tenantId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+    });
+    if (!encryptedBlob) {
+      // Fail-closed: never fall back to plaintext IndexedDB storage for sensitive medical/financial tables
+      return;
+    }
+  }
+
   return new Promise((resolve) => {
     try {
       const tx = db.transaction(STORE_MIRRORS, 'readwrite');
@@ -178,10 +378,12 @@ export async function saveTableMirrorToVault(
       const entry: TableMirrorEntry = {
         scopeKey,
         table,
-        tenantId,
-        branchId,
-        userId,
-        rows,
+        tenantId: scope.tenantId!,
+        branchId: scope.branchId!,
+        userId: scope.userId!,
+        encrypted: isSensitive,
+        payload: encryptedBlob ?? undefined,
+        rows: isSensitive ? undefined : rows,
         updatedAt: new Date().toISOString(),
         count: rows.length,
       };
@@ -194,33 +396,47 @@ export async function saveTableMirrorToVault(
   });
 }
 
-/** Read a tenant/branch/user-scoped mirrored table from IndexedDB */
+/** Read & decrypt a tenant/branch/user-scoped mirrored table from IndexedDB */
 export async function loadTableMirrorFromVault<T = any>(
   table: TableName,
   scope?: VaultMirrorScope
 ): Promise<T[]> {
+  const scopeKey = getVaultMirrorKey(table, scope);
+  if (!scopeKey || !scope?.tenantId || !scope?.branchId || !scope?.userId) {
+    return [];
+  }
   const db = await openVaultDb();
   if (!db) return [];
-  const scopeKey = getVaultMirrorKey(table, scope);
-  return new Promise((resolve) => {
+
+  const entry = await new Promise<TableMirrorEntry | undefined>((resolve) => {
     try {
       const tx = db.transaction(STORE_MIRRORS, 'readonly');
       const req = tx.objectStore(STORE_MIRRORS).get(scopeKey);
-      req.onsuccess = () => {
-        const res = req.result as TableMirrorEntry | undefined;
-        resolve(Array.isArray(res?.rows) ? (res.rows as T[]) : []);
-      };
-      req.onerror = () => resolve([]);
+      req.onsuccess = () => resolve(req.result as TableMirrorEntry | undefined);
+      req.onerror = () => resolve(undefined);
     } catch {
-      resolve([]);
+      resolve(undefined);
     }
   });
+
+  if (!entry) return [];
+
+  if (entry.encrypted) {
+    if (!entry.payload) return [];
+    const decrypted = await decryptVaultPayload<T[]>(entry.payload, {
+      tenantId: scope.tenantId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+    });
+    return Array.isArray(decrypted) ? decrypted : [];
+  }
+
+  return Array.isArray(entry.rows) ? (entry.rows as T[]) : [];
 }
 
 /**
- * Zero-Delete Protection: Archive any deleted record into immutable local Vault
- * (IndexedDB + localStorage mirror) with Trace ID and Checksum so it can be
- * restored to Cloud SQL in 1 click.
+ * Zero-Delete Protection: Archive deleted records into IndexedDB Vault
+ * (NEVER mirrors sensitive clinical/financial records to plaintext localStorage).
  */
 export async function archiveDeletedRecord(
   table: TableName,
@@ -243,15 +459,10 @@ export async function archiveDeletedRecord(
     reason,
     restoredAt: null,
     checksum: computeIntegrityChecksum(serialized),
+    tenantId: typeof record?.tenant_id === 'string' ? record.tenant_id : undefined,
+    branchId: typeof record?.branch_id === 'string' ? record.branch_id : undefined,
   };
 
-  // 1. Write to localStorage fallback immediately (synchronous safety)
-  const existing = readLsArchiveFallback();
-  if (!existing.some((e) => e.table === table && e.recordId === recordId && !e.restoredAt)) {
-    writeLsArchiveFallback([entry, ...existing]);
-  }
-
-  // 2. Write to durable IndexedDB Vault
   const db = await openVaultDb();
   if (db) {
     await new Promise<void>((resolve) => {
@@ -273,11 +484,10 @@ export async function archiveDeletedRecord(
   return entry;
 }
 
-/** List all archived (soft-deleted) records newest first */
+/** List all archived (soft-deleted) records newest first from IndexedDB */
 export async function listArchivedRecords(): Promise<ArchivedRecordEntry[]> {
   const db = await openVaultDb();
-  const lsItems = readLsArchiveFallback();
-  if (!db) return lsItems;
+  if (!db) return [];
 
   return new Promise((resolve) => {
     try {
@@ -285,18 +495,12 @@ export async function listArchivedRecords(): Promise<ArchivedRecordEntry[]> {
       const req = tx.objectStore(STORE_ARCHIVE).getAll();
       req.onsuccess = () => {
         const idbItems = (req.result as ArchivedRecordEntry[]) || [];
-        const mergedMap = new Map<string, ArchivedRecordEntry>();
-        for (const item of [...lsItems, ...idbItems]) {
-          mergedMap.set(item.archiveId, item);
-        }
-        const sorted = Array.from(mergedMap.values()).sort((a, b) =>
-          b.deletedAt.localeCompare(a.deletedAt)
-        );
+        const sorted = [...idbItems].sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
         resolve(sorted);
       };
-      req.onerror = () => resolve(lsItems);
+      req.onerror = () => resolve([]);
     } catch {
-      resolve(lsItems);
+      resolve([]);
     }
   });
 }
@@ -325,7 +529,6 @@ export async function restoreArchivedRecord(
       restoredAt: new Date().toISOString(),
     };
 
-    // Update IndexedDB & LS archive state
     const db = await openVaultDb();
     if (db) {
       await new Promise<void>((resolve) => {
@@ -339,8 +542,6 @@ export async function restoreArchivedRecord(
         }
       });
     }
-    const lsItems = readLsArchiveFallback().map((e) => (e.archiveId === archiveId ? updated : e));
-    writeLsArchiveFallback(lsItems);
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('minadental-vault-updated', { detail: updated }));
@@ -361,6 +562,7 @@ export async function getVaultStats(): Promise<VaultStats> {
   const db = await openVaultDb();
   const archived = await listArchivedRecords();
   const unrestored = archived.filter((a) => !a.restoredAt).length;
+  const encryptionActive = isWebCryptoAvailable();
 
   if (!db) {
     return {
@@ -370,6 +572,7 @@ export async function getVaultStats(): Promise<VaultStats> {
       archivedDeletedCount: archived.length,
       unrestoredDeletedCount: unrestored,
       lastMirrorAt: null,
+      encryptionActive,
     };
   }
 
@@ -392,6 +595,7 @@ export async function getVaultStats(): Promise<VaultStats> {
           archivedDeletedCount: archived.length,
           unrestoredDeletedCount: unrestored,
           lastMirrorAt: last,
+          encryptionActive,
         });
       };
       req.onerror = () =>
@@ -402,6 +606,7 @@ export async function getVaultStats(): Promise<VaultStats> {
           archivedDeletedCount: archived.length,
           unrestoredDeletedCount: unrestored,
           lastMirrorAt: null,
+          encryptionActive,
         });
     } catch {
       resolve({
@@ -411,17 +616,19 @@ export async function getVaultStats(): Promise<VaultStats> {
         archivedDeletedCount: archived.length,
         unrestoredDeletedCount: unrestored,
         lastMirrorAt: null,
+        encryptionActive,
       });
     }
   });
 }
 
 /**
- * Collect a 100% complete snapshot of ALL 20 Cloud SQL (Supabase) tables,
- * automatically falling back to the IndexedDB Vault if any table is offline.
+ * Collect a complete snapshot of ALL 20 Cloud SQL (Supabase) tables,
+ * falling back to the scoped encrypted IndexedDB Vault if offline.
  */
 export async function collectCompleteClinicSnapshot(
-  managerLabel: string = 'دکتر مهدی امیری (mehdi.amiri19851364@gmail.com)'
+  managerLabel: string = 'دکتر مهدی امیری (mehdi.amiri19851364@gmail.com)',
+  scope?: VaultMirrorScope
 ): Promise<FullClinicSnapshot> {
   const tables: Record<string, any[]> = {};
   const counts: Record<string, number> = {};
@@ -435,13 +642,15 @@ export async function collectCompleteClinicSnapshot(
           tables[table] = data;
           counts[table] = data.length;
           totalRecords += data.length;
-          await saveTableMirrorToVault(table, data);
+          if (scope) {
+            await saveTableMirrorToVault(table, data, scope);
+          }
           return;
         }
       } catch {
-        // fallback to IndexedDB Vault below
+        // fallback to scoped encrypted IndexedDB Vault below
       }
-      const cached = await loadTableMirrorFromVault(table);
+      const cached = scope ? await loadTableMirrorFromVault(table, scope) : [];
       tables[table] = cached;
       counts[table] = cached.length;
       totalRecords += cached.length;
@@ -469,16 +678,15 @@ export async function collectCompleteClinicSnapshot(
 
 /**
  * Non-Destructive Full Clinic Restore into Cloud SQL (Supabase PostgreSQL).
- * Supports both new v60 `tables` format and legacy flat JSON backups.
  */
 export async function restoreCompleteClinicSnapshot(
-  rawBackup: Record<string, any>
+  rawBackup: Record<string, any>,
+  scope?: VaultMirrorScope
 ): Promise<{ ok: boolean; restoredTables: number; restoredRows: number; errors: string[] }> {
   const errors: string[] = [];
   let restoredTables = 0;
   let restoredRows = 0;
 
-  // Support both structured `tables` object and legacy flat backup keys
   const sourceMap: Record<string, any[]> = rawBackup.tables || rawBackup.data || rawBackup;
   const keyAliases: Record<string, TableName> = {
     labOrders: 'lab_orders',
@@ -503,7 +711,9 @@ export async function restoreCompleteClinicSnapshot(
       } else {
         restoredTables++;
         restoredRows += rows.length;
-        await saveTableMirrorToVault(mappedTable, rows);
+        if (scope) {
+          await saveTableMirrorToVault(mappedTable, rows, scope);
+        }
       }
     } catch (err: any) {
       errors.push(`${mappedTable}: ${err?.message || 'خطای شبکه'}`);

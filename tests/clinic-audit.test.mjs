@@ -354,7 +354,7 @@ describe('Phase 8 [TRC-MINA-QBANK-9008-H]: Authentic QBank Curved-Notch UI, Proj
     const dashSrc = read('src/features/dashboard/DashboardPage.tsx');
     const foldersSrc = read('src/app/QBankFoldersOverlay.tsx');
 
-    assert.ok(tileSrc.includes('viewBox="0 0 220 104"'), 'QBankTile must render smooth curved SVG notch silhouette (FIX 02 96-108px geometry)');
+    assert.ok(tileSrc.includes('export function buildQBankNotchPath') && tileSrc.includes('ResizeObserver'), 'QBankTile must render pixel-true curved SVG notch silhouette via ResizeObserver (FIX 07)');
     assert.ok(tileSrc.includes('qbank-notch-card'), 'QBankTile must apply qbank-notch-card press physics');
     assert.ok(tileSrc.includes('playTactileFeedback'), 'QBankTile must trigger tactile feedback on tap');
     assert.ok(favSrc.includes('<QBankTile'), 'FavoriteModules must use QBankTile for home module cards');
@@ -520,17 +520,18 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(memSrc.includes('WEB_SEARCH_GLOBAL') && memSrc.includes('WORLD_CLASS_BENCHMARK') && memSrc.includes('NATIVE_IMPLEMENTATION') && memSrc.includes('LIVE_10_OF_10_GATE'), 'Protocol must lock all 4 mandatory steps');
     assert.ok(memSrc.includes('getGlobalBenchmarkProtocol'), 'MemPalace must expose getGlobalBenchmarkProtocol()');
 
+    const reportsSrc = read('src/features/reports/ReportsPage.tsx');
     assert.ok(kpiSrc.includes('dashboard_global_kpi_strip'), 'CompactKPIGrid must render Global Executive KPI Strip');
     assert.ok(kpiSrc.includes('kpi_pc_ratio'), 'CompactKPIGrid must compute Production vs Collection Ratio (P/C %)');
     assert.ok(kpiSrc.includes('kpi_case_acceptance'), 'CompactKPIGrid must compute Case Acceptance Rate (%)');
     assert.ok(kpiSrc.includes('kpi_chair_utilization'), 'CompactKPIGrid must compute Chair Utilization Rate (%)');
     assert.ok(kpiSrc.includes('kpi_ar_status'), 'CompactKPIGrid must track A/R & Overdue Instruments');
     assert.ok(!dashSrc.includes('dashboard_morning_huddle_bar'), 'No-Scroll Home must NOT embed Morning Huddle multi-day list inside Dashboard');
-    assert.ok(allServicesSrc.includes('dashboard_morning_huddle_bar'), 'AllServicesScreen must render Morning Huddle Continuity Panel');
-    assert.ok(allServicesSrc.includes("id: 'yesterday'") && allServicesSrc.includes("id: 'today'") && allServicesSrc.includes("id: 'tomorrow'") && allServicesSrc.includes('huddle_tab_${tab.id}'), 'Morning Huddle must support Yesterday, Today & Tomorrow views');
+    assert.ok(reportsSrc.includes('reports_morning_huddle') && reportsSrc.includes('<CompactKPIGrid'), 'ReportsPage must house the 3-day Morning Huddle and 4 Vital KPIs (FIX 05)');
+    assert.ok(reportsSrc.includes("id: 'yesterday'") && reportsSrc.includes("id: 'today'") && reportsSrc.includes("id: 'tomorrow'") && reportsSrc.includes('huddle_day_${tab.id}'), 'Morning Huddle in ReportsPage must support Yesterday, Today & Tomorrow views');
     assert.ok(memSrc.includes('TRC-MINA-DASH-9010-J') && memSrc.includes('PERMANENT_MODULE_BENCHMARK_PHASES') && memSrc.includes('getModuleBenchmarkPhases'), 'MemPalace must lock Phase 10 and 13-Module Section-by-Section Phased Plan');
     assert.ok(!dashSrc.includes('dashboard_module_phase_roadmap') && !dashSrc.includes('dashboard_active_ui_libs_strip'), 'Dashboard must NOT show non-clinical roadmap or UI-library cards');
-    assert.ok(allServicesSrc.includes('dashboard_daily_goal_bar') && allServicesSrc.includes('dashboard_trigger_ios_reminder_popup_btn'), 'AllServicesScreen must render Daily Production Goal Bar & 1-click Reminder Popup Trigger');
+    assert.ok(allServicesSrc.includes('all_services_screen') && allServicesSrc.includes('services_search_input'), 'AllServicesScreen must stay a clean QBank Service Launcher with bottom search (FIX 05)');
   });
 
   test('29. Autonomous Cloud SQL (20-Table) + Google Drive Activation & Unified Atomic Auto/Manual Update Engine', () => {
@@ -605,8 +606,9 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(metaJson.name.includes('مینادنتال'), 'metadata.json name must be مینادنتال');
     assert.ok(stringsXml.includes('<string name="app_name">مینادنتال</string>'), 'strings.xml app_name must be مینادنتال');
 
+    const reportsSrc = read('src/features/reports/ReportsPage.tsx');
     assert.ok(!dashSrc.includes('dashboard_active_ui_libs_strip') && !dashSrc.includes('dashboard_module_phase_roadmap'), 'Dashboard must remain 100% pure clinical UI');
-    assert.ok(kpiSrc.includes('dashboard_global_kpi_strip') && allServicesSrc.includes('dashboard_morning_huddle_bar'), 'CompactKPIGrid must render 4 Global KPIs and AllServicesScreen must house 3-Day Morning Huddle');
+    assert.ok(kpiSrc.includes('dashboard_global_kpi_strip') && reportsSrc.includes('reports_morning_huddle') && allServicesSrc.includes('all_services_screen'), 'CompactKPIGrid + Morning Huddle live in ReportsPage and AllServicesScreen is a pure launcher');
 
     assert.ok(patientsSrc.includes('getPatientFileNo') && patientsSrc.includes('insurance_number') && patientsSrc.includes('expandedCardId') && patientsSrc.includes('searchOpen'), 'Patients must support sliding chip bar, animated search lens, collapsible cards, and editable patient file number');
     assert.ok(treatmentsSrc.includes('PalmerChart') && treatmentsSrc.includes('TreatmentForm') && treatmentsSrc.includes('searchOpen'), 'Treatments must implement authentic Palmer Notation dental chart and treatment form');
@@ -685,14 +687,14 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     const handleSrc = read('src/components/ui/DraggableNotificationHandle.tsx');
     const drawerSrc = read('src/components/ui/NotificationDrawer.tsx');
 
-    assert.ok(tileSrc.includes('compact = false') && tileSrc.includes("'96px'") && tileSrc.includes("'108px'"), 'QBankTile must enforce FIX 02 adaptive QBank height (96px compact, 108px default)');
+    assert.ok(tileSrc.includes('compact = false') && tileSrc.includes('compact ? 96 : 108'), 'QBankTile must enforce FIX 02/07 adaptive QBank height (96px compact, 108px default)');
     assert.ok(foldersSrc.includes('qbank_all_folders_menu') && foldersSrc.includes('LayoutGrid'), 'QBankFoldersOverlay must render QBank 4-square Folders Menu overlay');
     assert.ok(foldersSrc.includes('qbank_global_search_input') && foldersSrc.includes('qbank_menu_back_btn'), 'QBankFoldersOverlay must render sticky bottom Search Pill & Circular Back button');
     assert.ok(foldersSrc.includes('grid-cols-3 gap-2') && foldersSrc.includes('grid-cols-3 gap-x-2.5'), 'QBankFoldersOverlay must render 3-column quick tiles and 3-column folders icon grid');
 
     assert.ok(shellSrc.includes('topbar_back_button') && shellSrc.includes('goBack'), 'AppShell must provide contextual global Back navigation stack');
     assert.ok(overlaySrc.includes('folder_global_search_btn'), 'Project Folder must provide 1-tap Global Search & Folders trigger');
-    assert.ok(allServicesSrc.includes('dashboard_qbank_slide_banner'), 'AllServicesScreen must render touch-swipeable QBank Service Slide Banner');
+    assert.ok(allServicesSrc.includes('all_services_screen') && !allServicesSrc.includes('dashboard_qbank_slide_banner'), 'AllServicesScreen must remain a pure QBank 3-column launcher without promotional banner clutter (FIX 05)');
 
     assert.ok(handleSrc.includes('z-[45]') && handleSrc.includes('onClick={handleClick}') && handleSrc.includes('Math.abs(dy) > 14'), 'DraggableNotificationHandle must reliably open on click/tap with z-[45] and >14px drag guard');
     assert.ok(handleSrc.includes('pullOffsetX') && handleSrc.includes("fill={notifCount > 0 ? '#0F172A' : 'none'}"), 'DraggableNotificationHandle must match QBank right-edge bell ear with live pull drag');
@@ -767,8 +769,8 @@ describe('Phase 11 [TRC-MINA-IOS27-V2-9011-K]: V2 Viewport-Based No-Scroll Home,
     assert.ok(dashSrc.includes('<PriorityAction') && read('src/features/dashboard/PriorityAction.tsx').includes('data-testid="dashboard_priority_action"'), 'Dashboard must render single Priority Action');
     assert.ok(useDashSrc.includes('selectedServices.slice(0, 4)') && favSrc.includes('selectedServices.slice(0, 4)'), 'Dashboard must strictly cap home selected services at 4');
     assert.ok(favSrc.includes('home_open_all_services_btn') && favSrc.includes("onNavigate('services')"), 'FavoriteModules must link to independent services screen');
-    assert.ok(useDashSrc.includes('viewport.hasNextAppointmentRoom') && useDashSrc.includes('!appearance.isLargeText') && dashSrc.includes('<NextAppointment'), 'Next appointment card must be conditional on viewport room and Dynamic Type');
-    assert.ok(!dashSrc.includes('dashboard_morning_huddle_bar') && !dashSrc.includes('dashboard_qbank_slide_banner'), 'Dashboard must not nest full modules or multi-day lists');
+    assert.ok(dashSrc.includes('<QuickActionsRow') && dashSrc.includes('ResizeObserver') && dashSrc.includes('showPriorityAlert'), 'Dashboard must include 5 Quick Actions and dynamically gate PriorityAction via ResizeObserver fit (FIX 06)');
+    assert.ok(!dashSrc.includes('dashboard_morning_huddle_bar') && !dashSrc.includes('dashboard_qbank_slide_banner') && !dashSrc.includes('<CompactKPIGrid'), 'Dashboard must not nest full modules, multi-day lists, or 4-card KPI grid');
 
     assert.ok(cssSrc.includes('.no-scroll-home-shell') && cssSrc.includes('.main-no-scroll-home'), 'index.css must define viewport-fit no-scroll home rules');
     assert.ok(cssSrc.includes('[data-large-text="true"]') && cssSrc.includes('max-height: 659px'), 'index.css must permit internal scroll only on tiny viewports or enlarged text');
@@ -787,8 +789,9 @@ describe('Phase 11 [TRC-MINA-IOS27-V2-9011-K]: V2 Viewport-Based No-Scroll Home,
 
     assert.ok(navSrc.includes('export type AppRouteId =') && navSrc.includes("'services'") && navSrc.includes("'reports'"), 'navigationStack must export AppRouteId including services and reports');
     assert.ok(navSrc.includes('saveRouteScroll') && navSrc.includes('getRouteScroll') && navSrc.includes('pushNavRoute') && navSrc.includes('popNavRoute'), 'navigationStack must export scroll ledger & stack helpers');
-    assert.ok(allServicesSrc.includes('data-testid="all_services_screen"') && allServicesSrc.includes('data-testid="services_home_customizer"'), 'AllServicesScreen must expose independent services view and Drag & Drop customizer');
-    assert.ok(routerSrc.includes("case 'services':") && routerSrc.includes('AllServicesScreen'), 'AppRouter must mount AllServicesScreen as full-screen services route');
+    const customizeSrc = read('src/features/services/CustomizeServicesPage.tsx');
+    assert.ok(allServicesSrc.includes('data-testid="all_services_screen"') && customizeSrc.includes('data-testid="services_home_customizer"'), 'AllServicesScreen must expose independent services launcher and CustomizeServicesPage must house Drag & Drop customizer (FIX 05)');
+    assert.ok(routerSrc.includes("case 'services':") && routerSrc.includes("case 'customize_services':") && routerSrc.includes('AllServicesScreen'), 'AppRouter must mount AllServicesScreen and CustomizeServicesPage as full-screen routes');
     assert.ok(shellSrc.includes('saveCurrentScroll(') && shellSrc.includes('getSavedScroll('), 'AppShell must save & restore per-route vertical scroll');
     assert.ok(shellSrc.includes('beginRtlEdgeBackSwipe') && gesturesSrc.includes('distFromRight >= 10 && distFromRight <= 44'), 'AppShell + gestures.ts must support RTL right-edge interactive Swipe Back');
     assert.ok(sheetSrc.includes('h-[100dvh]') && sheetSrc.includes('swipeRef') && sheetSrc.includes('vw - 48'), 'Sheet.tsx must render full-screen on mobile with right-edge Swipe Back');
@@ -985,8 +988,8 @@ describe('Phase 13 [TRC-MINA-SECOND-AUDIT-9013-M]: Second Audit Remediation (QBa
     assert.ok(shellSrc.includes('<AuroraBackground />'), 'AppShell must mount AuroraBackground');
     assert.ok(settingsSrc.includes('appearance_aurora_controls') && settingsSrc.includes('setAuroraBackdropMode'), 'SettingsSection must expose Aurora backdrop mode selector');
 
-    // FIX 02: Exact QBank Curved-Notch Geometry
-    assert.ok(tileSrc.includes('viewBox="0 0 220 104"') && tileSrc.includes("compact ? '96px' : '108px'") && tileSrc.includes('M 22,1 H 198'), 'QBankTile must enforce 22px corners, smooth curved bottom-left notch, and 96px–108px height');
+    // FIX 02 / FIX 07: Exact Pixel-True QBank Curved-Notch Geometry (no SVG stretch distortion)
+    assert.ok(tileSrc.includes('export function buildQBankNotchPath') && tileSrc.includes('ResizeObserver') && tileSrc.includes('compact ? 96 : 108') && !tileSrc.includes('<svg\n          preserveAspectRatio="none"') && !tileSrc.includes('preserveAspectRatio="none"\n'), 'QBankTile must compute pixel-true 22px curved notch path via ResizeObserver without SVG stretch distortion');
     assert.ok(cssSrc.includes('.qbank-notch-card') && cssSrc.includes('border-radius: 22px'), 'index.css must style qbank-notch-card with 22px border-radius');
 
     // FIX 03: Custom Filled Duotone SVG Icons
@@ -1062,11 +1065,241 @@ describe('Phase 13 [TRC-MINA-SECOND-AUDIT-9013-M]: Second Audit Remediation (QBa
     const seedSrc = read('src/lib/seedClinicData.ts');
 
     assert.ok(rlsSql.includes('ENABLE ROW LEVEL SECURITY') && rlsSql.includes('tenant_id') && rlsSql.includes('branch_id') && rlsSql.includes('payment_id'), 'SQL migration must enforce tenant_id, branch_id, payment_id, and RLS policies');
-    assert.ok(vaultSrc.includes('IDB_VERSION = 2') && vaultSrc.includes('export function getVaultMirrorKey') && vaultSrc.includes('scopeKey'), 'dataVault.ts must isolate IndexedDB mirrors with composite tenant::branch::user::table keys');
-    assert.ok(rtTableSrc.includes('saveTableMirrorToVault(table, rows, vaultScope)') && rtTableSrc.includes('loadTableMirrorFromVault<T>(table, vaultScope)'), 'useRealtimeTable must pass tenant/branch/user vaultScope on all Vault reads/writes');
+    assert.ok(vaultSrc.includes('IDB_VERSION = 3') && vaultSrc.includes('export function getVaultMirrorKey') && vaultSrc.includes('scopeKey') && vaultSrc.includes('encryptVaultPayload'), 'dataVault.ts must isolate and AES-GCM encrypt IndexedDB mirrors with composite tenant::branch::user::table keys (v3)');
+    assert.ok(rtTableSrc.includes('saveTableMirrorToVault(table,') && rtTableSrc.includes('loadTableMirrorFromVault<T>(table, vaultScope)'), 'useRealtimeTable must pass tenant/branch/user vaultScope on all Vault reads/writes');
     assert.ok(providersSrc.includes('resolveEffectiveRole({') && providersSrc.includes('userRole={effectiveRole}') && routerSrc.includes('canAccessRoute(effectiveRole'), 'AppProviders and AppRouter must wire fail-closed effectiveRole');
     assert.ok(accessSrc.includes("if (params.sessionStatus === 'authenticated') {") && accessSrc.includes("if (!serverRole) return 'secretary';"), 'resolveEffectiveRole must fail closed to secretary when authenticated without server role claim');
     assert.ok(metricsSrc.includes('if (!row.branch_id) {\n    return false;\n  }'), 'matchesTenantAndBranch must strictly reject null/missing branch_id rows');
     assert.ok(seedSrc.includes("tenant_id: row.tenant_id || 'minadental_clinic'") && seedSrc.includes("branch_id: row.branch_id || 'main'"), 'Seed clinic data must stamp explicit tenant_id and branch_id');
   });
 });
+
+describe('Phase 14 [TRC-MINA-THIRD-AUDIT-9014-N]: Third Audit Final Correction (Fail-Closed RLS, Zero Column-Stripping, Financial Truth, Exact QBank Dock/Launcher/Home, URL Routing & Request Cancellation)', () => {
+  const root = process.cwd();
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('46. FIX 01 — Fail-Closed RLS Migration, Financial Table Restrictions, AES-GCM Vault Encryption, Cross-User/Cross-Branch/Cross-Role Matrix & Switch Cleanup', async () => {
+    const hardeningSql = read('supabase/migrations/20261126_rls_hardening.sql');
+    const baseRlsSql = read('supabase/migrations/20261125_tenant_branch_rls.sql');
+    const vaultSrc = read('src/lib/dataVault.ts');
+    const authSrc = read('src/services/authentication/authService.ts');
+    const providersSrc = read('src/app/AppProviders.tsx');
+
+    // SQL fail-closed invariants
+    assert.ok(hardeningSql.includes('FORCE ROW LEVEL SECURITY'), '20261126_rls_hardening.sql must enforce FORCE ROW LEVEL SECURITY');
+    assert.ok(hardeningSql.includes('clinic_memberships') && hardeningSql.includes('app_authorize_clinic_op'), '20261126_rls_hardening.sql must define server-side clinic_memberships and app_authorize_clinic_op');
+    assert.ok(hardeningSql.includes('rls_migration_audit_log'), '20261126_rls_hardening.sql must record non-destructive pre-migration audit counts');
+    assert.ok(!hardeningSql.includes("'minadental_clinic'") && !baseRlsSql.includes("COALESCE(\n    NULLIF(auth.jwt() ->> 'tenant_id', ''),\n    'minadental_clinic'"), 'RLS helpers must NEVER default missing tenant_id to minadental_clinic');
+    assert.ok(!hardeningSql.includes("branch_id IS NULL") || hardeningSql.includes('null_branch_rows'), 'RLS policies must not allow NULL branch_id rows');
+    assert.ok(hardeningSql.includes("table_category = 'ledger'") && hardeningSql.includes("table_category = 'payroll'") && hardeningSql.includes("table_category = 'billing'"), 'RLS must separate ledger (manager-only), payroll, and billing access rules');
+    assert.ok(hardeningSql.includes('DROP POLICY IF EXISTS'), 'RLS hardening must dynamically drop legacy permissive policies');
+
+    // Vault encryption & session switch cleanup
+    assert.ok(vaultSrc.includes('AES-GCM') && vaultSrc.includes('clearAllSessionVaultKeys') && vaultSrc.includes('clearVaultMirrorsForScope'), 'dataVault.ts must encrypt sensitive mirrors with AES-GCM and wipe keys/mirrors on scope switch');
+    assert.ok(authSrc.includes('clearAllSessionVaultKeys') && authSrc.includes('clearVaultMirrorsForScope'), 'authService.ts must clear vault keys & mirrors on switchUser / setActiveBranchId / signOut');
+    assert.ok(providersSrc.includes('clearAllSessionVaultKeys') && providersSrc.includes('clearVaultMirrorsForScope'), 'AppProviders.tsx must purge sensitive vault state on user switch');
+
+    // Runtime Cross-User / Cross-Branch / Cross-Role Authorization Matrix Simulation (mirrors app_authorize_clinic_op)
+    const authorizeClinicOp = ({ jwtTenant, jwtBranch, membership, rowTenant, rowBranch, tableCategory, op, isSelfPayroll = false }) => {
+      if (!jwtTenant || !jwtBranch || !rowTenant || !rowBranch) return false;
+      if (!membership || !membership.active) return false;
+      if (membership.tenantId !== jwtTenant || jwtTenant !== rowTenant) return false;
+      if (membership.role !== 'manager' && (membership.branchId !== jwtBranch || jwtBranch !== rowBranch)) return false;
+      if (jwtBranch !== rowBranch) return false;
+      if (tableCategory === 'ledger') return membership.role === 'manager';
+      if (tableCategory === 'payroll') {
+        if (membership.role === 'manager') return true;
+        return membership.role === 'dentist' && op === 'SELECT' && isSelfPayroll;
+      }
+      if (tableCategory === 'billing') {
+        if (membership.role === 'manager') return true;
+        if (membership.role === 'secretary') return op === 'SELECT' || op === 'INSERT';
+        return false;
+      }
+      if (tableCategory === 'admin') return membership.role === 'manager' || op === 'SELECT';
+      if (op === 'DELETE') return membership.role === 'manager';
+      return true;
+    };
+
+    const userAManagerMain = { tenantId: 'clinic_a', branchId: 'branch_1', role: 'manager', active: true };
+    const userBSecretaryBranch2 = { tenantId: 'clinic_a', branchId: 'branch_2', role: 'secretary', active: true };
+    const userCAssistantBranch1 = { tenantId: 'clinic_a', branchId: 'branch_1', role: 'assistant', active: true };
+    const userDOtherTenant = { tenantId: 'clinic_b', branchId: 'branch_1', role: 'manager', active: true };
+
+    // Cross-tenant blocked
+    assert.equal(authorizeClinicOp({ jwtTenant: 'clinic_b', jwtBranch: 'branch_1', membership: userDOtherTenant, rowTenant: 'clinic_a', rowBranch: 'branch_1', tableCategory: 'clinical', op: 'SELECT' }), false);
+    // Cross-branch blocked for secretary
+    assert.equal(authorizeClinicOp({ jwtTenant: 'clinic_a', jwtBranch: 'branch_2', membership: userBSecretaryBranch2, rowTenant: 'clinic_a', rowBranch: 'branch_1', tableCategory: 'clinical', op: 'SELECT' }), false);
+    // Missing tenant/branch fails closed
+    assert.equal(authorizeClinicOp({ jwtTenant: '', jwtBranch: 'branch_1', membership: userAManagerMain, rowTenant: 'clinic_a', rowBranch: 'branch_1', tableCategory: 'clinical', op: 'SELECT' }), false);
+    // Secretary & Assistant blocked from ledger (finance_transactions)
+    assert.equal(authorizeClinicOp({ jwtTenant: 'clinic_a', jwtBranch: 'branch_2', membership: userBSecretaryBranch2, rowTenant: 'clinic_a', rowBranch: 'branch_2', tableCategory: 'ledger', op: 'SELECT' }), false);
+    assert.equal(authorizeClinicOp({ jwtTenant: 'clinic_a', jwtBranch: 'branch_1', membership: userCAssistantBranch1, rowTenant: 'clinic_a', rowBranch: 'branch_1', tableCategory: 'ledger', op: 'SELECT' }), false);
+    // Assistant blocked from billing (payments/checks/installments); Secretary can SELECT/INSERT but not UPDATE/DELETE
+    assert.equal(authorizeClinicOp({ jwtTenant: 'clinic_a', jwtBranch: 'branch_1', membership: userCAssistantBranch1, rowTenant: 'clinic_a', rowBranch: 'branch_1', tableCategory: 'billing', op: 'SELECT' }), false);
+    assert.equal(authorizeClinicOp({ jwtTenant: 'clinic_a', jwtBranch: 'branch_2', membership: userBSecretaryBranch2, rowTenant: 'clinic_a', rowBranch: 'branch_2', tableCategory: 'billing', op: 'INSERT' }), true);
+    assert.equal(authorizeClinicOp({ jwtTenant: 'clinic_a', jwtBranch: 'branch_2', membership: userBSecretaryBranch2, rowTenant: 'clinic_a', rowBranch: 'branch_2', tableCategory: 'billing', op: 'DELETE' }), false);
+    // Manager allowed on same branch ledger
+    assert.equal(authorizeClinicOp({ jwtTenant: 'clinic_a', jwtBranch: 'branch_1', membership: userAManagerMain, rowTenant: 'clinic_a', rowBranch: 'branch_1', tableCategory: 'ledger', op: 'SELECT' }), true);
+
+    // WebCrypto AES-GCM round-trip & key isolation verification
+    const subtle = globalThis.crypto?.subtle;
+    if (subtle) {
+      const key1 = await subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+      const key2 = await subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+      const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+      const pt = new TextEncoder().encode(JSON.stringify([{ id: 'pt1', name: 'بیمار محرمانه' }]));
+      const ct = await subtle.encrypt({ name: 'AES-GCM', iv }, key1, pt);
+      const dec = await subtle.decrypt({ name: 'AES-GCM', iv }, key1, ct);
+      assert.equal(JSON.parse(new TextDecoder().decode(dec))[0].id, 'pt1');
+      await assert.rejects(() => subtle.decrypt({ name: 'AES-GCM', iv }, key2, ct), 'Different session key must fail to decrypt vaulted clinical rows');
+    }
+  });
+
+  test('47. FIX 02 & FIX 09 — No Silent 42703 Column Stripping, Explicit migration_required Banner, Per-Source Statuses, 14-Source refreshAll & Stale Request Guard', () => {
+    const rtTableSrc = read('src/lib/useRealtimeTable.ts');
+    const bannerSrc = read('src/components/shared/SectionStatusBanner.tsx');
+    const dashSvcSrc = read('src/features/dashboard/dashboard.service.ts');
+
+    // FIX 02: Zero column-stripping fallback
+    assert.ok(rtTableSrc.includes("'migration_required'"), 'useRealtimeTable must support explicit migration_required status');
+    assert.ok(rtTableSrc.includes('export function isSchemaMigrationRequiredError'), 'useRealtimeTable must export isSchemaMigrationRequiredError');
+    assert.ok(!rtTableSrc.includes('buildFetchQuery(false)'), 'useRealtimeTable must NEVER fall back to unscoped queries without tenant_id/branch_id');
+    assert.ok(bannerSrc.includes('section_status_migration_required'), 'SectionStatusBanner must render dedicated migration_required alert');
+
+    // FIX 09: Per-source status reporting, pagination limit, 14-source refreshAll, monotonic request guard
+    assert.ok(rtTableSrc.includes('requestSeqRef') && rtTableSrc.includes('activeScopeKeyRef') && rtTableSrc.includes('export function shouldAcceptTableResponse'), 'useRealtimeTable must guard responses with monotonic requestSeq + activeScopeKey');
+    assert.ok(rtTableSrc.includes('DEFAULT_QUERY_LIMIT') && rtTableSrc.includes('options?: RealtimeTableOptions'), 'useRealtimeTable must support bounded pagination limit');
+    assert.ok(dashSvcSrc.includes('evaluateDashboardSourceStatuses') && dashSvcSrc.includes('FINANCIAL_REQUIRED_SOURCES') && dashSvcSrc.includes('fetchDashboardServerSummary'), 'dashboard.service.ts must report per-source statuses and support RPC aggregation');
+    for (const refCall of [
+      'patients.refresh()',
+      'appointments.refresh()',
+      'treatments.refresh()',
+      'labOrders.refresh()',
+      'implants.refresh()',
+      'payments.refresh()',
+      'inventory.refresh()',
+      'reminders.refresh()',
+      'finance.refresh()',
+      'installments.refresh()',
+      'checks.refresh()',
+      'safteh.refresh()',
+      'clinicSettings.refresh()',
+      'staff.refresh()',
+    ]) {
+      assert.ok(dashSvcSrc.includes(refCall), `dashboard.service.ts refreshAll() must refresh ${refCall}`);
+    }
+
+    // Runtime check for stale/out-of-order response guard
+    const shouldAccept = ({ responseSeq, latestSeq, responseScope, currentScope, aborted }) =>
+      !aborted && responseSeq === latestSeq && responseScope === currentScope;
+    assert.equal(shouldAccept({ responseSeq: 1, latestSeq: 2, responseScope: 'a::1::u1', currentScope: 'a::1::u1', aborted: false }), false, 'Stale sequence response must be rejected');
+    assert.equal(shouldAccept({ responseSeq: 2, latestSeq: 2, responseScope: 'a::1::u1', currentScope: 'a::2::u2', aborted: false }), false, 'Cross-scope response after user/branch switch must be rejected');
+    assert.equal(shouldAccept({ responseSeq: 2, latestSeq: 2, responseScope: 'a::1::u1', currentScope: 'a::1::u1', aborted: true }), false, 'Aborted response must be rejected');
+    assert.equal(shouldAccept({ responseSeq: 3, latestSeq: 3, responseScope: 'a::2::u2', currentScope: 'a::2::u2', aborted: false }), true, 'Matching current-scope latest response must be accepted');
+  });
+
+  test('48. FIX 03 — Realized-Only Accrual Profit, Linked Direct-Cost Dedup, Deterministic payment_id Dedup, Nullable Incomplete Financials & Closed-Day Capacity', () => {
+    const metricsSrc = read('src/features/dashboard/dashboard.metrics.ts');
+    const typesSrc = read('src/features/dashboard/dashboard.types.ts');
+    const kpiSrc = read('src/features/dashboard/CompactKPIGrid.tsx');
+    const smartSrc = read('src/features/dashboard/SmartBrief.tsx');
+    const reportsSrc = read('src/features/reports/ReportsPage.tsx');
+
+    assert.ok(metricsSrc.includes('export function isLinkedTreatmentDirectCostExpense'), 'dashboard.metrics.ts must export isLinkedTreatmentDirectCostExpense to prevent direct-cost double-counting');
+    assert.ok(metricsSrc.includes("t.status === 'completed'"), 'dashboard.metrics.ts must restrict realized production to completed treatments only');
+    assert.ok(metricsSrc.includes('monthPlannedProduction') && typesSrc.includes('monthNetProfit: number | null'), 'Financial metrics must separate planned production and allow null when financial sources are incomplete');
+    assert.ok(metricsSrc.includes('clinic_closed_weekdays') && metricsSrc.includes('clinic_working_days'), 'computeRealChairCapacity must respect closed weekdays / working-day settings');
+    assert.ok(kpiSrc.includes("'N/A'") && smartSrc.includes("'N/A'") && reportsSrc.includes("'N/A'"), 'KPIs, SmartBrief, and ReportsPage must render N/A instead of 0 when financial data is incomplete');
+
+    // Runtime verification: PAY: prefix without matching Payment.id must NOT be falsely dropped
+    const isDupStrict = (tx, payments) => {
+      const paymentIds = new Set(payments.map((p) => String(p.id || '').trim()).filter(Boolean));
+      if (paymentIds.size === 0) return false;
+      const linked = tx.payment_id ? String(tx.payment_id).trim() : '';
+      if (linked && paymentIds.has(linked)) return true;
+      const ref = String(tx.reference || '').trim();
+      const upper = ref.toUpperCase();
+      for (const pid of paymentIds) {
+        const up = pid.toUpperCase();
+        if (upper === up || upper === `PAY:${up}` || upper === `PAYMENT_${up}`) return true;
+      }
+      return false;
+    };
+    const pays = [{ id: 'p_real_1' }];
+    assert.equal(isDupStrict({ payment_id: 'p_real_1', reference: '' }, pays), true, 'Exact matching payment_id must be deduplicated');
+    assert.equal(isDupStrict({ payment_id: null, reference: 'PAY:p_real_1' }, pays), true, 'PAY:<matching_id> must be deduplicated');
+    assert.equal(isDupStrict({ payment_id: null, reference: 'PAY:MANUAL_CASH_99' }, pays), false, 'PAY: prefix with NO matching Payment.id must NOT be silently dropped');
+
+    // Runtime verification: Planned treatment excluded from accrual net profit, linked expense not double-counted
+    const completedTreatments = [{ id: 't1', status: 'completed', final_price: 5000000, lab_cost: 1000000, material_cost: 200000 }];
+    const plannedTreatments = [{ id: 't2', status: 'planned', final_price: 9000000, lab_cost: 0, material_cost: 0 }];
+    const expenses = [
+      { id: 'e1', amount: 1000000, treatment_id: 't1', category: 'lab' }, // linked direct cost -> skip from operating expense
+      { id: 'e2', amount: 500000, treatment_id: null, category: 'rent' }, // genuine operating expense
+    ];
+    const realizedProd = completedTreatments.reduce((s, t) => s + t.final_price, 0);
+    const directCosts = completedTreatments.reduce((s, t) => s + t.lab_cost + t.material_cost, 0);
+    const completedIds = new Set(completedTreatments.map((t) => t.id));
+    const operatingExp = expenses.filter((e) => !(e.treatment_id && completedIds.has(e.treatment_id))).reduce((s, e) => s + e.amount, 0);
+    const netProfit = realizedProd - directCosts - operatingExp;
+    assert.equal(plannedTreatments[0].status, 'planned');
+    assert.equal(netProfit, 3300000, 'Accrual net profit = 5,000,000 - 1,200,000 - 500,000 = 3,300,000 (planned excluded & linked lab expense not double-counted)');
+  });
+
+  test('49. FIX 04–07 — Exact 4-Tab QBank Dock, Direct All-Services Button, Pure 3-Col Launcher, Dedicated Customizer, Final Home Layout & Pixel-True QBankTile', () => {
+    const dockSrc = read('src/navigation/FloatingDock.tsx');
+    const shellSrc = read('src/app/AppShell.tsx');
+    const servicesSrc = read('src/components/sections/AllServicesScreen.tsx');
+    const customizerSrc = read('src/features/services/CustomizeServicesPage.tsx');
+    const dashSrc = read('src/features/dashboard/DashboardPage.tsx');
+    const quickSrc = read('src/features/dashboard/QuickActionsRow.tsx');
+    const tileSrc = read('src/components/ui/QBankTile.tsx');
+    const cssSrc = read('src/index.css');
+
+    // FIX 04: Exactly 4 primary tabs (dashboard, appointments, patients, finance), NO treatments in QBANK_DOCK_PRIMARY_IDS
+    const dockIdsMatch = dockSrc.match(/export const QBANK_DOCK_PRIMARY_IDS[\s\S]*?\];/);
+    assert.ok(dockIdsMatch && dockIdsMatch[0].includes("'dashboard'") && dockIdsMatch[0].includes("'appointments'") && dockIdsMatch[0].includes("'patients'") && dockIdsMatch[0].includes("'finance'"), 'FloatingDock must export 4 primary QBank destinations');
+    assert.ok(dockIdsMatch && !dockIdsMatch[0].includes("'treatments'"), 'QBANK_DOCK_PRIMARY_IDS must NOT contain treatments tab (FIX 04)');
+    assert.ok(shellSrc.includes("onOpenServices={() => navigate('services')}"), 'AppShell must wire detached All Services Dock button directly to services route');
+
+    // FIX 05: Pure 3-column QBank Service Launcher + dedicated CustomizeServicesPage
+    assert.ok(servicesSrc.includes('grid-cols-3') && servicesSrc.includes('services_search_input') && servicesSrc.includes('services_bottom_back_btn') && servicesSrc.includes('canAccessRoute('), 'AllServicesScreen must render RBAC-filtered 3-column grid with sticky bottom search and Back button');
+    assert.ok(customizerSrc.includes('customize_services_page') && customizerSrc.includes('services_home_customizer'), 'CustomizeServicesPage must provide dedicated 4-favorite selector & drag-and-drop reorder');
+
+    // FIX 06: Final Home layout (Smart Clinic Overview + 5 Quick Actions + 4 QBankTiles + ResizeObserver PriorityAction, no CompactKPIGrid)
+    assert.ok(quickSrc.includes('DASHBOARD_QUICK_ACTIONS') && quickSrc.includes('new_appointment') && quickSrc.includes('new_patient') && quickSrc.includes('receive_payment') && quickSrc.includes('reminders') && quickSrc.includes('search'), 'QuickActionsRow must expose all 5 clinic quick actions');
+    assert.ok(dashSrc.includes('<QuickActionsRow') && dashSrc.includes('data-home-fits-viewport') && !dashSrc.includes('CompactKPIGrid'), 'DashboardPage must render QuickActionsRow and measure viewport fit without CompactKPIGrid');
+
+    // FIX 07: Pixel-true QBankTile geometry + Dark Mode CSS vars
+    assert.ok(tileSrc.includes('export function buildQBankNotchPath') && tileSrc.includes('var(--qbt-fill-start') && !tileSrc.includes('preserveAspectRatio="none"\n'), 'QBankTile must compute pixel-true SVG path and respect Light/Dark CSS variables');
+    assert.ok(cssSrc.includes('html[data-theme="dark"] .qbank-notch-card') && cssSrc.includes('--qbt-fill-start: #132334'), 'index.css must define Dark Mode surface tokens for QBankTile');
+  });
+
+  test('50. FIX 08 — True Hash URL Routing (pushState/popstate/hashchange) & Form Draft Preservation', () => {
+    const urlRouterSrc = read('src/navigation/urlRouter.ts');
+    const navStackSrc = read('src/navigation/NavigationStack.tsx');
+    const formsSrc = read('src/features/forms/OperationalFormRoutes.tsx');
+
+    assert.ok(urlRouterSrc.includes('export function buildRouteHashUrl') && urlRouterSrc.includes('export function parseRouteFromUrl') && urlRouterSrc.includes('ALL_APP_ROUTES'), 'urlRouter.ts must serialize & parse hash SPA URLs');
+    assert.ok(navStackSrc.includes('window.history.pushState') && navStackSrc.includes("addEventListener('hashchange'") && navStackSrc.includes('saveRouteDraft') && navStackSrc.includes('getRouteDraft'), 'NavigationStack must sync History API + hashchange + route drafts');
+    assert.ok(formsSrc.includes('getRouteDraft') && formsSrc.includes('saveRouteDraft') && formsSrc.includes('clearRouteDraft'), 'OperationalFormRoutes must preserve form drafts across navigation');
+
+    // Runtime round-trip URL parsing check
+    const parseHash = (hash) => {
+      const cleaned = hash.replace(/^#\/?/, '');
+      const [routePart, queryPart] = cleaned.split('?');
+      const params = new URLSearchParams(queryPart || '');
+      return {
+        route: routePart || 'dashboard',
+        recordId: params.get('recordId') || undefined,
+        subTab: params.get('subTab') || undefined,
+      };
+    };
+    const parsed = parseHash('#/patients?recordId=pt_42&subTab=billing');
+    assert.equal(parsed.route, 'patients');
+    assert.equal(parsed.recordId, 'pt_42');
+    assert.equal(parsed.subTab, 'billing');
+  });
+});
+

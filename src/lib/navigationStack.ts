@@ -11,6 +11,7 @@ import type { SectionId } from '@/lib/sections';
 export type AppRouteId =
   | SectionId
   | 'services'
+  | 'customize_services'
   | 'reports'
   | 'patient_form'
   | 'appointment_form'

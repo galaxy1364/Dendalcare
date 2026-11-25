@@ -193,6 +193,7 @@ export type FinanceTransaction = {
   tenant_id?: string | null;
   branch_id?: string | null;
   payment_id?: string | null;
+  treatment_id?: string | null;
   type: 'income' | 'expense' | 'transfer';
   category: string;
   amount: number;

@@ -292,7 +292,7 @@ export function DuotoneCallerIdIcon({
   );
 }
 
-const DUOTONE_ICON_MAP: Record<SectionId | 'services' | 'reports' | 'patient_form' | 'appointment_form' | 'treatment_form', (p: DuotoneIconProps) => ReactNode> = {
+const DUOTONE_ICON_MAP: Record<AppRouteId, (p: DuotoneIconProps) => ReactNode> = {
   dashboard: (p) => <DuotoneDashboardIcon {...p} />,
   patients: (p) => <DuotonePatientsIcon {...p} />,
   appointments: (p) => <DuotoneAppointmentsIcon {...p} />,
@@ -307,6 +307,7 @@ const DUOTONE_ICON_MAP: Record<SectionId | 'services' | 'reports' | 'patient_for
   messages: (p) => <DuotoneMessagesIcon {...p} />,
   settings: (p) => <DuotoneSettingsIcon {...p} />,
   services: (p) => <DuotoneServicesGridIcon {...p} />,
+  customize_services: (p) => <DuotoneServicesGridIcon {...p} />,
   reports: (p) => <DuotoneReportsIcon {...p} />,
   patient_form: (p) => <DuotonePatientsIcon {...p} />,
   appointment_form: (p) => <DuotoneAppointmentsIcon {...p} />,

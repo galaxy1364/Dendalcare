@@ -53,7 +53,6 @@ export function AppShell() {
     showSyncToast,
     notifOpen,
     setNotifOpen,
-    qbankMenuOpen,
     openQBankMenu,
     closeQBankMenu,
     setProjectFolderOpen,
@@ -86,6 +85,8 @@ export function AppShell() {
   const section =
     activeRoute === 'services'
       ? { ...getSection('dashboard'), id: 'services' as const, label: 'همه خدمات کلینیک' }
+      : activeRoute === 'customize_services'
+      ? { ...getSection('dashboard'), id: 'customize_services' as const, label: 'تنظیم ۴ خدمت منتخب' }
       : activeRoute === 'reports'
       ? { ...getSection('finance'), id: 'reports' as const, label: 'گزارش جامع کلینیک' }
       : activeRoute === 'patient_form'
@@ -483,12 +484,11 @@ export function AppShell() {
             </div>
           </main>
 
-          {/* Non-Overlapping Mobile Bottom Pill Dock */}
+          {/* Non-Overlapping Mobile Bottom Pill Dock (FIX 04: 4 tabs + direct All Services trigger) */}
           <FloatingDock
             active={activeRoute}
             onChange={(id) => navigate(id)}
-            onOpenFolders={() => openQBankMenu(false)}
-            moreOpen={qbankMenuOpen}
+            onOpenServices={() => navigate('services')}
           />
         </div>
       </div>

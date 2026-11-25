@@ -3,18 +3,43 @@ import type { SectionId } from '@/lib/sections';
 import type { SmartDailyBriefSummary } from '@/services/intelligence/clinicIntelligence';
 import type { TableDataStatus } from '@/lib/useRealtimeTable';
 
+export type DashboardSourceKey =
+  | 'patients'
+  | 'appointments'
+  | 'treatments'
+  | 'lab_orders'
+  | 'implants'
+  | 'payments'
+  | 'inventory'
+  | 'reminders'
+  | 'finance_transactions'
+  | 'installments'
+  | 'checks'
+  | 'safteh'
+  | 'clinic_settings'
+  | 'staff';
+
 export interface DashboardRevenueMetrics {
-  todayCollected: number;
-  monthCollected: number;
-  monthExtraIncome: number;
-  monthExpense: number;
-  monthDirectCosts: number;
-  monthNetProfit: number;
-  monthCashFlow: number;
-  monthTreatmentProduction: number;
-  collectionChecksPendingAmount: number;
-  guaranteeChecksPendingAmount: number;
-  totalReceivables: number;
+  /** False when any required financial table is unauthorized, errored, or missing migration */
+  financialDataComplete: boolean;
+  /** Nullable when financialDataComplete === false (never conflates unknown/failed data with 0) */
+  todayCollected: number | null;
+  monthCollected: number | null;
+  monthExtraIncome: number | null;
+  /** Operating expenses deduplicated against direct treatment costs */
+  monthExpense: number | null;
+  /** Direct clinical costs (doctor/lab/material/other) of performed/completed treatments only */
+  monthDirectCosts: number | null;
+  /** Realized accrual net profit from completed treatments ONLY */
+  monthNetProfit: number | null;
+  monthCashFlow: number | null;
+  /** Performed/completed treatment net production only */
+  monthTreatmentProduction: number | null;
+  /** Separate pipeline value of planned/unperformed treatments (never included in realized profit) */
+  monthPlannedProduction: number | null;
+  collectionChecksPendingAmount: number | null;
+  guaranteeChecksPendingAmount: number | null;
+  totalReceivables: number | null;
   dailyRevenueTarget: number | null;
   monthlyRevenueTarget: number | null;
   dailyGoalProgressPct: number | null;
@@ -29,6 +54,7 @@ export interface DashboardCapacityMetrics {
   dailyChairCapacity: number | null;
   activeTodaySlots: number;
   chairUtilizationPct: number | null;
+  isClosedDay?: boolean;
 }
 
 export interface DashboardPriorityAction {
@@ -59,10 +85,12 @@ export interface DashboardMetrics {
   monthEndIso: string;
   branchId: string;
   hasSufficientData: boolean;
+  financialDataComplete: boolean;
   todayApptsCount: number;
   confirmedApptsCount: number;
   activeTreatCount: number;
   plannedTreatCount: number;
+  completedTreatCount: number;
   pendingLabCount: number;
   activeImplantCount: number;
   lowStockCount: number;
@@ -72,9 +100,9 @@ export interface DashboardMetrics {
   overdueInstallmentsCount: number;
   overdueSaftehCount: number;
   totalOverdueFinCount: number;
-  /** Null when totalProduction === 0 (never conflates missing denominator with 0% or fake 94%) */
+  /** Null when totalProduction === 0 or financial data incomplete */
   pcRatioPct: number | null;
-  /** Null when totalCases === 0 (never fakes 88%) */
+  /** Null when totalCases === 0 */
   caseAcceptancePct: number | null;
   revenue: DashboardRevenueMetrics;
   capacity: DashboardCapacityMetrics;
@@ -89,4 +117,8 @@ export interface DashboardAggregateStatus {
   isStale: boolean;
   isLoading: boolean;
   errorMessage: string | null;
+  sourceStatuses: Record<DashboardSourceKey, TableDataStatus>;
+  incompleteSources: DashboardSourceKey[];
+  migrationRequiredTables: DashboardSourceKey[];
+  financialDataComplete: boolean;
 }

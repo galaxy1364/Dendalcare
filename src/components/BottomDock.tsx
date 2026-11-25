@@ -158,7 +158,7 @@ export function BottomDock({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const resolveSectionId = (route: AppRouteId): SectionId => {
-    if (route === 'services') return 'dashboard';
+    if (route === 'services' || route === 'customize_services') return 'dashboard';
     if (route === 'reports') return 'finance';
     if (route === 'patient_form') return 'patients';
     if (route === 'appointment_form') return 'appointments';

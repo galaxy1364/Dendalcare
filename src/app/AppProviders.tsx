@@ -84,6 +84,8 @@ import {
 } from '@/services/authentication/authService';
 import { ACTIVE_TENANT_ID } from '@/services/authentication/authService';
 import { resolveEffectiveRole } from '@/services/permissions/accessControl';
+import { clearAllSessionVaultKeys, clearVaultMirrorsForScope } from '@/lib/dataVault';
+import { purgeClinicalLocalStorageCaches } from '@/services/supabase/scopedCache';
 
 export interface SmartWorkflowPopupState {
   id: string;
@@ -795,12 +797,18 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   const switchUser = useCallback(
     (u: ClinicUserAccount) => {
+      const prevUserId = currentUser.id;
+      if (prevUserId && prevUserId !== u.id) {
+        clearAllSessionVaultKeys();
+        purgeClinicalLocalStorageCaches({ userId: prevUserId });
+        void clearVaultMirrorsForScope({ userId: prevUserId });
+      }
       setCurrentUser(u);
       saveActiveUser(u);
       HapticEngine.selection();
       showSyncToast(`ورود به حساب: ${u.fullName || u.name} (${ROLE_LABELS[u.role]})`, 3000);
     },
-    [showSyncToast]
+    [currentUser.id, showSyncToast]
   );
 
   const addNewUser = useCallback(

@@ -12,6 +12,9 @@ const DashboardPage = lazy(() =>
 const AllServicesScreen = lazy(() =>
   import('@/components/sections/AllServicesScreen').then((m) => ({ default: m.AllServicesScreen }))
 );
+const CustomizeServicesPage = lazy(() =>
+  import('@/features/services/CustomizeServicesPage').then((m) => ({ default: m.CustomizeServicesPage }))
+);
 const Patients = lazy(() =>
   import('@/components/sections/Patients').then((m) => ({ default: m.Patients }))
 );
@@ -99,6 +102,8 @@ export function AppRouter() {
         return <DashboardPage />;
       case 'services':
         return <AllServicesScreen onNavigate={(id) => navigate(id)} onQuickAction={triggerQuickAction} />;
+      case 'customize_services':
+        return <CustomizeServicesPage />;
       case 'reports':
         return <ReportsPage />;
       case 'patients':

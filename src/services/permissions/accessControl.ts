@@ -16,6 +16,7 @@ export type ClinicAction =
 const ROUTE_ALLOWED_ROLES: Record<AppRouteId, readonly ClinicUserRole[]> = {
   dashboard: ['manager', 'dentist', 'secretary', 'assistant'],
   services: ['manager', 'dentist', 'secretary', 'assistant'],
+  customize_services: ['manager', 'dentist', 'secretary', 'assistant'],
   reports: ['manager', 'dentist', 'secretary'],
   patients: ['manager', 'dentist', 'secretary', 'assistant'],
   patient_form: ['manager', 'dentist', 'secretary'],

@@ -147,20 +147,26 @@ export function CompactKPIGrid({ metrics, onNavigate }: CompactKPIGridProps) {
             className={`text-xs font-black tabular-nums ${
               metrics.totalOverdueFinCount > 0
                 ? 'text-[#AD293C] dark:text-[#FB7185]'
+                : revenue.totalReceivables === null
+                ? 'text-[#526779] dark:text-[#9FB1C1]'
                 : 'text-[#176B52] dark:text-[#34D399]'
             }`}
           >
             {metrics.totalOverdueFinCount > 0
               ? `${fmt(metrics.totalOverdueFinCount)} معوق`
+              : revenue.totalReceivables === null
+              ? 'N/A'
               : `${fmt(revenue.totalReceivables)} ت`}
           </span>
         </div>
         <p className="text-[10px] font-semibold text-[#526779] dark:text-[#9FB1C1] mt-1.5 truncate tabular-nums">
-          {metrics.totalOverdueFinCount > 0
+          {!revenue.financialDataComplete
+            ? 'داده مالی ناقص (نیاز به همگام‌سازی/دسترسی)'
+            : metrics.totalOverdueFinCount > 0
             ? `${fmt(metrics.overdueChecksCount)} چک وصولی • ${fmt(metrics.overdueInstallmentsCount)} قسط`
-            : revenue.guaranteeChecksPendingAmount > 0
-            ? `جریان نقد: ${fmt(revenue.monthCashFlow)} • ضمانت: ${fmt(revenue.guaranteeChecksPendingAmount)}`
-            : `جریان نقد ماه: ${fmt(revenue.monthCashFlow)} ت`}
+            : (revenue.guaranteeChecksPendingAmount ?? 0) > 0
+            ? `جریان نقد: ${fmt(revenue.monthCashFlow ?? 0)} • ضمانت: ${fmt(revenue.guaranteeChecksPendingAmount ?? 0)}`
+            : `جریان نقد ماه: ${fmt(revenue.monthCashFlow ?? 0)} ت`}
         </p>
       </button>
     </div>

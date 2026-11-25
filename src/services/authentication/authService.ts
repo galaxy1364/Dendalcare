@@ -1,5 +1,6 @@
 import { rawSupabase } from '@/lib/supabaseCore';
 import { purgeClinicalLocalStorageCaches } from '@/services/supabase/scopedCache';
+import { clearAllSessionVaultKeys, clearVaultMirrorsForScope } from '@/lib/dataVault';
 
 export type ClinicBranch = {
   id: string;
@@ -45,6 +46,8 @@ export function setActiveBranchId(branchId: string): string {
       window.localStorage.setItem(ACTIVE_BRANCH_KEY, valid);
       if (prev && prev !== valid) {
         purgeClinicalLocalStorageCaches({ branchId: prev });
+        clearAllSessionVaultKeys();
+        void clearVaultMirrorsForScope({ branchId: prev });
       }
       window.dispatchEvent(new CustomEvent('minadental-branch-changed', { detail: valid }));
     } catch {
@@ -185,4 +188,9 @@ export async function signOutSupabaseSession(): Promise<void> {
     // ignore signout network error
   }
   purgeClinicalLocalStorageCaches();
+  clearAllSessionVaultKeys();
+  void clearVaultMirrorsForScope();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('minadental-user-changed', { detail: { signedOut: true } }));
+  }
 }

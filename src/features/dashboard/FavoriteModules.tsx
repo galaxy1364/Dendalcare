@@ -92,7 +92,7 @@ export function FavoriteModules({
                     id: 'customize',
                     label: 'تنظیم ۴ خدمت منتخب',
                     icon: <LayoutGrid size={14} />,
-                    onSelect: () => onNavigate('services'),
+                    onSelect: () => onNavigate('customize_services'),
                   },
                 ]}
               >

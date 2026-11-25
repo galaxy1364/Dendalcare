@@ -15,6 +15,7 @@ export const GLOBAL_FOCUS_EVENT = 'minadental-global-focus';
 const VALID_SECTIONS = new Set<AppRouteId>([
   'dashboard',
   'services',
+  'customize_services',
   'reports',
   'patients',
   'patient_form',
