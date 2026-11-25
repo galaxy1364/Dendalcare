@@ -16,10 +16,14 @@ export type ClinicAction =
 const ROUTE_ALLOWED_ROLES: Record<AppRouteId, readonly ClinicUserRole[]> = {
   dashboard: ['manager', 'dentist', 'secretary', 'assistant'],
   services: ['manager', 'dentist', 'secretary', 'assistant'],
+  reports: ['manager', 'dentist', 'secretary'],
   patients: ['manager', 'dentist', 'secretary', 'assistant'],
+  patient_form: ['manager', 'dentist', 'secretary'],
   appointments: ['manager', 'dentist', 'secretary', 'assistant'],
+  appointment_form: ['manager', 'dentist', 'secretary'],
   calendar: ['manager', 'dentist', 'secretary', 'assistant'],
   treatments: ['manager', 'dentist', 'assistant'],
+  treatment_form: ['manager', 'dentist'],
   lab: ['manager', 'dentist', 'secretary', 'assistant'],
   implants: ['manager', 'dentist', 'assistant'],
   finance: ['manager', 'secretary'],
@@ -45,16 +49,44 @@ const ACTION_ALLOWED_ROLES: Record<ClinicAction, readonly ClinicUserRole[]> = {
 
 const VALID_ROLES = new Set<ClinicUserRole>(['manager', 'dentist', 'secretary', 'assistant']);
 
+const ROLE_PRIVILEGE_RANK: Record<ClinicUserRole, number> = {
+  assistant: 1,
+  secretary: 2,
+  dentist: 3,
+  manager: 4,
+};
+
+/**
+ * Fail-closed RBAC role resolver:
+ * - When Supabase session is authenticated, server JWT claim (`serverVerifiedRole`) is authoritative
+ *   and prevents privilege escalation from localRole.
+ * - If authenticated with missing serverVerifiedRole claim, fails closed to `'secretary'`.
+ * - Only allows local user switching inside unauthenticated offline/single-device workflow without overriding server claims.
+ */
 export function resolveEffectiveRole(params: {
   serverVerifiedRole?: string | null;
   localRole?: string | null;
+  sessionStatus?: 'authenticated' | 'unauthenticated' | 'unauthorized';
 }): ClinicUserRole {
-  if (params.serverVerifiedRole && VALID_ROLES.has(params.serverVerifiedRole as ClinicUserRole)) {
-    return params.serverVerifiedRole as ClinicUserRole;
+  const serverRole =
+    params.serverVerifiedRole && VALID_ROLES.has(params.serverVerifiedRole as ClinicUserRole)
+      ? (params.serverVerifiedRole as ClinicUserRole)
+      : null;
+  const localRole =
+    params.localRole && VALID_ROLES.has(params.localRole as ClinicUserRole)
+      ? (params.localRole as ClinicUserRole)
+      : null;
+
+  if (params.sessionStatus === 'authenticated') {
+    if (!serverRole) return 'secretary';
+    if (localRole && ROLE_PRIVILEGE_RANK[localRole] < ROLE_PRIVILEGE_RANK[serverRole]) {
+      return localRole;
+    }
+    return serverRole;
   }
-  if (params.localRole && VALID_ROLES.has(params.localRole as ClinicUserRole)) {
-    return params.localRole as ClinicUserRole;
-  }
+
+  if (serverRole) return serverRole;
+  if (localRole) return localRole;
   return 'secretary';
 }
 

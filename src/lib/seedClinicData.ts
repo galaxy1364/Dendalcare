@@ -406,17 +406,24 @@ export const SEED_REMINDERS: Reminder[] = [
   },
 ];
 
+const withTenantScope = <T extends Record<string, any>>(rows: T[]): T[] =>
+  rows.map((row) => ({
+    ...row,
+    tenant_id: row.tenant_id || 'minadental_clinic',
+    branch_id: row.branch_id || 'main',
+  }));
+
 export const CLINIC_SEED_MAP: Record<string, any[]> = {
-  patients: SEED_PATIENTS,
-  appointments: SEED_APPOINTMENTS,
-  treatments: SEED_TREATMENTS,
-  lab_orders: SEED_LAB_ORDERS,
-  implants: SEED_IMPLANTS,
-  inventory: SEED_INVENTORY,
-  finance_transactions: SEED_FINANCE,
-  installments: SEED_INSTALLMENTS,
-  checks: SEED_CHECKS,
-  safteh: SEED_SAFTEH,
-  reminders: SEED_REMINDERS,
+  patients: withTenantScope(SEED_PATIENTS),
+  appointments: withTenantScope(SEED_APPOINTMENTS),
+  treatments: withTenantScope(SEED_TREATMENTS),
+  lab_orders: withTenantScope(SEED_LAB_ORDERS),
+  implants: withTenantScope(SEED_IMPLANTS),
+  inventory: withTenantScope(SEED_INVENTORY),
+  finance_transactions: withTenantScope(SEED_FINANCE),
+  installments: withTenantScope(SEED_INSTALLMENTS),
+  checks: withTenantScope(SEED_CHECKS),
+  safteh: withTenantScope(SEED_SAFTEH),
+  reminders: withTenantScope(SEED_REMINDERS),
   payments: [],
 };

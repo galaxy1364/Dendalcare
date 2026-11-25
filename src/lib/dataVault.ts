@@ -49,11 +49,28 @@ export interface ArchivedRecordEntry {
   checksum: string;
 }
 
+export interface VaultMirrorScope {
+  tenantId?: string;
+  branchId?: string;
+  userId?: string;
+}
+
 export interface TableMirrorEntry {
+  scopeKey: string;
   table: TableName;
+  tenantId: string;
+  branchId: string;
+  userId: string;
   rows: any[];
   updatedAt: string;
   count: number;
+}
+
+export function getVaultMirrorKey(table: TableName, scope?: VaultMirrorScope): string {
+  const tenantId = scope?.tenantId || 'minadental_clinic';
+  const branchId = scope?.branchId || 'main';
+  const userId = scope?.userId || 'active';
+  return `${tenantId}::${branchId}::${userId}::${table}`;
 }
 
 export interface VaultStats {
@@ -79,7 +96,7 @@ export interface FullClinicSnapshot {
 }
 
 const IDB_NAME = 'MinaDentalZeroDeleteVault_v1';
-const IDB_VERSION = 1;
+const IDB_VERSION = 2;
 const STORE_MIRRORS = 'table_mirrors';
 const STORE_ARCHIVE = 'deleted_archive';
 const LS_ARCHIVE_FALLBACK = 'minadental_zero_delete_archive_v1';
@@ -103,9 +120,12 @@ function openVaultDb(): Promise<IDBDatabase | null> {
       const req = indexedDB.open(IDB_NAME, IDB_VERSION);
       req.onupgradeneeded = () => {
         const db = req.result;
-        if (!db.objectStoreNames.contains(STORE_MIRRORS)) {
-          db.createObjectStore(STORE_MIRRORS, { keyPath: 'table' });
+        if (db.objectStoreNames.contains(STORE_MIRRORS)) {
+          db.deleteObjectStore(STORE_MIRRORS);
         }
+        const mirrorStore = db.createObjectStore(STORE_MIRRORS, { keyPath: 'scopeKey' });
+        mirrorStore.createIndex('table', 'table', { unique: false });
+        mirrorStore.createIndex('branchId', 'branchId', { unique: false });
         if (!db.objectStoreNames.contains(STORE_ARCHIVE)) {
           const store = db.createObjectStore(STORE_ARCHIVE, { keyPath: 'archiveId' });
           store.createIndex('deletedAt', 'deletedAt', { unique: false });
@@ -139,16 +159,28 @@ function writeLsArchiveFallback(items: ArchivedRecordEntry[]): void {
   }
 }
 
-/** Mirror a full Supabase table into IndexedDB without row truncation */
-export async function saveTableMirrorToVault(table: TableName, rows: any[]): Promise<void> {
+/** Mirror a full Supabase table into IndexedDB scoped strictly by tenant/branch/user */
+export async function saveTableMirrorToVault(
+  table: TableName,
+  rows: any[],
+  scope?: VaultMirrorScope
+): Promise<void> {
   const db = await openVaultDb();
   if (!db) return;
+  const tenantId = scope?.tenantId || 'minadental_clinic';
+  const branchId = scope?.branchId || 'main';
+  const userId = scope?.userId || 'active';
+  const scopeKey = getVaultMirrorKey(table, { tenantId, branchId, userId });
   return new Promise((resolve) => {
     try {
       const tx = db.transaction(STORE_MIRRORS, 'readwrite');
       const store = tx.objectStore(STORE_MIRRORS);
       const entry: TableMirrorEntry = {
+        scopeKey,
         table,
+        tenantId,
+        branchId,
+        userId,
         rows,
         updatedAt: new Date().toISOString(),
         count: rows.length,
@@ -162,14 +194,18 @@ export async function saveTableMirrorToVault(table: TableName, rows: any[]): Pro
   });
 }
 
-/** Read a mirrored table from IndexedDB (offline & instant hydration) */
-export async function loadTableMirrorFromVault<T = any>(table: TableName): Promise<T[]> {
+/** Read a tenant/branch/user-scoped mirrored table from IndexedDB */
+export async function loadTableMirrorFromVault<T = any>(
+  table: TableName,
+  scope?: VaultMirrorScope
+): Promise<T[]> {
   const db = await openVaultDb();
   if (!db) return [];
+  const scopeKey = getVaultMirrorKey(table, scope);
   return new Promise((resolve) => {
     try {
       const tx = db.transaction(STORE_MIRRORS, 'readonly');
-      const req = tx.objectStore(STORE_MIRRORS).get(table);
+      const req = tx.objectStore(STORE_MIRRORS).get(scopeKey);
       req.onsuccess = () => {
         const res = req.result as TableMirrorEntry | undefined;
         resolve(Array.isArray(res?.rows) ? (res.rows as T[]) : []);

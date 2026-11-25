@@ -110,21 +110,21 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* No-Scroll Home only on sufficient viewport & default typography when keyboard is closed */
+/* Viewport-fit Home shell without silent overflow:hidden clipping */
 .no-scroll-home-shell {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   min-height: 100%;
 }
 
 @media (min-height: 660px) and (max-width: 767px) {
   html:not([data-large-text="true"]):not([data-keyboard-open="true"]) .main-no-scroll-home {
-    overflow-y: hidden;
+    overflow-y: auto;
   }
   html:not([data-large-text="true"]):not([data-keyboard-open="true"]) .no-scroll-home-shell {
-    height: 100%;
+    min-height: 100%;
   }
 }
 
@@ -139,42 +139,144 @@ html[data-keyboard-open="true"] .main-no-scroll-home {
   overflow-y: auto;
 }
 
-/* ===== Subtle Clinical Daylight Backdrop (Zero Continuous GPU Orb Loops) ===== */
-.gemini-bg {
+/* ===== FIX 01: Live GPU-Composited Aurora Mesh Backdrop (18s-30s calm cycles) ===== */
+.aurora-mesh-canvas {
   position: fixed;
   inset: 0;
   z-index: -2;
   overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(
+    145deg,
+    #F5F9FC 0%,
+    var(--section-tint-start, #F3F8FF) 48%,
+    var(--section-tint-end, #EEF6FB) 100%
+  );
+  transition: background 0.4s var(--ease-out);
+}
+
+.aurora-mesh-dark {
+  background: linear-gradient(155deg, #09131D 0%, #0E1C2B 52%, #132236 100%);
+}
+
+.aurora-mesh-blob {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: transform, opacity;
+  filter: blur(52px);
+}
+
+.aurora-blob-blue {
+  width: 68vw;
+  max-width: 520px;
+  height: 68vw;
+  max-height: 520px;
+  top: -16%;
+  right: -14%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.34) 0%, rgba(186, 230, 253, 0.14) 55%, transparent 76%);
+  animation: auroraDriftA 20s ease-in-out infinite alternate;
+}
+
+.aurora-blob-lilac {
+  width: 72vw;
+  max-width: 560px;
+  height: 72vw;
+  max-height: 560px;
+  top: 18%;
+  left: -18%;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.30) 0%, rgba(221, 214, 254, 0.15) 55%, transparent 76%);
+  animation: auroraDriftB 25s ease-in-out infinite alternate;
+}
+
+.aurora-blob-mint {
+  width: 62vw;
+  max-width: 480px;
+  height: 62vw;
+  max-height: 480px;
+  bottom: -14%;
+  right: 8%;
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.26) 0%, rgba(167, 243, 208, 0.12) 56%, transparent 76%);
+  animation: auroraDriftC 29s ease-in-out infinite alternate;
+}
+
+.aurora-blob-pink {
+  width: 58vw;
+  max-width: 440px;
+  height: 58vw;
+  max-height: 440px;
+  bottom: 12%;
+  left: 12%;
+  background: radial-gradient(circle, rgba(244, 114, 182, 0.24) 0%, rgba(251, 207, 232, 0.12) 54%, transparent 76%);
+  animation: auroraDriftD 18s ease-in-out infinite alternate;
+}
+
+.aurora-mesh-dark .aurora-blob-blue {
+  opacity: 0.42;
+}
+.aurora-mesh-dark .aurora-blob-lilac {
+  opacity: 0.40;
+}
+.aurora-mesh-dark .aurora-blob-mint {
+  opacity: 0.32;
+}
+.aurora-mesh-dark .aurora-blob-pink {
+  opacity: 0.30;
+}
+
+.aurora-contrast-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.36) 0%, rgba(244, 247, 249, 0.56) 100%);
+}
+
+.aurora-mesh-dark .aurora-contrast-veil {
+  background: radial-gradient(circle at 50% 35%, rgba(10, 20, 30, 0.28) 0%, rgba(10, 20, 30, 0.58) 100%);
+}
+
+@keyframes auroraDriftA {
+  0% { transform: translate3d(0px, 0px, 0) scale(1); opacity: 0.82; }
+  50% { transform: translate3d(-28px, 24px, 0) scale(1.06); opacity: 0.96; }
+  100% { transform: translate3d(18px, 42px, 0) scale(0.97); opacity: 0.86; }
+}
+
+@keyframes auroraDriftB {
+  0% { transform: translate3d(0px, 0px, 0) scale(1); opacity: 0.80; }
+  50% { transform: translate3d(34px, -22px, 0) scale(1.07); opacity: 0.95; }
+  100% { transform: translate3d(12px, 28px, 0) scale(0.95); opacity: 0.84; }
+}
+
+@keyframes auroraDriftC {
+  0% { transform: translate3d(0px, 0px, 0) scale(0.98); opacity: 0.78; }
+  50% { transform: translate3d(-22px, -30px, 0) scale(1.05); opacity: 0.92; }
+  100% { transform: translate3d(24px, -10px, 0) scale(1); opacity: 0.82; }
+}
+
+@keyframes auroraDriftD {
+  0% { transform: translate3d(0px, 0px, 0) scale(1); opacity: 0.74; }
+  50% { transform: translate3d(24px, 20px, 0) scale(1.06); opacity: 0.90; }
+  100% { transform: translate3d(-18px, -24px, 0) scale(0.96); opacity: 0.78; }
+}
+
+.aurora-paused .aurora-mesh-blob,
+html[data-aurora-mode="static"] .aurora-mesh-blob,
+html[data-reduce-motion="true"] .aurora-mesh-blob {
+  animation-play-state: paused !important;
+}
+
+.aurora-low-power .aurora-mesh-blob {
+  filter: blur(36px);
+  animation-duration: 30s !important;
+}
+
+.gemini-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  overflow: hidden;
   background: linear-gradient(180deg, #F4F7F9 0%, var(--section-tint-start, #F2FBFA) 62%, var(--section-tint-end, #E2F5F3) 100%);
   transition: background 0.35s var(--ease-out);
-}
-
-.gemini-orb {
-  position: absolute;
-  border-radius: 50%;
-  opacity: 0.14;
-  pointer-events: none;
-}
-
-.gemini-orb-1 {
-  width: 340px;
-  height: 340px;
-  background: radial-gradient(circle, var(--section) 0%, transparent 72%);
-  top: -120px;
-  right: -90px;
-}
-
-.gemini-orb-2 {
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, var(--section-orb-b) 0%, transparent 74%);
-  bottom: -110px;
-  left: -80px;
-}
-
-.gemini-orb-3,
-.gemini-orb-4 {
-  display: none;
 }
 
 /* ===== Calibrated Surfaces (Max Blur Restraint + High Contrast) ===== */
@@ -237,9 +339,9 @@ html[data-keyboard-open="true"] .main-no-scroll-home {
 
 .bento-tile,
 .qbank-tile {
-  border-radius: 20px 20px 20px 38px;
+  border-radius: 22px;
   padding: 14px;
-  min-height: 108px;
+  min-height: 98px;
   position: relative;
   overflow: hidden;
   transition: transform 0.16s var(--ease-press), box-shadow 0.2s var(--ease-out);
@@ -255,6 +357,7 @@ html[data-keyboard-open="true"] .main-no-scroll-home {
 }
 
 .qbank-notch-card {
+  border-radius: 22px;
   transition: transform 0.16s var(--ease-press);
 }
 

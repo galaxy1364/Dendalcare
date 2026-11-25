@@ -17,6 +17,8 @@ export const rawSupabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 export type Patient = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   first_name: string;
   last_name: string;
   national_id: string | null;
@@ -40,6 +42,8 @@ export type Patient = {
 
 export type Appointment = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   patient_id: string | null;
   staff_id: string | null;
   title: string | null;
@@ -56,6 +60,8 @@ export type Appointment = {
 
 export type Treatment = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   patient_id: string | null;
   appointment_id: string | null;
   diagnosis: string | null;
@@ -76,6 +82,8 @@ export type Treatment = {
 
 export type TreatmentService = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   treatment_id: string;
   service_date: string;
   tooth_number: number | null;
@@ -91,6 +99,8 @@ export type TreatmentService = {
 
 export type Payment = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   patient_id: string | null;
   treatment_id: string | null;
   amount: number;
@@ -104,6 +114,8 @@ export type Payment = {
 
 export type LabOrder = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   patient_id: string | null;
   lab_name: string | null;
   work_type: string;
@@ -122,6 +134,8 @@ export type LabOrder = {
 
 export type Implant = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   patient_id: string | null;
   tooth_number: number | null;
   brand: string | null;
@@ -140,6 +154,8 @@ export type Implant = {
 
 export type InventoryItem = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   name: string;
   category: string;
   sku: string | null;
@@ -158,6 +174,8 @@ export type InventoryItem = {
 
 export type Reminder = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   patient_id: string | null;
   title: string;
   description: string | null;
@@ -172,6 +190,9 @@ export type Reminder = {
 
 export type FinanceTransaction = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
+  payment_id?: string | null;
   type: 'income' | 'expense' | 'transfer';
   category: string;
   amount: number;
@@ -186,6 +207,8 @@ export type FinanceTransaction = {
 
 export type Staff = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   first_name: string;
   last_name: string;
   role: string;
@@ -199,6 +222,8 @@ export type Staff = {
 
 export type ToothCondition = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   patient_id: string | null;
   tooth_number: number;
   condition: string;
@@ -210,6 +235,8 @@ export type ToothCondition = {
 
 export type Installment = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   patient_id: string | null;
   treatment_id: string | null;
   total_amount: number;
@@ -227,6 +254,8 @@ export type Installment = {
 
 export type Check = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   patient_id: string | null;
   installment_id?: string | null;
   treatment_id?: string | null;
@@ -248,6 +277,8 @@ export type Check = {
 
 export type Safteh = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   patient_id: string | null;
   installment_id?: string | null;
   safteh_number: string | null;
@@ -266,6 +297,8 @@ export type Safteh = {
 
 export type StaffSalary = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   staff_id: string | null;
   base_salary: number;
   bonus: number;
@@ -283,6 +316,8 @@ export type StaffSalary = {
 
 export type StaffShare = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   staff_id: string | null;
   share_type: 'percentage' | 'fixed' | 'net_half_after_lab';
   share_value: number;
@@ -296,6 +331,8 @@ export type StaffShare = {
 
 export type Message = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   from_staff_id: string | null;
   to_staff_id: string | null;
   subject: string;
@@ -307,6 +344,8 @@ export type Message = {
 
 export type Advertisement = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   title: string;
   content: string | null;
   image_url: string | null;
@@ -321,6 +360,8 @@ export type Advertisement = {
 
 export type ClinicSetting = {
   id: string;
+  tenant_id?: string | null;
+  branch_id?: string | null;
   key: string;
   value: string | null;
   category: string;

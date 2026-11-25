@@ -4,6 +4,7 @@ import { CORE_PALETTE, DARK_PALETTE } from '@/design-system/tokens/colors';
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type FontScaleMode = 'compact' | 'default' | 'large' | 'xlarge';
 export type MotionMode = 'system' | 'reduce' | 'full';
+export type AuroraBackdropMode = 'live' | 'low_power' | 'static';
 
 export interface AppearanceSettings {
   themeMode: ThemeMode;
@@ -11,12 +12,15 @@ export interface AppearanceSettings {
   fontScale: FontScaleMode;
   motionMode: MotionMode;
   resolvedReduceMotion: boolean;
+  auroraMode: AuroraBackdropMode;
+  resolvedAuroraMode: AuroraBackdropMode;
   isLargeText: boolean;
 }
 
 const THEME_KEY = 'minadental_appearance_theme_v2';
 const FONT_SCALE_KEY = 'minadental_appearance_font_scale_v2';
 const MOTION_KEY = 'minadental_appearance_motion_v2';
+const AURORA_KEY = 'minadental_appearance_aurora_v2';
 const APPEARANCE_EVENT = 'minadental-appearance-changed';
 
 const FONT_SCALE_PX: Record<FontScaleMode, string> = {
@@ -59,6 +63,17 @@ export function getMotionMode(): MotionMode {
   return 'system';
 }
 
+export function getAuroraBackdropMode(): AuroraBackdropMode {
+  if (typeof window === 'undefined') return 'live';
+  try {
+    const val = localStorage.getItem(AURORA_KEY);
+    if (val === 'live' || val === 'low_power' || val === 'static') return val;
+  } catch {
+    // ignore
+  }
+  return 'live';
+}
+
 export function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
   if (mode === 'dark') return 'dark';
   if (mode === 'light') return 'light';
@@ -77,16 +92,33 @@ export function resolveReduceMotion(mode: MotionMode): boolean {
   return false;
 }
 
+export function resolveEffectiveAuroraMode(
+  auroraMode: AuroraBackdropMode,
+  reduceMotion: boolean
+): AuroraBackdropMode {
+  if (reduceMotion || auroraMode === 'static') return 'static';
+  if (auroraMode === 'low_power') return 'low_power';
+  if (typeof navigator !== 'undefined') {
+    const conn = (navigator as unknown as { connection?: { saveData?: boolean } }).connection;
+    if (conn?.saveData) return 'low_power';
+  }
+  return 'live';
+}
+
 export function getAppearanceSettings(): AppearanceSettings {
   const themeMode = getThemeMode();
   const fontScale = getFontScaleMode();
   const motionMode = getMotionMode();
+  const resolvedReduceMotion = resolveReduceMotion(motionMode);
+  const auroraMode = getAuroraBackdropMode();
   return {
     themeMode,
     resolvedTheme: resolveTheme(themeMode),
     fontScale,
     motionMode,
-    resolvedReduceMotion: resolveReduceMotion(motionMode),
+    resolvedReduceMotion,
+    auroraMode,
+    resolvedAuroraMode: resolveEffectiveAuroraMode(auroraMode, resolvedReduceMotion),
     isLargeText: fontScale === 'large' || fontScale === 'xlarge',
   };
 }
@@ -101,6 +133,7 @@ export function applyAppearanceToDocument(
   root.setAttribute('data-font-scale', settings.fontScale);
   root.setAttribute('data-large-text', settings.isLargeText ? 'true' : 'false');
   root.setAttribute('data-reduce-motion', settings.resolvedReduceMotion ? 'true' : 'false');
+  root.setAttribute('data-aurora-mode', settings.resolvedAuroraMode);
   root.style.fontSize = FONT_SCALE_PX[settings.fontScale] || '16px';
 
   const palette = settings.resolvedTheme === 'dark' ? DARK_PALETTE : CORE_PALETTE;
@@ -153,6 +186,15 @@ export function setFontScaleMode(scale: FontScaleMode): void {
 export function setMotionMode(mode: MotionMode): void {
   try {
     if (typeof window !== 'undefined') localStorage.setItem(MOTION_KEY, mode);
+  } catch {
+    // ignore
+  }
+  notifyAppearanceChanged();
+}
+
+export function setAuroraBackdropMode(mode: AuroraBackdropMode): void {
+  try {
+    if (typeof window !== 'undefined') localStorage.setItem(AURORA_KEY, mode);
   } catch {
     // ignore
   }

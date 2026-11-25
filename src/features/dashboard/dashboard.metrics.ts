@@ -41,14 +41,31 @@ export interface DashboardMetricsInput {
   staff: Staff[];
   units: DentalUnit[];
   branchId: string;
+  tenantId?: string;
   userRole: ClinicUserRole;
   referenceDateIso?: string;
 }
 
-type BranchScopedRecord = { branch_id?: string | null };
+type TenantBranchScopedRecord = {
+  tenant_id?: string | null;
+  branch_id?: string | null;
+};
 
-function matchesBranch<T extends BranchScopedRecord>(row: T, branchId: string): boolean {
-  if (!row.branch_id) return true;
+/**
+ * FIX 08: Strict tenant & branch isolation.
+ * Records without an explicit matching `branch_id` are NEVER leaked across branches.
+ */
+export function matchesTenantAndBranch<T extends TenantBranchScopedRecord>(
+  row: T,
+  branchId: string,
+  tenantId?: string
+): boolean {
+  if (tenantId && row.tenant_id && row.tenant_id !== tenantId) {
+    return false;
+  }
+  if (!row.branch_id) {
+    return false;
+  }
   return row.branch_id === branchId;
 }
 
@@ -70,6 +87,20 @@ function parsePositiveNumberSetting(settings: ClinicSetting[], key: string): num
   return Number.isFinite(num) && num > 0 ? num : null;
 }
 
+/**
+ * FIX 07: Guarantee collateral checks vs collectible receivable checks.
+ */
+export function isGuaranteeCheck(c: Check): boolean {
+  if (c.is_guarantee === true) return true;
+  if (String(c.type || '').toLowerCase() === 'guarantee') return true;
+  if (/ضمانت/.test(String(c.notes || ''))) return true;
+  return false;
+}
+
+/**
+ * FIX 07: Real chair capacity requires explicit active units, active doctors, AND clinic shift schedule.
+ * Missing any real denominator returns `null` rather than hiding gaps with guessed defaults.
+ */
 export function computeRealChairCapacity(params: {
   units: DentalUnit[];
   staff: Staff[];
@@ -82,10 +113,8 @@ export function computeRealChairCapacity(params: {
     (st) => st.active !== false && (st.role === 'manager' || st.role === 'dentist')
   );
 
-  const morningStr =
-    clinicSettings.find((s) => s.key === 'clinic_morning_hours')?.value || '09:00 الی 13:30';
-  const eveningStr =
-    clinicSettings.find((s) => s.key === 'clinic_evening_hours')?.value || '16:00 الی 21:00';
+  const morningStr = clinicSettings.find((s) => s.key === 'clinic_morning_hours')?.value || '';
+  const eveningStr = clinicSettings.find((s) => s.key === 'clinic_evening_hours')?.value || '';
   const parsedShiftMinutes =
     parseShiftRangeMinutes(morningStr) + parseShiftRangeMinutes(eveningStr);
 
@@ -93,10 +122,7 @@ export function computeRealChairCapacity(params: {
     parsePositiveNumberSetting(clinicSettings, 'default_appointment_duration') ?? 30;
 
   const shiftMinutesPerDay = parsedShiftMinutes;
-  const effectiveChairs =
-    activeDoctors.length > 0
-      ? Math.min(activeUnits.length, activeDoctors.length)
-      : activeUnits.length;
+  const effectiveChairs = Math.min(activeUnits.length, activeDoctors.length);
 
   let dailyChairCapacity: number | null = null;
   if (effectiveChairs > 0 && shiftMinutesPerDay > 0 && slotDurationMinutes > 0) {
@@ -120,23 +146,28 @@ export function computeRealChairCapacity(params: {
 }
 
 /**
- * Deduplicates finance_transactions income against payments so payments aren't double-counted.
+ * FIX 07: Deterministic accounting-link deduplication between `finance_transactions` and `payments`.
+ * Never uses fuzzy `(samePatient && sameDate && sameAmount)` matching so legitimate multiple
+ * identical-amount same-day payments are never silently dropped.
  */
 export function isDuplicatePaymentTransaction(
-  tx: FinanceTransaction,
+  tx: FinanceTransaction & { payment_id?: string | null },
   completedPayments: Payment[]
 ): boolean {
-  const ref = String(tx.reference || '').toUpperCase();
+  const ref = String(tx.reference || '').trim().toUpperCase();
   const desc = String(tx.description || '');
-  if (ref.startsWith('PAY:') || ref.startsWith('PAYMENT_')) return true;
+  const linkedPaymentId = tx.payment_id ? String(tx.payment_id).trim() : '';
+
+  if (ref.startsWith('PAY:') || ref.startsWith('PAYMENT_')) {
+    return true;
+  }
 
   return completedPayments.some((p) => {
-    if (ref && ref === p.id.toUpperCase()) return true;
-    const samePatient = Boolean(p.patient_id && tx.patient_id && p.patient_id === tx.patient_id);
-    const sameDate = p.payment_date?.slice(0, 10) === tx.transaction_date?.slice(0, 10);
-    const sameAmount = Math.abs(Number(p.amount) - Number(tx.amount)) < 1;
-    if (samePatient && sameDate && sameAmount) return true;
-    if (desc && desc.includes(p.id)) return true;
+    const pid = String(p.id).trim();
+    if (!pid) return false;
+    if (linkedPaymentId && linkedPaymentId === pid) return true;
+    if (ref && (ref === pid.toUpperCase() || ref === `PAY:${pid.toUpperCase()}`)) return true;
+    if (desc && (desc.includes(`[PAY_ID:${pid}]`) || desc.includes(pid))) return true;
     return false;
   });
 }
@@ -146,18 +177,42 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
   const monthBounds = getCurrentJalaliMonthBounds(todayIso);
   const { startGregorian: monthStartIso, endGregorian: monthEndIso, monthLabel } = monthBounds;
 
-  const patients = input.patients.filter((r) => matchesBranch(r as Patient & BranchScopedRecord, input.branchId));
-  const appointments = input.appointments.filter((r) => matchesBranch(r as Appointment & BranchScopedRecord, input.branchId));
-  const treatments = input.treatments.filter((r) => matchesBranch(r as Treatment & BranchScopedRecord, input.branchId));
-  const labOrders = input.labOrders.filter((r) => matchesBranch(r as LabOrder & BranchScopedRecord, input.branchId));
-  const implants = input.implants.filter((r) => matchesBranch(r as Implant & BranchScopedRecord, input.branchId));
-  const payments = input.payments.filter((r) => matchesBranch(r as Payment & BranchScopedRecord, input.branchId));
-  const inventory = input.inventory.filter((r) => matchesBranch(r as InventoryItem & BranchScopedRecord, input.branchId));
-  const reminders = input.reminders.filter((r) => matchesBranch(r as Reminder & BranchScopedRecord, input.branchId));
-  const finance = input.finance.filter((r) => matchesBranch(r as FinanceTransaction & BranchScopedRecord, input.branchId));
-  const installments = input.installments.filter((r) => matchesBranch(r as Installment & BranchScopedRecord, input.branchId));
-  const checks = input.checks.filter((r) => matchesBranch(r as Check & BranchScopedRecord, input.branchId));
-  const safteh = input.safteh.filter((r) => matchesBranch(r as Safteh & BranchScopedRecord, input.branchId));
+  const patients = input.patients.filter((r) =>
+    matchesTenantAndBranch(r as Patient & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
+  const appointments = input.appointments.filter((r) =>
+    matchesTenantAndBranch(r as Appointment & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
+  const treatments = input.treatments.filter((r) =>
+    matchesTenantAndBranch(r as Treatment & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
+  const labOrders = input.labOrders.filter((r) =>
+    matchesTenantAndBranch(r as LabOrder & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
+  const implants = input.implants.filter((r) =>
+    matchesTenantAndBranch(r as Implant & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
+  const payments = input.payments.filter((r) =>
+    matchesTenantAndBranch(r as Payment & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
+  const inventory = input.inventory.filter((r) =>
+    matchesTenantAndBranch(r as InventoryItem & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
+  const reminders = input.reminders.filter((r) =>
+    matchesTenantAndBranch(r as Reminder & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
+  const finance = input.finance.filter((r) =>
+    matchesTenantAndBranch(r as FinanceTransaction & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
+  const installments = input.installments.filter((r) =>
+    matchesTenantAndBranch(r as Installment & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
+  const checks = input.checks.filter((r) =>
+    matchesTenantAndBranch(r as Check & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
+  const safteh = input.safteh.filter((r) =>
+    matchesTenantAndBranch(r as Safteh & TenantBranchScopedRecord, input.branchId, input.tenantId)
+  );
 
   const todayAppts = appointments.filter((a) => a.appointment_date === todayIso);
   const confirmedAppts = todayAppts.filter(
@@ -199,25 +254,64 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
     .filter((f) => f.type === 'expense')
     .reduce((sum, f) => sum + Number(f.amount || 0), 0);
 
+  // Cash flow = actual money received minus cash operating expenses
   const monthCashFlow = monthCollected + monthExtraIncome - monthExpense;
-  const monthNetProfit = monthCashFlow;
 
+  // Accrual Net Profit = Earned Treatment Net Production - Direct Clinical Costs - Operating Expenses
   const monthTreatments = treatments.filter(
     (t) => t.status !== 'cancelled' && isDateInRange(t.created_at, monthStartIso, monthEndIso)
   );
   const monthTreatmentProduction = monthTreatments.reduce(
-    (sum, t) => sum + Number(t.total_cost || 0),
+    (sum, t) => sum + Math.max(0, Number(t.total_cost || 0) - Number(t.discount || 0)),
     0
   );
+  const monthDirectCosts = monthTreatments.reduce(
+    (sum, t) =>
+      sum +
+      Number(t.doctor_cost || 0) +
+      Number(t.lab_cost || 0) +
+      Number(t.material_cost || 0) +
+      Number(t.other_cost || 0),
+    0
+  );
+  const monthNetProfit =
+    monthTreatmentProduction + monthExtraIncome - monthDirectCosts - monthExpense;
 
-  // Total outstanding patient receivables (treatments unpaid + active installment remainder)
+  // True A/R (Receivables) from unpaid balances of linked documents without double-counting or Math.max
   const treatmentReceivables = treatments
     .filter((t) => t.status !== 'cancelled')
-    .reduce((sum, t) => sum + Math.max(0, Number(t.total_cost || 0) - Number(t.paid_amount || 0)), 0);
-  const pendingChecksAmount = checks
-    .filter((c) => c.status === 'pending')
+    .reduce(
+      (sum, t) =>
+        sum +
+        Math.max(
+          0,
+          Math.max(0, Number(t.total_cost || 0) - Number(t.discount || 0)) -
+            Number(t.paid_amount || 0)
+        ),
+      0
+    );
+
+  const standaloneInstallmentReceivables = installments
+    .filter((i) => (i.status === 'active' || i.status === 'overdue') && !i.treatment_id)
+    .reduce(
+      (sum, i) => sum + Math.max(0, Number(i.total_amount || 0) - Number(i.paid_amount || 0)),
+      0
+    );
+
+  const collectionChecksPendingAmount = checks
+    .filter((c) => c.status === 'pending' && !isGuaranteeCheck(c))
     .reduce((sum, c) => sum + Number(c.amount || 0), 0);
-  const totalReceivables = Math.max(treatmentReceivables, pendingChecksAmount);
+
+  const guaranteeChecksPendingAmount = checks
+    .filter((c) => c.status === 'pending' && isGuaranteeCheck(c))
+    .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+
+  const standaloneCollectionChecksAmount = checks
+    .filter((c) => c.status === 'pending' && !isGuaranteeCheck(c) && !c.treatment_id && !c.installment_id)
+    .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+
+  const totalReceivables =
+    treatmentReceivables + standaloneInstallmentReceivables + standaloneCollectionChecksAmount;
 
   // Explicit denominators — NEVER return artificial defaults (no 94, 88, 75, 15M, 35M, 18%)
   const monthPaidTowardsProduction = monthCollected + monthExtraIncome;
@@ -258,11 +352,16 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
   const overdueRem = pendingRem.filter((r) => r.reminder_date < todayIso);
 
   const overdueInstallments = installments.filter(
-    (i) => i.status === 'active' && i.next_due_date && i.next_due_date < todayIso
+    (i) => (i.status === 'active' || i.status === 'overdue') && i.next_due_date && i.next_due_date < todayIso
   ).length;
-  const overdueChecks = checks.filter((c) => c.status === 'pending' && c.due_date < todayIso).length;
+  const overdueChecks = checks.filter(
+    (c) => c.status === 'pending' && !isGuaranteeCheck(c) && c.due_date < todayIso
+  ).length;
+  const overdueGuaranteeChecks = checks.filter(
+    (c) => c.status === 'pending' && isGuaranteeCheck(c) && c.due_date < todayIso
+  ).length;
   const overdueSafteh = safteh.filter((sf) => sf.status === 'pending' && sf.due_date < todayIso).length;
-  const totalOverdueFinCount = overdueInstallments + overdueChecks + overdueSafteh;
+  const totalOverdueFinCount = overdueInstallments + overdueChecks;
 
   const patientMap = new Map<string, Patient>();
   for (const p of patients) patientMap.set(p.id, p);
@@ -310,7 +409,7 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
 
   if (totalOverdueFinCount > 0 && canAccessRoute(input.userRole, 'finance')) {
     priorityAction = {
-      title: `${fmt(totalOverdueFinCount)} چک یا قسط سررسید گذشته`,
+      title: `${fmt(totalOverdueFinCount)} چک وصولی یا قسط سررسید گذشته`,
       subtitle: `${fmt(overdueChecks)} چک صیادی و ${fmt(overdueInstallments)} قسط نیازمند پیگیری`,
       cta: 'پیگیری مالی',
       target: 'finance',
@@ -419,6 +518,7 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
     lowStockCount: lowStock.length,
     pendingRemindersCount: pendingRem.length,
     overdueChecksCount: overdueChecks,
+    overdueGuaranteeChecksCount: overdueGuaranteeChecks,
     overdueInstallmentsCount: overdueInstallments,
     overdueSaftehCount: overdueSafteh,
     totalOverdueFinCount,
@@ -429,9 +529,12 @@ export function computeDashboardMetrics(input: DashboardMetricsInput): Dashboard
       monthCollected,
       monthExtraIncome,
       monthExpense,
+      monthDirectCosts,
       monthNetProfit,
       monthCashFlow,
       monthTreatmentProduction,
+      collectionChecksPendingAmount,
+      guaranteeChecksPendingAmount,
       totalReceivables,
       dailyRevenueTarget,
       monthlyRevenueTarget,

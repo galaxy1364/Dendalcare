@@ -8,9 +8,12 @@ export interface DashboardRevenueMetrics {
   monthCollected: number;
   monthExtraIncome: number;
   monthExpense: number;
+  monthDirectCosts: number;
   monthNetProfit: number;
   monthCashFlow: number;
   monthTreatmentProduction: number;
+  collectionChecksPendingAmount: number;
+  guaranteeChecksPendingAmount: number;
   totalReceivables: number;
   dailyRevenueTarget: number | null;
   monthlyRevenueTarget: number | null;
@@ -65,6 +68,7 @@ export interface DashboardMetrics {
   lowStockCount: number;
   pendingRemindersCount: number;
   overdueChecksCount: number;
+  overdueGuaranteeChecksCount: number;
   overdueInstallmentsCount: number;
   overdueSaftehCount: number;
   totalOverdueFinCount: number;
