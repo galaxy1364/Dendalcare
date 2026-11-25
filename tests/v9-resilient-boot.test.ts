@@ -406,7 +406,8 @@ export async function runAllV9ResilientBootTests(): Promise<V9TestResult[]> {
       const dist404 = fs.readFileSync(path.join(ROOT, 'dist/404.html'), 'utf8');
       assert.equal(dist404, distIndex, 'dist/404.html must match dist/index.html byte-for-byte');
       assert.ok(!dist404.includes('src/main.tsx'), 'dist/404.html must not reference src/main.tsx');
-      assert.ok(!distIndex.includes('dev-local'), 'dist/index.html must not stamp dev-local');
+      const stampedBuildId = distIndex.match(/<meta\s+name="minadental-build-id"\s+content="([^"]+)"/i)?.[1];
+      assert.ok(stampedBuildId && stampedBuildId !== 'dev-local', `dist/index.html must stamp real buildId, got ${stampedBuildId}`);
     }
   });
 
@@ -447,7 +448,7 @@ export async function runAllV9ResilientBootTests(): Promise<V9TestResult[]> {
       currentReleaseId: 'v5.1.0-1122334455',
       releaseSequence: 101,
       manifestUrl: './releases/v5.1.0-1122334455/release-manifest.json',
-      publishedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       revokedReleaseIds: [],
     };
     const unsignedManifest: AuthoritativeReleaseManifest = {
@@ -455,16 +456,26 @@ export async function runAllV9ResilientBootTests(): Promise<V9TestResult[]> {
       releaseId: 'v5.1.0-1122334455',
       releaseSequence: 101,
       semver: '5.1.0',
+      gitCommit: 'abcdef1234567890',
       channel: 'stable',
       platform: 'web',
       publishedAt: new Date().toISOString(),
       origin: 'ci_pipeline',
-      minCompatibleSchemaVersion: 1,
+      minSchemaVersion: 1,
       minNativeVersion: '1.0.0',
       contentDigest: '1122334455'.repeat(6) + '1122',
+      entryScripts: ['./assets/index.js'],
+      entryStyles: ['./assets/index.css'],
       assets: [{ path: './index.html', sha256: 'a'.repeat(64), size: 100, critical: true }],
+      urgency: 'standard',
+      revoked: false,
       releaseNotes: 'Test unsigned',
-      rollbackPolicy: { strategy: 'forward_release', maxAutomaticReloadAttempts: 2 },
+      rollbackPolicy: {
+        strategy: 'forward_release',
+        minRollbackSequence: 100,
+        schemaBackwardCompatible: true,
+        preserveUserData: true,
+      },
     };
 
     const dummyAdapter: PlatformUpdateAdapter = {

@@ -303,7 +303,12 @@
         stopSplashSpinner();
 
         var el = document.getElementById('boot-error');
+        var titleEl = document.getElementById('boot-error-title');
         var metaEl = document.getElementById('boot-error-meta');
+        if (titleEl && rootCause.code === 'RAW_TSX_DEPLOY_ERROR') {
+          titleEl.textContent =
+            'هاست در حال بارگذاری فایل سورس خام (بدون بیلد) است. در GitHub به مسیر Settings ← Pages ← Source بروید، گزینه «GitHub Actions» را انتخاب کنید و دیپلوی را اجرا نمایید.';
+        }
         if (metaEl) {
           metaEl.textContent =
             'CODE=' + rootCause.code +

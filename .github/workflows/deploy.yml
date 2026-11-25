@@ -48,13 +48,23 @@ jobs:
             exit 1
           fi
 
-      - name: Compute strict monotonic CI release sequence (fail-closed)
+      - name: Compute strict monotonic CI release sequence (fail-closed with legacy raw-root migration guard)
         id: seq
         env:
           MINA_BASE_SEQUENCE: '65'
           MINA_BOOTSTRAP_FIRST_RELEASE: ${{ inputs.bootstrap_first_release || 'false' }}
         run: |
-          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --require-remote-pointer
+          BOOTSTRAP_FLAG="$MINA_BOOTSTRAP_FIRST_RELEASE"
+          if [ "$BOOTSTRAP_FLAG" != "true" ]; then
+            PTR_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://galaxy1364.github.io/Dendalcare/release-pointer.json || echo "000")
+            if [ "$PTR_STATUS" = "404" ]; then
+              if curl -s https://galaxy1364.github.io/Dendalcare/ | grep -q "src/main.tsx"; then
+                echo "Detected legacy unbuilt GitHub Pages root (src/main.tsx + 404 pointer). Enabling one-time first-release bootstrap."
+                BOOTSTRAP_FLAG="true"
+              fi
+            fi
+          fi
+          MINA_BOOTSTRAP_FIRST_RELEASE="$BOOTSTRAP_FLAG" node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --require-remote-pointer
 
       - name: Mandatory Pre-Deploy TypeScript Typecheck
         run: npm run typecheck

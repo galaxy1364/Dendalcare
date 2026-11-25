@@ -1,6 +1,6 @@
 // MinaDental Unified Service Worker (V8 Verified Release Assurance)
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
-const BUILD_ID = "v4.9.6-8dacfa16b2";
+const BUILD_ID = "v4.9.6-65c9e13289";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
@@ -10,14 +10,14 @@ const CLIENT_LEASE_TTL_MS = 10 * 60 * 1000;
 const CRITICAL_PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-C-VykRiy.js",
+  "./assets/index-DROSY2Dk.js",
   "./assets/index-GiHbXGuz.css"
 ];
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-C-VykRiy.js",
+  "./assets/index-DROSY2Dk.js",
   "./assets/index-GiHbXGuz.css",
   "./manifest.json",
   "./favicon.svg",

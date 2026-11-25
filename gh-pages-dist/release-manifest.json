@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "releaseId": "v4.9.6-955aad2737",
+  "releaseId": "v4.9.6-65c9e13289",
   "releaseSequence": 65,
   "semver": "4.9.6",
   "gitCommit": "local-uncommitted",
@@ -8,9 +8,9 @@
   "platform": "web",
   "minNativeVersion": "4.9.0",
   "minSchemaVersion": 4,
-  "publishedAt": "2026-11-25T14:22:10.736Z",
-  "expiresAt": "2027-11-25T14:22:10.736Z",
-  "contentDigest": "955aad2737a08f65a2d0a0dbe35999b222d9e9ecfea696a28dbc08a95ff22842",
+  "publishedAt": "2026-11-25T14:49:14.049Z",
+  "expiresAt": "2027-11-25T14:49:14.049Z",
+  "contentDigest": "65c9e132890ae6eb0ca97bece940825c43f7e8d78b4ada8189c6bd2ea483d9db",
   "releaseNotes": "نسخه v4.9.6 (انتشار #65) — موتور به‌روزرسانی تأییدشده V7 با مانیفست رسمی، اعتبارسنجی SHA-256/امضا، هماهنگ‌کننده واحد بین‌تبی، حفظ داده‌ها در نقطه امن و بررسی واقعی پس از راه‌اندازی",
   "entryScripts": [
     "./assets/index-DROSY2Dk.js"
@@ -21,8 +21,8 @@
   "assets": [
     {
       "path": "./index.html",
-      "sha256": "10d012e65a82eedaed1fb90991e80bee23588b0860727fe24e6f585fb832b506",
-      "size": 24413,
+      "sha256": "229f8b7a550f12cd59688e3c71298fb2d42658414c5d91f2bf00225db4990a87",
+      "size": 24866,
       "critical": true,
       "contentType": "text/html; charset=utf-8"
     },
@@ -546,7 +546,7 @@
     },
     {
       "path": "./sw.js",
-      "sha256": "e2b5e52a0c6682941d373956d9f8b66cf0fa1705341f7679c3b6ab61def2803e",
+      "sha256": "53de64b46065df1042a48f2a67ad0f2200aa74ad5439db481bb0897c56f92608",
       "size": 15543,
       "critical": false,
       "contentType": "application/javascript; charset=utf-8"

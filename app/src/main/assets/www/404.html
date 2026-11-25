@@ -14,10 +14,10 @@
   <meta name="application-name" content="مینادنتال" />
   <meta name="format-detection" content="telephone=no" />
   <meta name="description" content="مینادنتال — پلتفرم یکپارچه مدیریت کلینیک دندانپزشکی با طراحی سیستماتیک، تقویم شمسی و گزارش‌گیری دقیق مالی" />
-  <meta name="minadental-build-id" content="v4.9.6-955aad2737" />
+  <meta name="minadental-build-id" content="v4.9.6-65c9e13289" />
   <meta name="minadental-release-seq" content="65" />
   <meta name="minadental-semver" content="4.9.6" />
-  <meta name="minadental-content-digest" content="955aad2737a08f65a2d0a0dbe35999b222d9e9ecfea696a28dbc08a95ff22842" />
+  <meta name="minadental-content-digest" content="65c9e132890ae6eb0ca97bece940825c43f7e8d78b4ada8189c6bd2ea483d9db" />
   <title>مینادنتال | مدیریت هوشمند کلینیک دندانپزشکی</title>
 
   <link rel="icon" type="image/svg+xml" href="./assets/favicon-BZotrQQN.svg" />
@@ -188,7 +188,12 @@
         stopSplashSpinner();
 
         var el = document.getElementById('boot-error');
+        var titleEl = document.getElementById('boot-error-title');
         var metaEl = document.getElementById('boot-error-meta');
+        if (titleEl && rootCause.code === 'RAW_TSX_DEPLOY_ERROR') {
+          titleEl.textContent =
+            'هاست در حال بارگذاری فایل سورس خام (بدون بیلد) است. در GitHub به مسیر Settings ← Pages ← Source بروید، گزینه «GitHub Actions» را انتخاب کنید و دیپلوی را اجرا نمایید.';
+        }
         if (metaEl) {
           metaEl.textContent =
             'CODE=' + rootCause.code +

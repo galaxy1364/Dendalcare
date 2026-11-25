@@ -260,7 +260,10 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     const sw = read('public/sw.js');
 
     assert.ok(html.includes('href="./manifest.json" crossorigin="use-credentials"'), 'index.html must keep manifest with credentials');
-    assert.ok(html.includes('./fonts/vazirmatn-arabic.woff2'), 'index.html must preload self-hosted Vazirmatn font');
+    assert.ok(
+      html.includes("'Vazirmatn', 'Tahoma'") && read('src/index.css').includes('vazirmatn-arabic.woff2'),
+      'Self-hosted Vazirmatn font must be configured via CSS with Persian-safe Tahoma fallback (without fatal preload tags)'
+    );
     assert.ok(html.includes('window.__deferredInstallPrompt'), 'index.html must capture beforeinstallprompt early');
     assert.ok(manifest.icons.some((i) => i.purpose === 'any' && i.sizes === '512x512'), 'manifest must have 512x512 any icon');
     assert.ok(manifest.icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512'), 'manifest must have 512x512 maskable icon');
@@ -577,8 +580,8 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
       'publishWebAppToGitHubPages must sync intact assets from build-manifest.json'
     );
     assert.ok(
-      htmlSrc.includes('name="minadental-build-id"') && htmlSrc.includes("k.indexOf('minadental-') === 0"),
-      'index.html must track deterministic BUILD_ID and scope cache recovery strictly to minadental-* caches'
+      htmlSrc.includes('name="minadental-build-id"') && htmlSrc.includes("k.indexOf('minadental-shell-') === 0"),
+      'index.html must track deterministic BUILD_ID and scope cache recovery strictly to minadental-shell-* / minadental-v* caches'
     );
 
     const headerEndIdx = shellSrc.indexOf('</header>');
