@@ -138,7 +138,8 @@ async function fetchAndCacheAsset(cache, assetUrl, isCritical) {
     const parsedExisting = new URL(assetUrl, self.location.href);
     const modeExisting = assetUrl === './' || assetUrl.endsWith('.html') ? 'navigate' : 'cors';
     const ctExisting = preStaged.headers.get('content-type') || '';
-    if (isValidMimeForPath(parsedExisting.pathname, ctExisting, modeExisting)) {
+    if (isValidMimeForPath(parsedExisting.pathname, ctExisting, modeExisting) &&
+        (modeExisting !== 'navigate' || await readNavigationBuildId(preStaged) === RESOLVED_BUILD_ID)) {
       return;
     }
   }
@@ -153,7 +154,8 @@ async function fetchAndCacheAsset(cache, assetUrl, isCritical) {
     res.ok &&
     res.status === 200 &&
     res.type === 'basic' &&
-    isValidMimeForPath(parsed.pathname, ct, mode);
+    isValidMimeForPath(parsed.pathname, ct, mode) &&
+    (mode !== 'navigate' || await readNavigationBuildId(res) === RESOLVED_BUILD_ID);
 
   if (!valid) {
     if (isCritical) {
@@ -176,7 +178,8 @@ async function verifyOwnStagedInventory() {
     const parsed = new URL(assetUrl, self.location.href);
     const mode = assetUrl === './' || assetUrl.endsWith('.html') ? 'navigate' : 'cors';
     const ct = matched.headers.get('content-type') || '';
-    if (!isValidMimeForPath(parsed.pathname, ct, mode)) {
+    if (!isValidMimeForPath(parsed.pathname, ct, mode) ||
+        (mode === 'navigate' && await readNavigationBuildId(matched) !== RESOLVED_BUILD_ID)) {
       missing.push(assetUrl);
     }
   }
@@ -328,6 +331,32 @@ self.addEventListener('sync', (event) => {
   }
 });
 
+// V10: HTML is executable release content, not just a MIME type.
+// Validate the build marker and actual module entry; never cache or replay raw developer HTML.
+async function readNavigationBuildId(response) {
+  if (!response || response.status !== 200 ||
+      !isValidMimeForPath('/index.html', response.headers.get('content-type'), 'navigate')) return null;
+  let timer;
+  try {
+    const html = await Promise.race([
+      response.clone().text(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('HTML probe timed out')), NAVIGATION_TIMEOUT_MS);
+      }),
+    ]);
+    const marker = html.match(/<meta\s+name=["']minadental-build-id["']\s+content=["']([^"']+)["']/i)?.[1];
+    if (!marker || !/^v\d+\.\d+\.\d+-[a-f0-9]{10}$/.test(marker)) return null;
+    const entries = [...html.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi)].map((match) => match[1]);
+    if (entries.some((src) => /\.(?:tsx|ts)(?:[?#]|$)/i.test(src))) return null;
+    if (!entries.some((src) => /\.m?js(?:[?#]|$)/i.test(src))) return null;
+    return marker;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function handleNavigationRequest(request, url) {
   try {
     const networkResponse = await fetchWithTimeout(
@@ -335,27 +364,29 @@ async function handleNavigationRequest(request, url) {
       { cache: 'no-store' },
       NAVIGATION_TIMEOUT_MS
     );
-    if (isCacheableResponse(request, networkResponse, url.pathname)) {
-      const htmlProbe = await networkResponse.clone().text().catch(() => '');
-      const metaMatch = htmlProbe.match(/<meta\s+name="minadental-build-id"\s+content="([^"]+)"/i);
-      const responseBuildId = metaMatch ? metaMatch[1] : null;
-      // V7/V8: NEVER cache navigation HTML belonging to a DIFFERENT release into this worker's cache
-      if (!responseBuildId || RESOLVED_BUILD_ID === 'dev-local' || responseBuildId === RESOLVED_BUILD_ID) {
-        const clone = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', clone)).catch(() => {});
+    const responseBuildId = await readNavigationBuildId(networkResponse);
+    if (responseBuildId) {
+      // A valid newer root may boot normally but must never contaminate this release's cache.
+      if (responseBuildId === RESOLVED_BUILD_ID && isCacheableResponse(request, networkResponse, url.pathname)) {
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put('./index.html', networkResponse.clone());
+        } catch { /* storage failure must not block a healthy online shell */ }
       }
+      return networkResponse;
     }
-    return networkResponse;
-  } catch {
+  } catch { /* bounded offline fallback below */ }
+
+  try {
     const cache = await caches.open(CACHE_NAME);
     const exactMatch = await cache.match(request);
-    if (exactMatch) return exactMatch;
+    if (await readNavigationBuildId(exactMatch) === RESOLVED_BUILD_ID) return exactMatch;
     const indexMatch = await cache.match('./index.html');
-    if (indexMatch) return indexMatch;
+    if (await readNavigationBuildId(indexMatch) === RESOLVED_BUILD_ID) return indexMatch;
     const rootMatch = await cache.match('./');
-    if (rootMatch) return rootMatch;
-    return createOfflineHtmlResponse();
-  }
+    if (await readNavigationBuildId(rootMatch) === RESOLVED_BUILD_ID) return rootMatch;
+  } catch { /* cache may be disabled, evicted, or inaccessible */ }
+  return createOfflineHtmlResponse();
 }
 
 async function handleStaticAssetRequest(request, url) {
