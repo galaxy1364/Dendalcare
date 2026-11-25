@@ -23,7 +23,7 @@ on:
         type: boolean
 
 concurrency:
-  group: minadental-release-${{ inputs.channel || 'staging' }}
+  group: "pages"
   cancel-in-progress: false
 
 permissions:
@@ -67,7 +67,7 @@ jobs:
           MINA_RELEASE_SEQUENCE_INPUT: ${{ inputs.release_sequence }}
           MINA_BOOTSTRAP_FIRST_RELEASE: ${{ inputs.bootstrap_first_release }}
         run: |
-          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --require-remote-pointer
+          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --require-remote-pointer --allow-legacy-root-migration
 
       - name: Typecheck
         run: npm run typecheck
