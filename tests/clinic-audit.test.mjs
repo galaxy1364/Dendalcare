@@ -265,7 +265,7 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     assert.ok(manifest.icons.some((i) => i.purpose === 'any' && i.sizes === '512x512'), 'manifest must have 512x512 any icon');
     assert.ok(manifest.icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512'), 'manifest must have 512x512 maskable icon');
     assert.ok(
-      sw.includes("const CACHE_PREFIX = 'minadental-shell-'") && sw.includes("const BUILD_ID = '__MINA_BUILD_ID__'"),
+      sw.includes("const CACHE_PREFIX = 'minadental-shell-'") && sw.includes("const BUILD_ID = '__MINA_BUILD_ID_VALUE__'"),
       'sw.js must derive its cache name from deterministic BUILD_ID with minadental- namespace'
     );
   });

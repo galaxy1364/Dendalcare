@@ -1,4 +1,4 @@
-name: MinaDental V5 Release Gate CI
+name: MinaDental V6 Release Gate CI
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  quality-build-and-unit-gates:
-    name: Typecheck, Deterministic Build, Asset-Graph HTTP/MIME & Unit Tests
+  quality-build-and-asset-gates:
+    name: Typecheck, Deterministic Build, Syntax/Subpath Asset Graph & Unit Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -29,10 +29,10 @@ jobs:
       - name: Production deterministic Vite build
         run: npm run build
 
-      - name: Verify recursive HTTP 200 & MIME asset graph (dist + gh-pages-dist)
+      - name: Verify inline JS syntax, hygiene, and root + /Dendalcare/ HTTP/MIME asset graph
         run: npm run verify:assets
 
-      - name: Run audit & V4/V5 production-import unit tests
+      - name: Run audit & V4/V5/V6 production-import unit tests
         run: npm test
 
       - name: Verify SQL migrations exist and preserve SECURITY INVOKER
@@ -43,11 +43,10 @@ jobs:
           grep -q "get_clinic_dashboard_summary" supabase/migrations/20261127_v4_rpc_and_accounting_dates.sql
           grep -q "SECURITY INVOKER" supabase/migrations/20261127_v4_rpc_and_accounting_dates.sql
 
-  playwright-e2e-and-staging-rls:
-    name: Playwright E2E (Chromium + WebKit) & Staging RLS Gate
+  browser-e2e-smoke:
+    name: Unconditional Playwright E2E (Chromium + WebKit)
     runs-on: ubuntu-latest
-    needs: quality-build-and-unit-gates
-    if: ${{ vars.ENABLE_STAGING_GATES == 'true' }}
+    needs: quality-build-and-asset-gates
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -68,15 +67,35 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
 
       - name: Run Playwright Release Gate E2E
-        run: npx playwright test
+        run: npm run test:e2e
 
-      - name: Upload Playwright report on failure
-        if: failure()
+      - name: Upload Playwright report & viewport screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
-          path: playwright-report/
+          name: playwright-v6-artifacts
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7
+
+  staging-rls-gate:
+    name: Staging RLS Multi-Tenant Gate (Secret-Gated)
+    runs-on: ubuntu-latest
+    needs: quality-build-and-asset-gates
+    if: ${{ vars.ENABLE_STAGING_GATES == 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Run Staging RLS Verification
         env:

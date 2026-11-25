@@ -4,26 +4,63 @@ import { isChunkLoadError } from '@/components/ErrorBoundary';
 export interface LazyRetryOptions {
   maxRetries?: number;
   baseDelayMs?: number;
+  importTimeoutMs?: number;
   delayFn?: (ms: number) => Promise<void>;
   storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
   reloadFn?: () => void;
   buildId?: string;
 }
 
+const DEFAULT_IMPORT_TIMEOUT_MS = 12_000;
+
 function defaultDelay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getRuntimeBuildId(): string {
-  if (typeof window !== 'undefined' && typeof (window as any).__MINA_BUILD_ID__ === 'string') {
-    return (window as any).__MINA_BUILD_ID__;
+  if (typeof window !== 'undefined' && typeof window.__minaBuildId === 'string' && window.__minaBuildId) {
+    return window.__minaBuildId;
+  }
+  if (typeof document !== 'undefined') {
+    const meta = document.querySelector('meta[name="minadental-build-id"]');
+    const content = meta?.getAttribute('content');
+    if (content && !content.startsWith('__MINA_')) {
+      return content;
+    }
   }
   return 'dev-local';
 }
 
+function withAttemptDeadline<T>(promise: Promise<T>, timeoutMs: number, chunkName: string): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`Chunk load timeout (${timeoutMs}ms): ${chunkName}`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
 /**
- * Pure dynamic-import executor with bounded retries + at-most-once controlled reload
- * on chunk/version mismatch (exported for direct unit testing).
+ * Pure dynamic-import executor with per-attempt hanging deadline + bounded retries +
+ * at-most-once controlled reload on chunk/version mismatch (exported for direct unit testing).
  */
 export async function importWithRetry<T>(
   importer: () => Promise<T>,
@@ -32,6 +69,7 @@ export async function importWithRetry<T>(
 ): Promise<T> {
   const maxRetries = options?.maxRetries ?? 2;
   const baseDelayMs = options?.baseDelayMs ?? 300;
+  const importTimeoutMs = options?.importTimeoutMs ?? DEFAULT_IMPORT_TIMEOUT_MS;
   const delayFn = options?.delayFn ?? defaultDelay;
   const buildId = options?.buildId ?? getRuntimeBuildId();
   const storage =
@@ -52,7 +90,7 @@ export async function importWithRetry<T>(
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
-      const mod = await importer();
+      const mod = await withAttemptDeadline(importer(), importTimeoutMs, chunkName);
       // Clear reload guard once chunk loads cleanly
       try {
         storage?.setItem(`minadental_chunk_reload_${buildId}_${chunkName}`, '0');
@@ -92,8 +130,8 @@ export async function importWithRetry<T>(
 }
 
 /**
- * Drop-in replacement for React.lazy with bounded network retry and single controlled
- * version-mismatch recovery so stale chunk hashes never brick route transitions.
+ * Drop-in replacement for React.lazy with bounded network retry, hanging-import timeout,
+ * and single controlled version-mismatch recovery so stale chunk hashes never brick route transitions.
  */
 export function lazyWithRetry<T extends ComponentType<any>>(
   importer: () => Promise<{ default: T }>,

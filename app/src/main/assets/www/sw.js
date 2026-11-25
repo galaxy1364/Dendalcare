@@ -1,22 +1,29 @@
-// MinaDental Unified Service Worker (V5 Release Recovery)
+// MinaDental Unified Service Worker (V6 Boot Hotfix)
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
-const BUILD_ID = 'v4.9.5-7f8ec84697';
+const BUILD_ID = "v4.9.5-3f9fda3e19";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
 const NAVIGATION_TIMEOUT_MS = 4500;
 
+const CRITICAL_PRECACHE_ASSETS = [
+  "./",
+  "./index.html",
+  "./assets/index-LBKdRReX.js",
+  "./assets/index-CaXE2HbZ.css"
+];
+
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
+  "./assets/index-LBKdRReX.js",
+  "./assets/index-CaXE2HbZ.css",
   "./manifest.json",
   "./favicon.svg",
   "./logo.png",
   "./icon-192.png",
   "./icon-512.png",
-  "./apple-touch-icon.png",
-  "./assets/index-C5XSKkgQ.js",
-  "./assets/index-CaXE2HbZ.css"
+  "./apple-touch-icon.png"
 ];
 
 const NEVER_CACHE_PATH_PATTERNS = [
@@ -26,6 +33,7 @@ const NEVER_CACHE_PATH_PATTERNS = [
   '/storage/v1/',
   '/functions/v1/',
   '/api/',
+  '/assets/aistudio/',
 ];
 
 const BYPASS_EXTENSIONS = ['.apk', '.mobileconfig', '.idsig', '.ipa'];
@@ -123,33 +131,45 @@ function notifyClients(payload) {
     .catch(() => {});
 }
 
-// Install: precache shell assets safely.
-// CRITICAL (V5 P0-03): Do NOT call self.skipWaiting() unconditionally in install,
-// so active tabs never mix old HTML with new chunk hashes mid-session.
+async function fetchAndCacheAsset(cache, assetUrl, isCritical) {
+  const req = new Request(assetUrl, { cache: 'no-store' });
+  const res = await fetch(req);
+  const parsed = new URL(req.url);
+  const mode = assetUrl === './' || assetUrl.endsWith('.html') ? 'navigate' : 'cors';
+  const ct = res && res.headers ? res.headers.get('content-type') || '' : '';
+  const valid =
+    Boolean(res) &&
+    res.ok &&
+    res.status === 200 &&
+    res.type === 'basic' &&
+    isValidMimeForPath(parsed.pathname, ct, mode);
+
+  if (!valid) {
+    if (isCritical) {
+      throw new Error(`Critical precache asset invalid (${res ? res.status : 'NO_RES'}): ${assetUrl}`);
+    }
+    return;
+  }
+  await cache.put(assetUrl, res);
+}
+
+// Install: atomically validate critical entry shell/JS/CSS assets so a broken release never activates.
+// Optional icons/secondary files remain best-effort.
+// CRITICAL (V5/V6): Do NOT call self.skipWaiting() unconditionally in install.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) =>
-        Promise.allSettled(
-          PRECACHE_ASSETS.map(async (assetUrl) => {
-            try {
-              const req = new Request(assetUrl, { cache: 'no-store' });
-              const res = await fetch(req);
-              const parsed = new URL(req.url);
-              const mode = assetUrl === './' || assetUrl.endsWith('.html') ? 'navigate' : 'cors';
-              if (res && res.ok && res.status === 200 && res.type === 'basic') {
-                const ct = res.headers.get('content-type') || '';
-                if (isValidMimeForPath(parsed.pathname, ct, mode)) {
-                  await cache.put(assetUrl, res);
-                }
-              }
-            } catch {
-              // Resilient install: skip unreachable optional asset
-            }
-          })
-        )
-      )
+      .then(async (cache) => {
+        const criticalSet = new Set(CRITICAL_PRECACHE_ASSETS);
+        await Promise.all(
+          CRITICAL_PRECACHE_ASSETS.map((assetUrl) => fetchAndCacheAsset(cache, assetUrl, true))
+        );
+        const optionalAssets = PRECACHE_ASSETS.filter((assetUrl) => !criticalSet.has(assetUrl));
+        await Promise.allSettled(
+          optionalAssets.map((assetUrl) => fetchAndCacheAsset(cache, assetUrl, false))
+        );
+      })
       .then(() => {
         if (self.registration && self.registration.active) {
           return notifyClients({ type: 'SW_UPDATE_READY', buildId: RESOLVED_BUILD_ID });

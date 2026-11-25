@@ -54,15 +54,22 @@ function cleanStaleGhPagesFiles(ghPagesDir: string): void {
   }
 }
 
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
 /**
- * V5 P0-01 & P0-03 Atomic Deterministic Deployment Plugin:
- * 1. Computes one deterministic content-derived BUILD_ID from all emitted Vite assets.
- * 2. Stamps that exact BUILD_ID into dist/index.html, dist/sw.js (with real precache entry assets),
- *    dist/version.json, and dist/build-manifest.json.
- * 3. Atomically mirrors dist/ -> gh-pages-dist/ preserving intact gh-pages-dist/assets/* structure
- *    (eliminating the broken flattened-root vs ./assets/* 404 mismatch permanently).
- * 4. Synchronizes root sw.js & version.json from the same deterministic build output so zero
- *    conflicting Service Worker copies can drift.
+ * V6 P0 Atomic Deterministic Deployment Plugin:
+ * 1. Strips dev-only `assets/aistudio/` artifacts BEFORE hashing, manifests, or mirroring.
+ * 2. Computes one deterministic content-derived BUILD_ID from all emitted production Vite assets.
+ * 3. Stamps BUILD_ID ONLY into value-only placeholders (`content="__MINA_BUILD_ID_VALUE__"` in HTML
+ *    and `'__MINA_BUILD_ID_VALUE__'` via JSON.stringify in SW) — NEVER mutating JS identifiers.
+ * 4. Fails the build immediately if any unresolved `__MINA_` placeholder survives.
+ * 5. Atomically mirrors clean dist/ -> gh-pages-dist/ preserving intact gh-pages-dist/assets/* structure.
  */
 function syncDeterministicReleasePlugin(): Plugin {
   return {
@@ -74,6 +81,12 @@ function syncDeterministicReleasePlugin(): Plugin {
       const publicDir = path.resolve(__dirname, 'public');
 
       if (!fs.existsSync(distDir) || !fs.existsSync(assetsDir)) return;
+
+      // 0. Hygiene gate: exclude dev-only AI Studio prompts/screenshots from all public release bundles
+      const leakedAiStudioDir = path.join(assetsDir, 'aistudio');
+      if (fs.existsSync(leakedAiStudioDir)) {
+        fs.rmSync(leakedAiStudioDir, { recursive: true, force: true });
+      }
 
       const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'));
       const pkgVersion = String(pkg.version || '5.0.0');
@@ -89,10 +102,17 @@ function syncDeterministicReleasePlugin(): Plugin {
       const shortHash = hash.digest('hex').slice(0, 10);
       const buildId = `v${pkgVersion}-${shortHash}`;
 
-      // 1. Stamp BUILD_ID into dist/index.html & extract entry script/css paths
+      // 1. Stamp BUILD_ID safely ONLY into the HTML meta attribute (never JS identifiers)
       const distIndexPath = path.join(distDir, 'index.html');
       let distHtml = fs.readFileSync(distIndexPath, 'utf8');
-      distHtml = distHtml.replaceAll('__MINA_BUILD_ID__', buildId);
+      const metaPlaceholder = 'content="__MINA_BUILD_ID_VALUE__"';
+      if (!distHtml.includes(metaPlaceholder)) {
+        throw new Error('[vite-sync] Expected value-only placeholder content="__MINA_BUILD_ID_VALUE__" in dist/index.html');
+      }
+      distHtml = distHtml.replace(metaPlaceholder, `content="${escapeHtmlAttribute(buildId)}"`);
+      if (distHtml.includes('__MINA_BUILD_ID')) {
+        throw new Error('[vite-sync] Unresolved __MINA_BUILD_ID placeholder remained in dist/index.html');
+      }
       fs.writeFileSync(distIndexPath, distHtml, 'utf8');
 
       const entryScripts = Array.from(
@@ -105,29 +125,40 @@ function syncDeterministicReleasePlugin(): Plugin {
       );
 
       // 2. Generate unified dist/sw.js from public/sw.js template with exact BUILD_ID & entry assets
+      const criticalPrecacheAssets = Array.from(
+        new Set(['./', './index.html', ...entryScripts, ...entryStyles])
+      );
       const precacheAssets = Array.from(
         new Set([
-          './',
-          './index.html',
+          ...criticalPrecacheAssets,
           './manifest.json',
           './favicon.svg',
           './logo.png',
           './icon-192.png',
           './icon-512.png',
           './apple-touch-icon.png',
-          ...entryScripts,
-          ...entryStyles,
         ])
       );
 
       const swTemplatePath = path.join(publicDir, 'sw.js');
       if (fs.existsSync(swTemplatePath)) {
         let swSource = fs.readFileSync(swTemplatePath, 'utf8');
-        swSource = swSource.replaceAll('__MINA_BUILD_ID__', buildId);
+        const swBuildPlaceholder = "'__MINA_BUILD_ID_VALUE__'";
+        if (!swSource.includes(swBuildPlaceholder)) {
+          throw new Error("[vite-sync] Expected value-only placeholder '__MINA_BUILD_ID_VALUE__' in public/sw.js");
+        }
+        swSource = swSource.replace(swBuildPlaceholder, JSON.stringify(buildId));
+        swSource = swSource.replace(
+          /const CRITICAL_PRECACHE_ASSETS = \/\*__MINA_CRITICAL_ASSETS__\*\/ \[[\s\S]*?\];/,
+          `const CRITICAL_PRECACHE_ASSETS = ${JSON.stringify(criticalPrecacheAssets, null, 2)};`
+        );
         swSource = swSource.replace(
           /const PRECACHE_ASSETS = \/\*__MINA_PRECACHE_ASSETS__\*\/ \[[\s\S]*?\];/,
           `const PRECACHE_ASSETS = ${JSON.stringify(precacheAssets, null, 2)};`
         );
+        if (swSource.includes('__MINA_BUILD_ID') || swSource.includes('__MINA_PRECACHE_ASSETS__') || swSource.includes('__MINA_CRITICAL_ASSETS__')) {
+          throw new Error('[vite-sync] Unresolved placeholder remained in dist/sw.js');
+        }
         fs.writeFileSync(path.join(distDir, 'sw.js'), swSource, 'utf8');
         // Keep root sw.js synchronized with the single built Service Worker
         fs.writeFileSync(path.resolve(__dirname, 'sw.js'), swSource, 'utf8');

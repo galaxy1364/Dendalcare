@@ -152,6 +152,7 @@ fun DentalCareWebView(
                                     path.endsWith(".svg") -> "image/svg+xml"
                                     path.endsWith(".json") || path.endsWith(".webmanifest") -> "application/json"
                                     path.endsWith(".png") -> "image/png"
+                                    path.endsWith(".webp") -> "image/webp"
                                     path.endsWith(".jpg") || path.endsWith(".jpeg") -> "image/jpeg"
                                     path.endsWith(".ico") -> "image/x-icon"
                                     path.endsWith(".woff2") -> "font/woff2"

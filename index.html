@@ -14,7 +14,7 @@
   <meta name="application-name" content="مینادنتال" />
   <meta name="format-detection" content="telephone=no" />
   <meta name="description" content="مینادنتال — پلتفرم یکپارچه مدیریت کلینیک دندانپزشکی با طراحی سیستماتیک، تقویم شمسی و گزارش‌گیری دقیق مالی" />
-  <meta name="minadental-build-id" content="__MINA_BUILD_ID__" />
+  <meta name="minadental-build-id" content="__MINA_BUILD_ID_VALUE__" />
   <title>مینادنتال | مدیریت هوشمند کلینیک دندانپزشکی</title>
 
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
@@ -140,7 +140,7 @@
       var metaBuild = document.querySelector('meta[name="minadental-build-id"]');
       var buildId = (metaBuild && metaBuild.getAttribute('content')) || 'dev-local';
       if (buildId.indexOf('__MINA_') === 0) buildId = 'dev-local';
-      window.__MINA_BUILD_ID__ = buildId;
+      window.__minaBuildId = buildId;
 
       window.addEventListener('beforeinstallprompt', function (e) {
         e.preventDefault();
@@ -206,6 +206,12 @@
           showBootFallback();
         }
       }, true);
+
+      window.addEventListener('unhandledrejection', function () {
+        if (!window.__minaAppMounted) {
+          showBootFallback();
+        }
+      });
 
       // Watchdog waits for genuine post-commit React handshake (set in AppProviders useEffect)
       setTimeout(showBootFallback, 12000);

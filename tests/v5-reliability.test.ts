@@ -342,7 +342,7 @@ export async function runAllV5ReliabilityTests(): Promise<V5TestResult[]> {
       name: 'V5-09 [P0-03]: Service Worker enforces Build ID cache, minadental-* isolation, no abrupt skipWaiting in install, awaited fallback, and HTML-for-JS guard',
       fn: () => {
         const swSrc = fs.readFileSync(path.resolve(process.cwd(), 'public/sw.js'), 'utf8');
-        assert.ok(swSrc.includes("const BUILD_ID = '__MINA_BUILD_ID__'"), 'SW must use build-injected BUILD_ID');
+        assert.ok(swSrc.includes("const BUILD_ID = '__MINA_BUILD_ID_VALUE__'"), 'SW must use value-only build-injected BUILD_ID');
         assert.ok(!swSrc.includes('v64.0-b64'), 'Hardcoded v64 cache version must be removed');
         assert.ok(swSrc.includes("key.startsWith('minadental-')"), 'SW activate must only delete minadental-* caches');
 
@@ -460,6 +460,58 @@ export async function runAllV5ReliabilityTests(): Promise<V5TestResult[]> {
         const routerSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/app/AppRouter.tsx'), 'utf8');
         assert.ok(!mainSrc.includes('__minaAppMounted = true'), 'main.tsx must NOT set __minaAppMounted synchronously');
         assert.ok(routerSrc.includes('resetKey={activeRoute}'), 'AppRouter ErrorBoundary must reset on route switch');
+      },
+    },
+    {
+      name: 'V6-01 [P0-Boot]: Dotted/hyphenated BUILD_ID stamping never corrupts inline JS, RootErrorBoundary wraps App, and SW validates critical assets atomically',
+      fn: () => {
+        const htmlSrc = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf8');
+        const mainSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/main.tsx'), 'utf8');
+        const rootBoundarySrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/RootErrorBoundary.tsx'), 'utf8');
+        const swSrc = fs.readFileSync(path.resolve(process.cwd(), 'public/sw.js'), 'utf8');
+        const viteSrc = fs.readFileSync(path.resolve(process.cwd(), 'vite.config.ts'), 'utf8');
+
+        assert.ok(htmlSrc.includes('content="__MINA_BUILD_ID_VALUE__"'), 'index.html must use value-only placeholder in meta content');
+        assert.ok(htmlSrc.includes('window.__minaBuildId = buildId;'), 'index.html must assign fixed window.__minaBuildId identifier');
+        assert.ok(!htmlSrc.includes('window.__MINA_BUILD_ID__'), 'index.html must never use replaceable placeholder as JS property name');
+        assert.ok(viteSrc.includes('content="__MINA_BUILD_ID_VALUE__"'), 'vite.config.ts must replace only targeted value placeholder');
+        assert.ok(!viteSrc.includes("replaceAll('__MINA_BUILD_ID__'"), 'vite.config.ts must never blindly replaceAll __MINA_BUILD_ID__');
+
+        assert.ok(mainSrc.includes('<RootErrorBoundary'), 'src/main.tsx must wrap <App /> in RootErrorBoundary');
+        assert.ok(mainSrc.includes('unhandledrejection'), 'src/main.tsx must handle unhandled rejections with sanitization');
+        assert.ok(!rootBoundarySrc.includes('indexedDB.deleteDatabase'), 'RootErrorBoundary recovery must never wipe IndexedDB');
+        assert.ok(swSrc.includes('CRITICAL_PRECACHE_ASSETS'), 'SW must validate critical entry assets atomically during install');
+        assert.ok(swSrc.includes('/assets/aistudio/'), 'SW must never cache dev-only /assets/aistudio/ paths');
+      },
+    },
+    {
+      name: 'V6-02 [P0-Runtime]: lazyWithRetry enforces per-attempt importTimeoutMs deadline so stalled dynamic imports never hang forever',
+      fn: async () => {
+        let attempts = 0;
+        const start = Date.now();
+        await assert.rejects(
+          () =>
+            importWithRetry(
+              () => {
+                attempts += 1;
+                return new Promise(() => {
+                  // Intentionally never settles (simulates stalled mobile network chunk fetch)
+                });
+              },
+              'StalledModule',
+              {
+                maxRetries: 1,
+                baseDelayMs: 5,
+                importTimeoutMs: 30,
+                delayFn: instantDelay,
+                storage: null,
+              }
+            ),
+          /Chunk load timeout \(30ms\): StalledModule/
+        );
+        const elapsed = Date.now() - start;
+        assert.equal(attempts, 2, 'Must execute 1 initial attempt + 1 bounded retry');
+        assert.ok(elapsed < 1000, `Hanging dynamic import must reject promptly, took ${elapsed}ms`);
       },
     },
   ];

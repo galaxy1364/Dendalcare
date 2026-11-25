@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -16,34 +16,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build_and_deploy:
+  build_verify_and_deploy:
+    name: Build, Verify Release Gates & Deploy GitHub Pages
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '22'
+          cache: 'npm'
 
-      - name: Install dependencies and build Vite bundle
-        run: |
-          npm install --legacy-peer-deps
-          npm run build
-          touch dist/.nojekyll
+      - name: Install lockfile dependencies
+        run: npm ci
+
+      - name: Mandatory Pre-Deploy TypeScript Typecheck
+        run: npm run typecheck
+
+      - name: Mandatory Deterministic Production Build
+        run: npm run build
+
+      - name: Mandatory Pre-Deploy Inline Syntax, Hygiene & Subpath Asset Graph Gate
+        run: npm run verify:assets
+
+      - name: Mandatory Pre-Deploy Unit & Audit Tests
+        run: npm test
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-        continue-on-error: true
 
-      - name: Upload artifact for GitHub Pages
+      - name: Upload verified ./dist artifact for GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
-        continue-on-error: true
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy verified artifact to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        continue-on-error: true

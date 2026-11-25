@@ -101,7 +101,7 @@ export function createBootstrapMachine(): BootstrapMachine {
       };
 
       if (typeof window !== 'undefined') {
-        (window as any).__minaBootState = snapshot.stage;
+        window.__minaBootState = snapshot.stage;
       }
 
       listeners.forEach((fn) => {
@@ -132,8 +132,8 @@ export const appBootstrap = createBootstrapMachine();
 export function markShellCommitted(): void {
   appBootstrap.transition('SHELL_READY');
   if (typeof window !== 'undefined') {
-    (window as any).__minaAppMounted = true;
-    (window as any).__minaBootState = appBootstrap.getSnapshot().stage;
+    window.__minaAppMounted = true;
+    window.__minaBootState = appBootstrap.getSnapshot().stage;
   }
   if (typeof document !== 'undefined') {
     const splashEl = document.getElementById('app-splash');
