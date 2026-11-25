@@ -54,17 +54,7 @@ jobs:
           MINA_BASE_SEQUENCE: '65'
           MINA_BOOTSTRAP_FIRST_RELEASE: ${{ inputs.bootstrap_first_release || 'false' }}
         run: |
-          BOOTSTRAP_FLAG="$MINA_BOOTSTRAP_FIRST_RELEASE"
-          if [ "$BOOTSTRAP_FLAG" != "true" ]; then
-            PTR_STATUS=$(curl -sL -o /dev/null -w "%{http_code}" https://galaxy1364.github.io/Dendalcare/release-pointer.json || echo "000")
-            if [ "$PTR_STATUS" = "404" ]; then
-              if curl -sL https://galaxy1364.github.io/Dendalcare/ | grep -qE "src/main\.tsx|__MINA_BUILD_ID"; then
-                echo "Detected legacy unbuilt GitHub Pages root (raw src/main.tsx + 404 pointer). Enabling one-time first-release bootstrap."
-                BOOTSTRAP_FLAG="true"
-              fi
-            fi
-          fi
-          MINA_BOOTSTRAP_FIRST_RELEASE="$BOOTSTRAP_FLAG" node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --require-remote-pointer
+          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --require-remote-pointer --allow-legacy-root-migration
 
       - name: Mandatory Pre-Deploy TypeScript Typecheck
         run: npm run typecheck
