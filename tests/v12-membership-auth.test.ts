@@ -211,13 +211,13 @@ export async function runAllV12MembershipAuthTests(): Promise<V12TestResult[]> {
     );
   }));
 
-  results.push(await runCase('V12-04: resolveEffectiveRole fails closed to assistant on unauthorized session even with local manager role', () => {
+  results.push(await runCase('V12-04: resolveEffectiveRole fails closed to unauthorized on unauthorized session even with local manager role', () => {
     const effective = resolveEffectiveRole({
       serverVerifiedRole: null,
       localRole: 'manager',
       sessionStatus: 'unauthorized',
     });
-    expect(effective === 'assistant', `Expected assistant least-privilege role on unauthorized session, got ${effective}`);
+    expect(effective === 'unauthorized', `Expected strict unauthorized fail-closed role on unauthorized session, got ${effective}`);
   }));
 
   results.push(await runCase('V12-05: V12 SQL baselines enforce membership-only resolution, FORCE RLS on 23 tables, and zero fake data', () => {

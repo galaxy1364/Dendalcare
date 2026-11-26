@@ -281,7 +281,7 @@ export function AppShell() {
                       setUserModalOpen(true);
                     }}
                     aria-label="حساب کاربری و مدیریت دسترسی"
-                    title={`${currentUser.fullName || 'مدیر'} (${ROLE_LABELS[effectiveRole]})`}
+                    title={`${currentUser.fullName || 'مدیر'} (${effectiveRole === 'unauthorized' ? 'فاقد عضویت فعال' : ROLE_LABELS[effectiveRole]})`}
                     data-testid="topbar_user_avatar_button"
                   >
                     <User size={18} className="text-[#087C76] dark:text-[#2DD4BF]" />

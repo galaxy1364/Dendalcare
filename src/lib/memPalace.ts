@@ -378,6 +378,24 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'محافظت از پیش‌نویس‌های ذخیره‌نشده و مودال‌های باز در src/platform/gestures.ts به همراه لغو ایمن ژست و پوشش تست‌های واحد و E2E',
     ],
   },
+  {
+    id: 'milestone-16',
+    traceId: 'TRC-MINA-V14-CLINICAL-INTEGRITY-9016-P',
+    phaseNumber: 16,
+    title: 'یکپارچگی گردش‌کار بالینی V14: احراز هویت بدون Fallback، نوبت‌دهی تراکنشی PostgreSQL و مسیر ۹ مرحله‌ای بیمار',
+    titleEn: 'V14 Clinical Workflow Integrity: Zero-Fallback Runtime Auth, Transactional PostgreSQL Scheduling & 9-Stage Unified Patient Journey',
+    description: 'حذف کامل fallbackهای مجوز در مسیر اجرای زنده (AppProviders، accessControl، supabaseGuardian و offlineQueue)، پیاده‌سازی نوبت‌دهی تراکنشی و کلید یکتایی پایدار در PostgreSQL همراه با تریگر محافظت در برابر نوشتن مستقیم API، تایید تعداد ردیف‌های متاثر واقعی و نمایش مسیر یکپارچه ۹ مرحله‌ای بیمار بر اساس HL7 FHIR R4.',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/06',
+    checksum: 'p160v14clin',
+    deliverables: [
+      'حذف کامل resolveEffectiveRole قدیمی از AppProviders و اعمال resolveStrictMembershipRole بدون fallback به secretary یا assistant در کل مسیر اجرا و صف آفلاین',
+      'مهاجرت افزایشی PostgreSQL (20261129000000) شامل جدول appointment_command_idempotency، تریگر BEFORE INSERT OR UPDATE با قفل pg_advisory_xact_lock و RPCهای تراکنشی نوبت‌دهی',
+      'راستی‌آزمایی تعداد ردیف‌های متاثر واقعی (affectedRows >= 1) در supabaseGuardian و appointmentCommandService و تفکیک قطعی queued_offline از ثبت تاییدشده سرور',
+      'موتور مسیر یکپارچه ۹ مرحله‌ای بیمار (پذیرش، نوبت، حضور، انتظار، معاینه، طرح درمان، اجرای درمان، تسویه مالی و پیگیری) منطبق بر HL7 FHIR R4',
+    ],
+  },
 ]);
 
 export interface ModuleBenchmarkPhase {

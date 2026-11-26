@@ -1,1 +1,0 @@
-import{l as e}from"./jsx-dev-runtime-CZBQKi2T.js";var t=e(`ChevronUp`,[[`path`,{d:`m18 15-6-6-6 6`,key:`153udz`}]]);export{t};

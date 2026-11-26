@@ -1,0 +1,1 @@
+import{l as e}from"./jsx-dev-runtime-Cc__ST2y.js";var t=e(`ArrowUpRight`,[[`path`,{d:`M7 7h10v10`,key:`1tivn9`}],[`path`,{d:`M7 17 17 7`,key:`1vkiza`}]]);export{t};

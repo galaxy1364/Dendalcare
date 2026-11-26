@@ -83,7 +83,10 @@ import {
   type VerifiedSessionState,
 } from '@/services/authentication/authService';
 import { ACTIVE_TENANT_ID } from '@/services/authentication/authService';
-import { resolveEffectiveRole } from '@/services/permissions/accessControl';
+import {
+  resolveStrictMembershipRole,
+  type EffectiveClinicRole,
+} from '@/services/permissions/accessControl';
 import {
   clearAllSessionVaultKeys,
   clearVaultMirrorsForScope,
@@ -128,7 +131,7 @@ export interface NewUserInput {
 interface ClinicShellContextValue {
   users: ClinicUserAccount[];
   currentUser: ClinicUserAccount;
-  effectiveRole: ClinicUserRole;
+  effectiveRole: EffectiveClinicRole;
   verifiedSession: VerifiedSessionState;
   authBusy: boolean;
   authFeedback: { ok: boolean; text: string } | null;
@@ -910,7 +913,7 @@ function ClinicShellProviders({
 
   const effectiveRole = useMemo(
     () =>
-      resolveEffectiveRole({
+      resolveStrictMembershipRole({
         serverVerifiedRole: verifiedSession.serverVerifiedRole,
         localRole: currentUser.role,
         sessionStatus: verifiedSession.status,

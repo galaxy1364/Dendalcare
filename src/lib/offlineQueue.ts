@@ -3,6 +3,7 @@ import {
   SUPABASE_PROJECT_REF,
   getBackendNamespaceKey,
 } from '@/lib/supabaseCore';
+import { getRuntimeAuthStatus } from '@/services/authentication/authService';
 
 export interface OfflineMutationItem {
   id: string;
@@ -41,8 +42,12 @@ function isTransientNetworkError(err: any): boolean {
   );
 }
 
+let memoryOfflineQueue: OfflineMutationItem[] = [];
+
 export function getOfflineQueue(): OfflineMutationItem[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return [...memoryOfflineQueue];
+  }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
@@ -55,7 +60,8 @@ export function getOfflineQueue(): OfflineMutationItem[] {
 }
 
 export function saveOfflineQueue(queue: OfflineMutationItem[]): void {
-  if (typeof window === 'undefined') return;
+  memoryOfflineQueue = [...queue];
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
     emitQueueChanged(queue.length);
@@ -83,7 +89,7 @@ export function enqueueOfflineMutation(
   queue.push(newItem);
   saveOfflineQueue(queue);
 
-  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && 'SyncManager' in window) {
+  if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && 'SyncManager' in window) {
     navigator.serviceWorker.ready
       .then((reg: any) => reg.sync.register('sync-dental-offline-queue'))
       .catch(() => {});
@@ -93,7 +99,8 @@ export function enqueueOfflineMutation(
 }
 
 export function clearOfflineQueue(): void {
-  if (typeof window === 'undefined') return;
+  memoryOfflineQueue = [];
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   localStorage.removeItem(STORAGE_KEY);
   emitQueueChanged(0);
 }
@@ -112,6 +119,17 @@ export async function processOfflineQueue(client: any = supabase): Promise<{
 
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return { processed: 0, failed: queue.length, blocked: 0, reconciledLocal: 0, errors: ['Device is offline'] };
+  }
+
+  // V14 Security Guard: NEVER replay queued offline mutations while session membership is unauthorized/revoked
+  if (getRuntimeAuthStatus() === 'unauthorized') {
+    return {
+      processed: 0,
+      failed: queue.length,
+      blocked: queue.length,
+      reconciledLocal: 0,
+      errors: ['UNAUTHORIZED_SESSION_REPLAY_BLOCKED'],
+    };
   }
 
   let processed = 0;

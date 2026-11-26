@@ -17,9 +17,31 @@ export const CLINIC_BRANCHES: ClinicBranch[] = [
 export const ACTIVE_BRANCH_KEY = getBackendNamespaceKey('minadental_active_branch_v1');
 export const ACTIVE_TENANT_ID = 'minadental_clinic';
 let verifiedSessionTenantId: string | null = null;
+let verifiedSessionAuthStatus: AuthStatus = 'unauthenticated';
+let verifiedSessionServerRole: string | null = null;
 
 export function getActiveTenantId(): string {
   return verifiedSessionTenantId || ACTIVE_TENANT_ID;
+}
+
+export function getRuntimeAuthStatus(): AuthStatus {
+  return verifiedSessionAuthStatus;
+}
+
+export function getRuntimeServerVerifiedRole(): string | null {
+  return verifiedSessionServerRole;
+}
+
+export function setRuntimeAuthSnapshot(params: {
+  status: AuthStatus;
+  serverVerifiedRole?: string | null;
+  tenantId?: string | null;
+}): void {
+  verifiedSessionAuthStatus = params.status;
+  verifiedSessionServerRole = params.serverVerifiedRole ?? null;
+  if (params.tenantId !== undefined) {
+    verifiedSessionTenantId = params.tenantId;
+  }
 }
 
 export type AuthStatus = 'authenticated' | 'unauthenticated' | 'unauthorized';
@@ -230,7 +252,7 @@ export async function getVerifiedSupabaseSession(
     });
     const result = await Promise.race([sessionPromise, timeoutPromise]);
     if (!result || result.error || !result.data?.session?.user) {
-      verifiedSessionTenantId = null;
+      setRuntimeAuthSnapshot({ status: 'unauthenticated', serverVerifiedRole: null, tenantId: null });
       return unauthenticatedFallback;
     }
     const user = result.data.session.user;
@@ -244,7 +266,7 @@ export async function getVerifiedSupabaseSession(
     };
     currentUnauthorizedFallback = unauthorizedFallback;
 
-    // Security (V12): Membership-only server role resolution.
+    // Security (V12/V14): Membership-only server role resolution.
     // Never fall back to client/token app_metadata when clinic_memberships is missing, revoked, or unreachable.
     const { data: memberships, error: memErr } = await client
       .from('clinic_memberships')
@@ -261,7 +283,7 @@ export async function getVerifiedSupabaseSession(
     });
 
     if (resolved.status !== 'authenticated' || !resolved.tenantId) {
-      verifiedSessionTenantId = null;
+      setRuntimeAuthSnapshot({ status: 'unauthorized', serverVerifiedRole: null, tenantId: null });
       return unauthorizedFallback;
     }
 
@@ -274,21 +296,33 @@ export async function getVerifiedSupabaseSession(
       });
       const rpcRole = typeof rpcRes?.data === 'string' ? rpcRes.data.trim() : '';
       if (rpcRes?.error || !VALID_CLINIC_ROLES.has(rpcRole as AuthoritativeClinicRole)) {
-        verifiedSessionTenantId = null;
+        setRuntimeAuthSnapshot({ status: 'unauthorized', serverVerifiedRole: null, tenantId: null });
         return unauthorizedFallback;
       }
-      verifiedSessionTenantId = resolved.tenantId;
+      setRuntimeAuthSnapshot({
+        status: 'authenticated',
+        serverVerifiedRole: rpcRole,
+        tenantId: resolved.tenantId,
+      });
       return {
         ...resolved,
         serverVerifiedRole: rpcRole,
       };
     }
 
-    verifiedSessionTenantId = resolved.tenantId;
+    setRuntimeAuthSnapshot({
+      status: 'authenticated',
+      serverVerifiedRole: resolved.serverVerifiedRole,
+      tenantId: resolved.tenantId,
+    });
     return resolved;
   } catch {
-    verifiedSessionTenantId = null;
-    return currentUnauthorizedFallback ?? unauthenticatedFallback;
+    if (currentUnauthorizedFallback) {
+      setRuntimeAuthSnapshot({ status: 'unauthorized', serverVerifiedRole: null, tenantId: null });
+      return currentUnauthorizedFallback;
+    }
+    setRuntimeAuthSnapshot({ status: 'unauthenticated', serverVerifiedRole: null, tenantId: null });
+    return unauthenticatedFallback;
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -327,7 +361,7 @@ export async function signInWithSupabaseEmail(
 }
 
 export async function signOutSupabaseSession(): Promise<void> {
-  verifiedSessionTenantId = null;
+  setRuntimeAuthSnapshot({ status: 'unauthenticated', serverVerifiedRole: null, tenantId: null });
   try {
     await rawSupabase.auth.signOut();
   } catch {

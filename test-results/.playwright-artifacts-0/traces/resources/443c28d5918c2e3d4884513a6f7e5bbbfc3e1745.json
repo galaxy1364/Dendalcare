@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "channel": "staging",
+  "platform": "web",
+  "currentReleaseId": "v4.9.6-66b982d305",
+  "releaseSequence": 9000,
+  "manifestUrl": "./releases/v4.9.6-66b982d305/release-manifest.json",
+  "updatedAt": "2026-11-26T09:45:50.365Z",
+  "revokedReleaseIds": [],
+  "minSupportedSequence": 1
+}

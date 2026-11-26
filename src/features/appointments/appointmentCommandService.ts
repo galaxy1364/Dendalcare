@@ -1,6 +1,12 @@
 import { supabase, type Appointment } from '@/lib/supabase';
-import { getMutationOutcome, type MutationOutcome } from '@/lib/supabaseGuardian';
-import { ACTIVE_TENANT_ID, getActiveBranchId, getActiveTenantId } from '@/services/authentication/authService';
+import { getBackendNamespaceKey } from '@/lib/supabaseCore';
+import { getMutationOutcome, hasZeroAffectedRows, type MutationOutcome } from '@/lib/supabaseGuardian';
+import {
+  ACTIVE_TENANT_ID,
+  getActiveBranchId,
+  getActiveTenantId,
+  getRuntimeAuthStatus,
+} from '@/services/authentication/authService';
 import { canPerformAction } from '@/services/permissions/accessControl';
 import {
   APPOINTMENT_STATUS,
@@ -83,13 +89,30 @@ export interface AppointmentCommandOutcome {
   ok: boolean;
   outcome: MutationOutcome;
   errorMessage?: string;
+  errorCode?: string;
+  affectedRows?: number;
+  clientRequestId?: string;
+  idempotentReplay?: boolean;
   data?: unknown;
+}
+
+export interface PersistentIdempotencyEntry {
+  clientRequestId: string;
+  payloadFingerprint: string;
+  status: 'in_flight' | 'completed';
+  timestamp: number;
+  outcome?: AppointmentCommandOutcome;
 }
 
 const VALID_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const VALID_TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
-const RECENT_REQUEST_IDS = new Map<string, number>();
-const IDEMPOTENCY_WINDOW_MS = 4000;
+
+export const APPOINTMENT_IDEMPOTENCY_STORAGE_KEY = getBackendNamespaceKey(
+  'minadental_appt_idempotency_v14'
+);
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000; // 24h persistent ledger window
+const IN_FLIGHT_REQUESTS = new Map<string, Promise<AppointmentCommandOutcome>>();
+const MEMORY_IDEMPOTENCY_LEDGER = new Map<string, PersistentIdempotencyEntry>();
 
 export function canTransitionAppointmentStatus(
   fromStatus: string | null | undefined,
@@ -105,7 +128,7 @@ export function canTransitionAppointmentStatus(
 }
 
 /**
- * Shared client-side domain validator unifying full-screen operational forms,
+ * Shared domain validator unifying full-screen operational forms,
  * Appointments manager modal, Calendar quick-add, and Caller-ID booking.
  * Never coerces NaN/invalid/fractional durations silently.
  */
@@ -201,147 +224,592 @@ export function validateAppointmentDraft(
   };
 }
 
-function claimIdempotencyKey(key: string | null | undefined): boolean {
-  if (!key) return true;
+export function computeAppointmentPayloadFingerprint(
+  id: string | null | undefined,
+  payload: NormalizedAppointmentPayload
+): string {
+  return [
+    id || 'new',
+    payload.tenant_id,
+    payload.branch_id,
+    payload.patient_id || '',
+    payload.staff_id || '',
+    payload.appointment_date,
+    payload.appointment_time,
+    String(payload.duration_min),
+    payload.type,
+    payload.status,
+    payload.room || '',
+  ].join('|');
+}
+
+function loadPersistentIdempotencyLedger(): Record<string, PersistentIdempotencyEntry> {
   const now = Date.now();
-  for (const [k, ts] of RECENT_REQUEST_IDS.entries()) {
-    if (now - ts > IDEMPOTENCY_WINDOW_MS) {
-      RECENT_REQUEST_IDS.delete(k);
+  const out: Record<string, PersistentIdempotencyEntry> = {};
+
+  for (const [k, v] of MEMORY_IDEMPOTENCY_LEDGER.entries()) {
+    if (now - v.timestamp <= IDEMPOTENCY_TTL_MS) {
+      out[k] = v;
+    } else {
+      MEMORY_IDEMPOTENCY_LEDGER.delete(k);
     }
   }
-  const existing = RECENT_REQUEST_IDS.get(key);
-  if (existing && now - existing < IDEMPOTENCY_WINDOW_MS) {
-    return false;
+
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = window.localStorage.getItem(APPOINTMENT_IDEMPOTENCY_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, PersistentIdempotencyEntry>;
+        if (parsed && typeof parsed === 'object') {
+          for (const [k, v] of Object.entries(parsed)) {
+            if (v && typeof v === 'object' && now - Number(v.timestamp || 0) <= IDEMPOTENCY_TTL_MS) {
+              out[k] = v;
+              MEMORY_IDEMPOTENCY_LEDGER.set(k, v);
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore storage read error
+    }
   }
-  RECENT_REQUEST_IDS.set(key, now);
-  return true;
+  return out;
+}
+
+function savePersistentIdempotencyEntry(entry: PersistentIdempotencyEntry): void {
+  MEMORY_IDEMPOTENCY_LEDGER.set(entry.clientRequestId, entry);
+  if (typeof window !== 'undefined') {
+    try {
+      const current = loadPersistentIdempotencyLedger();
+      current[entry.clientRequestId] = entry;
+      window.localStorage.setItem(APPOINTMENT_IDEMPOTENCY_STORAGE_KEY, JSON.stringify(current));
+    } catch {
+      // ignore quota error
+    }
+  }
+}
+
+export function clearAppointmentIdempotencyLedger(): void {
+  MEMORY_IDEMPOTENCY_LEDGER.clear();
+  IN_FLIGHT_REQUESTS.clear();
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.removeItem(APPOINTMENT_IDEMPOTENCY_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export const clearAppointmentIdempotencyWindow = clearAppointmentIdempotencyLedger;
+
+function extractCanonicalAffectedRows(data: unknown, explicitCount?: number | null): {
+  affectedRows: number;
+  row: unknown;
+} {
+  if (typeof explicitCount === 'number' && explicitCount >= 0) {
+    return {
+      affectedRows: explicitCount,
+      row: Array.isArray(data) ? data[0] ?? null : data,
+    };
+  }
+  if (Array.isArray(data)) {
+    return {
+      affectedRows: data.length,
+      row: data[0] ?? null,
+    };
+  }
+  if (data && typeof data === 'object') {
+    return {
+      affectedRows: 1,
+      row: data,
+    };
+  }
+  return { affectedRows: 0, row: null };
+}
+
+function isRpcNotDeployedError(error: any): boolean {
+  const code = String(error?.code || '');
+  const msg = String(error?.message || '').toLowerCase();
+  return (
+    code === 'PGRST202' ||
+    code === '42883' ||
+    msg.includes('could not find the function') ||
+    msg.includes('book_or_update_appointment_v14') ||
+    msg.includes('transition_appointment_status_v14')
+  );
 }
 
 export async function saveAppointmentCommand(params: {
   actorRole: string | undefined;
   draft: AppointmentDraftInput;
+  editingId?: string | null;
+  currentStatus?: string | null;
+  idempotencyKey?: string | null;
   existingAppointments?: Appointment[];
+  client?: any;
+  supabaseClient?: any;
 }): Promise<AppointmentCommandOutcome> {
-  if (!canPerformAction(params.actorRole, 'book_appointment')) {
+  if (getRuntimeAuthStatus() === 'unauthorized' || !canPerformAction(params.actorRole, 'book_appointment')) {
     return {
       ok: false,
       outcome: 'error',
-      errorMessage: 'نقش فعلی مجوز ثبت یا ویرایش نوبت را ندارد.',
+      errorCode: 'MINA_APPT_UNAUTHORIZED',
+      affectedRows: 0,
+      errorMessage: 'نقش فعلی یا وضعیت عضویت شما مجوز ثبت یا ویرایش نوبت را ندارد.',
     };
   }
 
-  const validation = validateAppointmentDraft(params.draft, params.existingAppointments ?? []);
+  const effectiveDraft: AppointmentDraftInput = {
+    ...params.draft,
+    id: params.draft.id ?? params.editingId ?? null,
+    clientRequestId: params.draft.clientRequestId ?? params.idempotencyKey ?? null,
+  };
+
+  const validation = validateAppointmentDraft(effectiveDraft, params.existingAppointments ?? []);
   if (!validation.valid || !validation.payload) {
     return {
       ok: false,
       outcome: 'error',
+      errorCode: 'MINA_APPT_VALIDATION_FAILED',
+      affectedRows: 0,
       errorMessage: validation.error || 'اطلاعات نوبت نامعتبر است.',
     };
   }
 
-  const reqKey =
-    params.draft.clientRequestId ||
-    `${params.draft.id || 'new'}::${validation.payload.patient_id || 'none'}::${validation.payload.appointment_date}::${validation.payload.appointment_time}::${validation.payload.room || 'any'}`;
-  if (!claimIdempotencyKey(reqKey)) {
+  const payload = validation.payload;
+  const fingerprint = computeAppointmentPayloadFingerprint(effectiveDraft.id, payload);
+  const clientRequestId = String(
+    effectiveDraft.clientRequestId ||
+      `appt_v14_${effectiveDraft.id || 'new'}_${payload.tenant_id}_${payload.branch_id}_${payload.patient_id || 'none'}_${payload.appointment_date}_${payload.appointment_time}_${payload.room || 'any'}`
+  ).trim();
+
+  // 1. Check persistent idempotency ledger (only when explicit clientRequestId is provided or in-flight)
+  if (effectiveDraft.clientRequestId) {
+    const ledger = loadPersistentIdempotencyLedger();
+    const existingEntry = ledger[clientRequestId];
+    if (existingEntry) {
+      if (existingEntry.payloadFingerprint !== fingerprint) {
+        return {
+          ok: false,
+          outcome: 'error',
+          errorCode: 'MINA_APPT_IDEMPOTENCY_CONFLICT',
+          affectedRows: 0,
+          clientRequestId,
+          errorMessage: 'شناسه یکتای درخواست قبلاً با مشخصات نوبت متفاوتی ثبت شده است.',
+        };
+      }
+      if (existingEntry.status === 'completed' && existingEntry.outcome) {
+        return {
+          ...existingEntry.outcome,
+          clientRequestId,
+          idempotentReplay: true,
+        };
+      }
+    }
+  }
+
+  const inFlight = IN_FLIGHT_REQUESTS.get(clientRequestId);
+  if (inFlight) {
+    const settled = await inFlight;
     return {
-      ok: false,
-      outcome: 'error',
-      errorMessage: 'درخواست مشابه در حال ثبت است. لطفاً چند لحظه صبر کنید.',
+      ...settled,
+      clientRequestId,
+      idempotentReplay: true,
     };
   }
 
-  const result = params.draft.id
-    ? await supabase
-        .from('appointments')
-        .update(validation.payload)
-        .eq('id', params.draft.id)
-    : await supabase.from('appointments').insert(validation.payload);
+  const executionPromise = (async (): Promise<AppointmentCommandOutcome> => {
+    const dbClient = params.client || params.supabaseClient || supabase;
+    const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
 
-  const outcome = getMutationOutcome(result);
-  if (outcome === 'error') {
-    RECENT_REQUEST_IDS.delete(reqKey);
-    return {
-      ok: false,
-      outcome: 'error',
-      errorMessage: result.error?.message || 'ثبت نوبت در سرور انجام نشد.',
+    // 2. Try authoritative PostgreSQL transactional RPC first when online and rpc() is available
+    if (!isOffline && typeof dbClient.rpc === 'function') {
+      try {
+        const rpcRes = await dbClient.rpc('book_or_update_appointment_v14', {
+          p_tenant_id: payload.tenant_id,
+          p_branch_id: payload.branch_id,
+          p_client_request_id: clientRequestId,
+          p_appointment_id: effectiveDraft.id ?? null,
+          p_patient_id: payload.patient_id,
+          p_staff_id: payload.staff_id ?? null,
+          p_title: payload.title ?? null,
+          p_appointment_date: payload.appointment_date,
+          p_appointment_time: payload.appointment_time,
+          p_duration_min: payload.duration_min,
+          p_type: payload.type,
+          p_status: payload.status,
+          p_room: payload.room,
+          p_notes: payload.notes,
+        });
+
+        if (!rpcRes?.error && rpcRes?.data) {
+          const rpcPayload = rpcRes.data as {
+            ok?: boolean;
+            affectedRows?: number;
+            affected_rows?: number;
+            idempotentReplay?: boolean;
+            idempotent_replay?: boolean;
+            appointment?: unknown;
+            record?: unknown;
+          };
+          const recordObj = rpcPayload.appointment ?? rpcPayload.record ?? null;
+          const affected = Number(
+            rpcPayload.affectedRows ?? rpcPayload.affected_rows ?? (recordObj ? 1 : 0)
+          );
+          if (affected <= 0 || !recordObj) {
+            return {
+              ok: false,
+              outcome: 'error',
+              errorCode: 'MINA_APPT_ZERO_ROWS',
+              affectedRows: 0,
+              clientRequestId,
+              errorMessage: 'هیچ ردیفی در سرور ثبت یا به‌روزرسانی نشد.',
+            };
+          }
+          const confirmedOutcome: AppointmentCommandOutcome = {
+            ok: true,
+            outcome: 'confirmed',
+            affectedRows: affected,
+            clientRequestId,
+            idempotentReplay: Boolean(rpcPayload.idempotentReplay ?? rpcPayload.idempotent_replay),
+            data: recordObj,
+          };
+          savePersistentIdempotencyEntry({
+            clientRequestId,
+            payloadFingerprint: fingerprint,
+            status: 'completed',
+            timestamp: Date.now(),
+            outcome: confirmedOutcome,
+          });
+          return confirmedOutcome;
+        }
+
+        if (rpcRes?.error && !isRpcNotDeployedError(rpcRes.error)) {
+          return {
+            ok: false,
+            outcome: 'error',
+            errorCode: String(rpcRes.error.code || 'MINA_APPT_RPC_REJECTED'),
+            clientRequestId,
+            errorMessage: rpcRes.error.message || 'ثبت نوبت توسط قوانین تراکنشی سرور رد شد.',
+          };
+        }
+      } catch (rpcErr: any) {
+        if (!isRpcNotDeployedError(rpcErr)) {
+          // If network failure, fall through to guarded table builder so offline queue handles it
+          const msg = String(rpcErr?.message || '').toLowerCase();
+          if (!msg.includes('fetch') && !msg.includes('network') && !msg.includes('timeout')) {
+            return {
+              ok: false,
+              outcome: 'error',
+              errorCode: 'MINA_APPT_RPC_ERROR',
+              clientRequestId,
+              errorMessage: rpcErr?.message || 'خطا در اجرای تراکنش نوبت‌دهی سرور.',
+            };
+          }
+        }
+      }
+    }
+
+    // 3. Fallback / Offline-Guarded Table Mutation with explicit .select() canonical row verification
+    const baseQuery = params.draft.id
+      ? dbClient.from('appointments').update(payload).eq('id', params.draft.id)
+      : dbClient.from('appointments').insert(payload);
+
+    const result =
+      typeof baseQuery?.select === 'function' ? await baseQuery.select() : await baseQuery;
+
+    const outcome = getMutationOutcome(result);
+    if (outcome === 'error') {
+      const isZeroRow = !result?.error && hasZeroAffectedRows(result);
+      return {
+        ok: false,
+        outcome: 'error',
+        errorCode: isZeroRow
+          ? 'MINA_APPT_ZERO_ROWS'
+          : String(result?.error?.code || 'MINA_APPT_MUTATION_FAILED'),
+        affectedRows: 0,
+        clientRequestId,
+        errorMessage:
+          result?.error?.message ||
+          'ثبت یا ویرایش نوبت در سرور انجام نشد (ردیف هدف یافت نشد یا دسترسی محدود است).',
+      };
+    }
+
+    if (outcome === 'queued_offline') {
+      const queuedOutcome: AppointmentCommandOutcome = {
+        ok: true,
+        outcome: 'queued_offline',
+        affectedRows: 0,
+        clientRequestId,
+        idempotentReplay: false,
+        data: result?.data,
+      };
+      savePersistentIdempotencyEntry({
+        clientRequestId,
+        payloadFingerprint: fingerprint,
+        status: 'completed',
+        timestamp: Date.now(),
+        outcome: queuedOutcome,
+      });
+      return queuedOutcome;
+    }
+
+    const { affectedRows, row } = extractCanonicalAffectedRows(result?.data, result?.affectedRows);
+    if (affectedRows <= 0) {
+      return {
+        ok: false,
+        outcome: 'error',
+        errorCode: 'MINA_APPT_ZERO_ROWS',
+        affectedRows: 0,
+        clientRequestId,
+        errorMessage: 'هیچ ردیفی در جدول نوبت‌ها تغییر نکرد (ممکن است نوبت حذف شده یا خارج از شعبه فعال باشد).',
+      };
+    }
+
+    const confirmedOutcome: AppointmentCommandOutcome = {
+      ok: true,
+      outcome: 'confirmed',
+      affectedRows,
+      clientRequestId,
+      idempotentReplay: false,
+      data: row ?? result?.data,
     };
-  }
 
-  return {
-    ok: true,
-    outcome,
-    data: result.data,
-  };
+    savePersistentIdempotencyEntry({
+      clientRequestId,
+      payloadFingerprint: fingerprint,
+      status: 'completed',
+      timestamp: Date.now(),
+      outcome: confirmedOutcome,
+    });
+
+    return confirmedOutcome;
+  })();
+
+  IN_FLIGHT_REQUESTS.set(clientRequestId, executionPromise);
+  try {
+    return await executionPromise;
+  } finally {
+    IN_FLIGHT_REQUESTS.delete(clientRequestId);
+  }
 }
 
 export async function transitionAppointmentStatusCommand(params: {
   actorRole: string | undefined;
   appointmentId: string;
-  currentStatus: string;
-  nextStatus: string;
+  currentStatus?: string;
+  nextStatus?: string;
+  fromStatus?: string;
+  toStatus?: string;
+  clientRequestId?: string;
+  client?: any;
+  supabaseClient?: any;
 }): Promise<AppointmentCommandOutcome> {
-  if (!canPerformAction(params.actorRole, 'book_appointment')) {
+  if (getRuntimeAuthStatus() === 'unauthorized' || !canPerformAction(params.actorRole, 'book_appointment')) {
     return {
       ok: false,
       outcome: 'error',
+      errorCode: 'MINA_APPT_UNAUTHORIZED',
+      affectedRows: 0,
       errorMessage: 'نقش فعلی مجوز تغییر وضعیت نوبت را ندارد.',
     };
   }
 
-  if (!canTransitionAppointmentStatus(params.currentStatus, params.nextStatus)) {
+  const currentStatus = String(params.currentStatus ?? params.fromStatus ?? '');
+  const nextStatus = String(params.nextStatus ?? params.toStatus ?? '');
+
+  if (!canTransitionAppointmentStatus(currentStatus, nextStatus)) {
     return {
       ok: false,
       outcome: 'error',
-      errorMessage: `انتقال وضعیت از «${APPOINTMENT_STATUS[params.currentStatus]?.label || params.currentStatus}» به «${APPOINTMENT_STATUS[params.nextStatus]?.label || params.nextStatus}» مجاز نیست.`,
+      errorCode: 'MINA_APPT_ILLEGAL_TRANSITION',
+      affectedRows: 0,
+      errorMessage: `انتقال وضعیت از «${APPOINTMENT_STATUS[currentStatus]?.label || currentStatus}» به «${APPOINTMENT_STATUS[nextStatus]?.label || nextStatus}» مجاز نیست.`,
     };
   }
 
-  const result = await supabase
+  const dbClient = params.client || params.supabaseClient || supabase;
+  const tenantId = getActiveTenantId() || ACTIVE_TENANT_ID;
+  const branchId = getActiveBranchId();
+  const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+
+  if (!isOffline && typeof dbClient.rpc === 'function') {
+    try {
+      const rpcRes = await dbClient.rpc('transition_appointment_status_v14', {
+        p_tenant_id: tenantId,
+        p_branch_id: branchId,
+        p_appointment_id: params.appointmentId,
+        p_expected_status: currentStatus,
+        p_next_status: nextStatus,
+        p_client_request_id: params.clientRequestId ?? null,
+      });
+
+      if (!rpcRes?.error && rpcRes?.data) {
+        const rpcPayload = rpcRes.data as {
+          affectedRows?: number;
+          affected_rows?: number;
+          appointment?: unknown;
+          record?: unknown;
+        };
+        const recordObj = rpcPayload.appointment ?? rpcPayload.record ?? null;
+        const affected = Number(
+          rpcPayload.affectedRows ?? rpcPayload.affected_rows ?? (recordObj ? 1 : 0)
+        );
+        if (affected <= 0 || !recordObj) {
+          return {
+            ok: false,
+            outcome: 'error',
+            errorCode: 'MINA_APPT_ZERO_ROWS',
+            affectedRows: 0,
+            errorMessage: 'تغییر وضعیت اعمال نشد؛ نوبت یافت نشد یا وضعیت آن توسط کاربر دیگری تغییر کرده است.',
+          };
+        }
+        return {
+          ok: true,
+          outcome: 'confirmed',
+          affectedRows: affected,
+          data: recordObj,
+        };
+      }
+
+      if (rpcRes?.error && !isRpcNotDeployedError(rpcRes.error)) {
+        return {
+          ok: false,
+          outcome: 'error',
+          errorCode: String(rpcRes.error.code || 'MINA_APPT_TRANSITION_REJECTED'),
+          affectedRows: 0,
+          errorMessage: rpcRes.error.message || 'تغییر وضعیت نوبت توسط سرور رد شد.',
+        };
+      }
+    } catch (rpcErr: any) {
+      if (!isRpcNotDeployedError(rpcErr)) {
+        const msg = String(rpcErr?.message || '').toLowerCase();
+        if (!msg.includes('fetch') && !msg.includes('network') && !msg.includes('timeout')) {
+          return {
+            ok: false,
+            outcome: 'error',
+            errorCode: 'MINA_APPT_RPC_ERROR',
+            affectedRows: 0,
+            errorMessage: rpcErr?.message || 'خطا در تغییر وضعیت نوبت.',
+          };
+        }
+      }
+    }
+  }
+
+  const updateQuery = dbClient
     .from('appointments')
-    .update({ status: params.nextStatus })
+    .update({ status: nextStatus })
     .eq('id', params.appointmentId);
+
+  const result =
+    typeof updateQuery?.select === 'function' ? await updateQuery.select() : await updateQuery;
 
   const outcome = getMutationOutcome(result);
   if (outcome === 'error') {
+    const isZeroRow = !result?.error && hasZeroAffectedRows(result);
     return {
       ok: false,
       outcome: 'error',
-      errorMessage: result.error?.message || 'تغییر وضعیت نوبت انجام نشد.',
+      errorCode: isZeroRow
+        ? 'MINA_APPT_ZERO_ROWS'
+        : String(result?.error?.code || 'MINA_APPT_TRANSITION_FAILED'),
+      affectedRows: 0,
+      errorMessage: result?.error?.message || 'تغییر وضعیت نوبت انجام نشد.',
+    };
+  }
+
+  if (outcome === 'queued_offline') {
+    return {
+      ok: true,
+      outcome: 'queued_offline',
+      affectedRows: 0,
+      data: result?.data,
+    };
+  }
+
+  const { affectedRows, row } = extractCanonicalAffectedRows(result?.data, result?.affectedRows);
+  if (affectedRows <= 0) {
+    return {
+      ok: false,
+      outcome: 'error',
+      errorCode: 'MINA_APPT_ZERO_ROWS',
+      affectedRows: 0,
+      errorMessage: 'تغییر وضعیت نوبت هیچ ردیفی را تغییر نداد.',
     };
   }
 
   return {
     ok: true,
-    outcome,
-    data: result.data,
+    outcome: 'confirmed',
+    affectedRows,
+    data: row ?? result?.data,
   };
 }
 
 export async function deleteAppointmentCommand(params: {
   actorRole: string | undefined;
   appointmentId: string;
+  client?: any;
+  supabaseClient?: any;
 }): Promise<AppointmentCommandOutcome> {
-  if (!canPerformAction(params.actorRole, 'delete_critical_records')) {
+  if (
+    getRuntimeAuthStatus() === 'unauthorized' ||
+    !canPerformAction(params.actorRole, 'delete_critical_records')
+  ) {
     return {
       ok: false,
       outcome: 'error',
-      errorMessage: 'حذف نوبت صرفاً با دسترسی مدیر کلینیک مجاز است.',
+      errorCode: 'MINA_APPT_DELETE_FORBIDDEN',
+      affectedRows: 0,
+      errorMessage: 'حذف نوبت صرفاً با دسترسی تاییدشده مدیر کلینیک مجاز است.',
     };
   }
 
-  const result = await supabase.from('appointments').delete().eq('id', params.appointmentId);
+  const dbClient = params.client || params.supabaseClient || supabase;
+  const delQuery = dbClient.from('appointments').delete().eq('id', params.appointmentId);
+  const result =
+    typeof delQuery?.select === 'function' ? await delQuery.select() : await delQuery;
+
   const outcome = getMutationOutcome(result);
   if (outcome === 'error') {
+    const isZeroRow = !result?.error && hasZeroAffectedRows(result);
     return {
       ok: false,
       outcome: 'error',
-      errorMessage: result.error?.message || 'حذف نوبت انجام نشد.',
+      errorCode: isZeroRow
+        ? 'MINA_APPT_ZERO_ROWS'
+        : String(result?.error?.code || 'MINA_APPT_DELETE_FAILED'),
+      affectedRows: 0,
+      errorMessage: result?.error?.message || 'حذف نوبت انجام نشد.',
+    };
+  }
+
+  if (outcome === 'queued_offline') {
+    return {
+      ok: true,
+      outcome: 'queued_offline',
+      affectedRows: 0,
+      data: result?.data,
+    };
+  }
+
+  const { affectedRows, row } = extractCanonicalAffectedRows(result?.data, result?.affectedRows);
+  if (affectedRows <= 0) {
+    return {
+      ok: false,
+      outcome: 'error',
+      errorCode: 'MINA_APPT_ZERO_ROWS',
+      affectedRows: 0,
+      errorMessage: 'نوبت مورد نظر در سرور یافت نشد یا قبلاً حذف شده است.',
     };
   }
 
   return {
     ok: true,
-    outcome,
-    data: result.data,
+    outcome: 'confirmed',
+    affectedRows,
+    data: row ?? result?.data,
   };
 }

@@ -9,7 +9,7 @@ import {
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import {
   supabase,
-  type Patient, type Treatment, type Payment,
+  type Patient, type Appointment, type Treatment, type Payment,
   type LabOrder, type Implant, type Reminder,
   type Installment, type Check as CheckType, type Safteh,
 } from '@/lib/supabase';
@@ -29,6 +29,7 @@ import { getMutationOutcome } from '@/lib/supabaseGuardian';
 import { HapticEngine } from '@/lib/hapticsAudio';
 import { ContextMenuTrigger } from '@/components/ui/ContextMenu';
 import { emitGlobalFocus } from '@/lib/globalFocus';
+import { computePatientClinicalJourney } from '@/features/clinical-journey/patientJourney';
 
 const GENDER_OPTIONS = [
   { value: 'male', label: 'مرد' },
@@ -116,6 +117,7 @@ type PatientTab = 'info' | 'chart' | 'treatments' | 'payments' | 'installments' 
 
 export function Patients() {
   const { data: patients, loading, refresh } = useRealtimeTable<Patient>('patients');
+  const { data: appointments } = useRealtimeTable<Appointment>('appointments');
   const { data: treatments } = useRealtimeTable<Treatment>('treatments');
   const { data: payments } = useRealtimeTable<Payment>('payments');
   const { data: labOrders } = useRealtimeTable<LabOrder>('lab_orders');
@@ -404,10 +406,12 @@ export function Patients() {
       ) : (
         <div className="space-y-2.5 stagger">
           {filtered.map((patient, idx) => {
+            const pAppointments = appointments.filter(a => a.patient_id === patient.id);
             const pTreatments = treatments.filter(t => t.patient_id === patient.id);
             const pPayments = payments.filter(p => p.patient_id === patient.id);
             const pLabs = labOrders.filter(l => l.patient_id === patient.id);
             const pImplants = implants.filter(im => im.patient_id === patient.id);
+            const pReminders = reminders.filter(r => r.patient_id === patient.id);
             const totalPaid = pPayments.reduce((s, p) => s + Number(p.amount), 0);
             const totalCost = pTreatments.reduce((s, t) => s + Number(t.total_cost), 0);
             const balance = totalCost - totalPaid;
@@ -417,7 +421,16 @@ export function Patients() {
             const fileNo = getPatientFileNo(patient, idx);
             const isExpanded = expandedCardId === patient.id;
 
-            // Compute Live Clinical Progress Stage for the Patient Card Timeline
+            // Compute Live Clinical Progress Stage + V14 9-Stage Unified Clinical Patient Journey
+            const clinicalJourney = computePatientClinicalJourney({
+              patient,
+              appointments: pAppointments,
+              treatments: pTreatments,
+              payments: pPayments,
+              installments: pInstallments,
+              checks: pChecks,
+              reminders: pReminders,
+            });
             const hasTreatments = pTreatments.length > 0;
             const hasCompletedTreat = pTreatments.some(t => t.status === 'completed');
             const hasActiveLabOrImp = pLabs.some(l => l.status !== 'delivered_to_patient') || pImplants.some(i => i.stage !== 'completed');
@@ -541,8 +554,52 @@ export function Patients() {
                   </div>
                 </div>
 
-                {/* Live Interactive Clinical Progress Line on Patient Card */}
-                <div className="mt-2.5 pt-2 border-t border-gray-100">
+                {/* Live Interactive Clinical Progress Line on Patient Card + V14 9-Stage Unified Clinical Journey */}
+                <div className="mt-2.5 pt-2 border-t border-gray-100 space-y-2" data-testid={`patient_clinical_journey_${patient.id}`}>
+                  <div className="flex items-center justify-between gap-2 text-[10px]">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg shrink-0">
+                        مسیر بالینی: {clinicalJourney.currentStageLabelFa} ({clinicalJourney.progressPercent.toLocaleString('fa-IR')}٪)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        emitGlobalFocus({
+                          section: clinicalJourney.nextActionRoute as any,
+                          query: `${patient.first_name} ${patient.last_name}`,
+                          recordId: patient.id,
+                        })
+                      }
+                      className="text-[9.5px] font-extrabold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-2 py-0.5 rounded-lg transition-colors shrink-0"
+                    >
+                      گام بعدی: {clinicalJourney.nextActionLabelFa} ←
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-9 gap-1">
+                    {clinicalJourney.stages.map((st) => {
+                      const isDone = st.state === 'completed';
+                      const isActive = st.state === 'current' || st.state === 'attention';
+                      return (
+                        <div
+                          key={st.id}
+                          onClick={() => setDetailPatient(patient)}
+                          title={`${st.labelFa} — ${st.detailFa}`}
+                          className={`cursor-pointer rounded-lg px-1 py-1 text-center transition-all border ${
+                            isActive
+                              ? 'bg-emerald-50 border-emerald-500 text-emerald-800'
+                              : isDone
+                              ? 'bg-emerald-50/50 border-emerald-200 text-emerald-700'
+                              : 'bg-slate-50 border-transparent text-slate-400'
+                          }`}
+                        >
+                          <div className="text-[8.5px] font-extrabold truncate">{st.shortLabelFa}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
                   <div className="grid grid-cols-4 gap-1">
                     {timelineSteps.map((st, sIdx) => (
                       <div
@@ -636,6 +693,7 @@ export function Patients() {
         {detailPatient && (
           <PatientDetail
             patient={detailPatient}
+            appointments={appointments.filter(a => a.patient_id === detailPatient.id)}
             treatments={treatments.filter(t => t.patient_id === detailPatient.id)}
             payments={payments.filter(p => p.patient_id === detailPatient.id)}
             labOrders={labOrders.filter(l => l.patient_id === detailPatient.id)}
@@ -801,10 +859,10 @@ function DeleteBtn({ onClick }: { onClick: () => void }) {
 
 // ==================== PATIENT DETAIL HUB ====================
 function PatientDetail({
-  patient, treatments, payments, labOrders, implants, reminders, installments, checks, safteh, onEdit, onDelete,
+  patient, appointments, treatments, payments, labOrders, implants, reminders, installments, checks, safteh, onEdit, onDelete,
   onOpenGallery, onOpenPrint, onOpenConsent,
 }: {
-  patient: Patient; treatments: Treatment[]; payments: Payment[];
+  patient: Patient; appointments: Appointment[]; treatments: Treatment[]; payments: Payment[];
   labOrders: LabOrder[]; implants: Implant[]; reminders: Reminder[];
   installments: Installment[]; checks: CheckType[]; safteh: Safteh[];
   onEdit: () => void; onDelete: () => void;
@@ -816,6 +874,15 @@ function PatientDetail({
   const balance = totalCost - totalPaid;
   const installmentDebt = installments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.total_amount) - Number(i.paid_amount)), 0);
   const pendingChecks = checks.filter(c => c.status === 'pending').reduce((s, c) => s + Number(c.amount), 0);
+  const clinicalJourney = computePatientClinicalJourney({
+    patient,
+    appointments,
+    treatments,
+    payments,
+    installments,
+    checks,
+    reminders,
+  });
 
   const tabs: { id: PatientTab; label: string; icon: typeof Heart; color: string; count?: number }[] = [
     { id: 'info', label: 'اطلاعات', icon: FileText, color: '#10B981' },
@@ -875,6 +942,36 @@ function PatientDetail({
           <FileSignature size={14} />
           رضایت‌نامه A4
         </button>
+      </div>
+
+      {/* V14 9-Stage Unified Clinical Patient Journey (HL7 FHIR R4 Workflow) */}
+      <div className="glass-card p-3 space-y-2" data-testid="patient_detail_clinical_journey">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs font-extrabold text-emerald-700">
+            مسیر یکپارچه ۹ مرحله‌ای بالینی: {clinicalJourney.currentStageLabelFa} ({clinicalJourney.progressPercent.toLocaleString('fa-IR')}٪)
+          </div>
+          <span className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-lg">
+            گام بعدی: {clinicalJourney.nextActionLabelFa}
+          </span>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-9 gap-1">
+          {clinicalJourney.stages.map((st) => (
+            <div
+              key={st.id}
+              className={`rounded-xl p-1.5 text-center border ${
+                st.state === 'current' || st.state === 'attention'
+                  ? 'bg-emerald-50 border-emerald-500 text-emerald-800'
+                  : st.state === 'completed'
+                  ? 'bg-emerald-50/50 border-emerald-200 text-emerald-700'
+                  : 'bg-slate-50 border-transparent text-slate-400'
+              }`}
+              title={`${st.fhirResource} (${st.state}) — ${st.detailFa}`}
+            >
+              <div className="text-[9.5px] font-extrabold truncate">{st.shortLabelFa}</div>
+              <div className="text-[8px] opacity-80 truncate">{st.detailFa}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2">

@@ -1,0 +1,1 @@
+import{l as e}from"./jsx-dev-runtime-Cc__ST2y.js";var t=e(`ChevronUp`,[[`path`,{d:`m18 15-6-6-6 6`,key:`153udz`}]]);export{t};

@@ -388,4 +388,74 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       expect(overflowOk).toBe(true);
     }
   });
+
+  test('V14 strict fail-closed unauthorized session barrier & 9-stage clinical journey UI render in Persian RTL', async ({ browser }) => {
+    const context = await browser.newContext({
+      serviceWorkers: 'block',
+      viewport: { width: 390, height: 844 },
+    });
+    const page = await context.newPage();
+    try {
+      const corsHeaders = {
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': 'apikey,authorization,content-type,x-client-info,prefer',
+        'access-control-allow-methods': 'GET,POST,OPTIONS',
+      };
+      await page.route(/\/rest\/v1\/patients/, async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          await route.fulfill({ status: 204, headers: corsHeaders });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          headers: corsHeaders,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: '00000000-0000-0000-0000-000000000501',
+              tenant_id: 'minadental_clinic',
+              branch_id: 'main',
+              first_name: 'نگار',
+              last_name: 'شریفی',
+              phone: '09123334455',
+              national_id: '0011223344',
+              birth_date: null,
+              gender: 'female',
+              blood_type: 'O+',
+              allergies: null,
+              medical_history: null,
+              medications: null,
+              insurance_provider: 'آزاد',
+              insurance_number: '1405',
+              address: null,
+              email: null,
+              notes: '[پرونده: 1405]',
+              status: 'active',
+              created_at: '2026-11-30T06:00:00Z',
+              updated_at: '2026-11-30T06:00:00Z',
+            },
+          ]),
+        });
+      });
+
+      await page.goto('/#/patients', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+
+      const journeyCard = page.getByTestId('patient_clinical_journey_00000000-0000-0000-0000-000000000501');
+      await expect(journeyCard).toBeVisible();
+      await expect(journeyCard).toContainText('مسیر بالینی:');
+      await expect(journeyCard).toContainText('پذیرش');
+      await expect(journeyCard).toContainText('پیگیری');
+
+      const rtlAndOverflow = await page.evaluate(() => ({
+        dir: document.documentElement.dir,
+        noOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2,
+      }));
+      expect(rtlAndOverflow.dir).toBe('rtl');
+      expect(rtlAndOverflow.noOverflow).toBe(true);
+    } finally {
+      await context.close();
+    }
+  });
 });
+

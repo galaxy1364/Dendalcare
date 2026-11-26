@@ -28,7 +28,7 @@ import {
   parseRouteFromUrl,
   readCurrentBrowserRoute,
 } from '@/navigation/urlRouter';
-import { canAccessRoute } from '@/services/permissions/accessControl';
+import { canAccessRoute, type EffectiveClinicRole } from '@/services/permissions/accessControl';
 import type { ClinicUserRole } from '@/lib/cloudSyncEngine';
 
 const routeFilterCache = new Map<AppRouteId, Record<string, string>>();
@@ -91,7 +91,7 @@ export function NavigationProvider({
   onBeforeOverlayBack,
 }: {
   children: ReactNode;
-  userRole: ClinicUserRole;
+  userRole: ClinicUserRole | EffectiveClinicRole;
   /** Returns true if an overlay/drawer intercepted Back before changing routes */
   onBeforeOverlayBack?: () => boolean;
 }) {
@@ -149,7 +149,7 @@ export function NavigationProvider({
 
   // Re-evaluate active route if role switches to one without access
   useEffect(() => {
-    if (!canAccessRoute(userRole, activeRoute)) {
+    if (!canAccessRoute(userRole, activeRoute) && activeRoute !== 'dashboard') {
       setDeniedRouteNotice(activeRoute);
       setActiveRoute('dashboard');
       setActiveParams({});

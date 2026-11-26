@@ -57,48 +57,26 @@ const ROLE_PRIVILEGE_RANK: Record<ClinicUserRole, number> = {
   manager: 4,
 };
 
+export type EffectiveClinicRole = ClinicUserRole | 'unauthorized';
+
+export function isAuthorizedRole(role: ClinicUserRole | EffectiveClinicRole | string | undefined | null): role is ClinicUserRole {
+  return Boolean(role && VALID_ROLES.has(role as ClinicUserRole));
+}
+
 /**
- * Fail-closed RBAC role resolver:
- * - When Supabase session is authenticated, server JWT claim (`serverVerifiedRole`) is authoritative
- *   and prevents privilege escalation from localRole.
- * - If authenticated with missing serverVerifiedRole claim, fails closed to `'secretary'`.
- * - Only allows local user switching inside unauthenticated offline/single-device workflow without overriding server claims.
+ * V14 Strict fail-closed RBAC role resolver (zero permissive fallback):
+ * - When sessionStatus is `'unauthorized'`, returns `'unauthorized'` (never `'assistant'`).
+ * - When sessionStatus is `'authenticated'`, requires a verified `serverVerifiedRole` from `clinic_memberships`;
+ *   if missing or invalid, returns `'unauthorized'` (never `'secretary'`).
+ * - When sessionStatus is `'authenticated'`, `localRole` may only downgrade within the verified server role rank, never escalate.
+ * - Only allows local user switching inside `'unauthenticated'` offline/single-device workflow when a valid role is present; otherwise fails closed to `'unauthorized'`.
  */
 export function resolveEffectiveRole(params: {
   serverVerifiedRole?: string | null;
   localRole?: string | null;
   sessionStatus?: 'authenticated' | 'unauthenticated' | 'unauthorized';
-}): ClinicUserRole {
-  const serverRole =
-    params.serverVerifiedRole && VALID_ROLES.has(params.serverVerifiedRole as ClinicUserRole)
-      ? (params.serverVerifiedRole as ClinicUserRole)
-      : null;
-  const localRole =
-    params.localRole && VALID_ROLES.has(params.localRole as ClinicUserRole)
-      ? (params.localRole as ClinicUserRole)
-      : null;
-
-  if (params.sessionStatus === 'authenticated') {
-    if (!serverRole) return 'secretary';
-    if (localRole && ROLE_PRIVILEGE_RANK[localRole] < ROLE_PRIVILEGE_RANK[serverRole]) {
-      return localRole;
-    }
-    return serverRole;
-  }
-
-  if (params.sessionStatus === 'unauthorized') {
-    return 'assistant';
-  }
-
-  if (serverRole) return serverRole;
-  if (localRole) return localRole;
-  return 'secretary';
-}
-
-export type EffectiveClinicRole = ClinicUserRole | 'unauthorized';
-
-export function isAuthorizedRole(role: ClinicUserRole | EffectiveClinicRole | string | undefined | null): role is ClinicUserRole {
-  return Boolean(role && VALID_ROLES.has(role as ClinicUserRole));
+}): EffectiveClinicRole {
+  return resolveStrictMembershipRole(params);
 }
 
 /**

@@ -1,1 +1,0 @@
-import{I as e,L as t}from"./index-C7J9au59.js";function n(t){e(t)}function r(e,n){return t(e,e=>{n({...e,section:e.section})})}export{r as n,n as t};

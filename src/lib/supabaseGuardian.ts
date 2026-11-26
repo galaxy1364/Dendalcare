@@ -13,7 +13,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TableName } from '@/lib/supabaseCore';
 import { archiveDeletedRecord, loadTableMirrorFromVault } from '@/lib/dataVault';
 import { enqueueOfflineMutation } from '@/lib/offlineQueue';
-import { getActiveBranchId, getActiveTenantId } from '@/services/authentication/authService';
+import {
+  getActiveBranchId,
+  getActiveTenantId,
+  getRuntimeAuthStatus,
+  getRuntimeServerVerifiedRole,
+} from '@/services/authentication/authService';
+import { resolveStrictMembershipRole } from '@/services/permissions/accessControl';
 
 export const CRITICAL_DELETE_PROTECTED_TABLES = new Set<string>([
   'patients',
@@ -61,42 +67,60 @@ type ActiveActorInfo = {
   fullName: string;
   canEditPricesAfterSave: boolean;
   canDeleteCriticalRecords: boolean;
+  sessionStatus?: 'authenticated' | 'unauthenticated' | 'unauthorized';
 };
 
-/** Reads active clinic user directly from storage to avoid circular imports */
+/** Reads active clinic user and cross-checks runtime membership authorization */
 function readActiveActor(): ActiveActorInfo {
-  if (typeof window === 'undefined') {
+  const sessionStatus = getRuntimeAuthStatus();
+  const serverVerifiedRole = getRuntimeServerVerifiedRole();
+
+  let localRole = 'manager';
+  let fullName = 'دکتر مهدی امیری';
+  let localCanEditPrices: boolean | undefined;
+  let localCanDeleteRecords: boolean | undefined;
+
+  if (typeof window !== 'undefined') {
+    try {
+      const activeId = localStorage.getItem('minadental_active_user_id_v4');
+      const rawUsers = localStorage.getItem('minadental_clinic_users_v4');
+      if (rawUsers) {
+        const users = JSON.parse(rawUsers);
+        if (Array.isArray(users) && users.length > 0) {
+          const matched = (activeId && users.find((u: any) => u.id === activeId)) || users[0];
+          localRole = matched?.role || 'manager';
+          fullName = matched?.fullName || matched?.name || 'دکتر مهدی امیری';
+          localCanEditPrices = matched?.permissions?.canEditPricesAfterSave;
+          localCanDeleteRecords = matched?.permissions?.canDeleteCriticalRecords;
+        }
+      }
+    } catch {
+      // ignore storage read error
+    }
+  }
+
+  const strictRole = resolveStrictMembershipRole({
+    serverVerifiedRole,
+    localRole,
+    sessionStatus,
+  });
+
+  if (strictRole === 'unauthorized') {
     return {
-      role: 'manager',
-      fullName: 'دکتر مهدی امیری',
-      canEditPricesAfterSave: true,
-      canDeleteCriticalRecords: true,
+      role: 'unauthorized',
+      fullName,
+      canEditPricesAfterSave: false,
+      canDeleteCriticalRecords: false,
+      sessionStatus,
     };
   }
-  try {
-    const activeId = localStorage.getItem('minadental_active_user_id_v4');
-    const rawUsers = localStorage.getItem('minadental_clinic_users_v4');
-    if (rawUsers) {
-      const users = JSON.parse(rawUsers);
-      if (Array.isArray(users) && users.length > 0) {
-        const matched = (activeId && users.find((u: any) => u.id === activeId)) || users[0];
-        const role = matched?.role || 'manager';
-        return {
-          role,
-          fullName: matched?.fullName || matched?.name || 'دکتر مهدی امیری',
-          canEditPricesAfterSave: matched?.permissions?.canEditPricesAfterSave ?? role === 'manager',
-          canDeleteCriticalRecords: matched?.permissions?.canDeleteCriticalRecords ?? role === 'manager',
-        };
-      }
-    }
-  } catch {
-    // default to manager
-  }
+
   return {
-    role: 'manager',
-    fullName: 'دکتر مهدی امیری',
-    canEditPricesAfterSave: true,
-    canDeleteCriticalRecords: true,
+    role: strictRole,
+    fullName,
+    canEditPricesAfterSave: (localCanEditPrices ?? strictRole === 'manager') && strictRole === 'manager',
+    canDeleteCriticalRecords: (localCanDeleteRecords ?? strictRole === 'manager') && strictRole === 'manager',
+    sessionStatus,
   };
 }
 
@@ -135,6 +159,13 @@ export function evaluateMutationGuard(params: {
 }): { allowed: boolean; reason?: string } {
   const { table, operation, payload, actor } = params;
 
+  if (actor.role === 'unauthorized' || actor.sessionStatus === 'unauthorized') {
+    return {
+      allowed: false,
+      reason: `قفل امنیتی نشست: عضویت کلینیک برای کاربر «${actor.fullName}» فعال نیست یا لغو شده است. ثبت یا ویرایش در جدول «${table}» مسدود شد.`,
+    };
+  }
+
   if (operation === 'DELETE' && CRITICAL_DELETE_PROTECTED_TABLES.has(table) && !actor.canDeleteCriticalRecords) {
     return {
       allowed: false,
@@ -159,7 +190,23 @@ export function evaluateMutationGuard(params: {
 
 export type MutationOutcome = 'confirmed' | 'queued_offline' | 'error';
 
+export function hasZeroAffectedRows(res: {
+  data?: unknown;
+  count?: number | null;
+  affectedRows?: number | null;
+  queuedOffline?: boolean;
+} | null | undefined): boolean {
+  if (!res || res.queuedOffline === true) return false;
+  if (typeof res.affectedRows === 'number' && res.affectedRows === 0) return true;
+  if (typeof res.count === 'number' && res.count === 0) return true;
+  if (Array.isArray(res.data) && res.data.length === 0) return true;
+  return false;
+}
+
 export function verifyServerMutation(res: {
+  data?: unknown;
+  count?: number | null;
+  affectedRows?: number | null;
   error?: unknown;
   status?: number | null;
   queuedOffline?: boolean;
@@ -168,18 +215,23 @@ export function verifyServerMutation(res: {
   if (!res) return false;
   if (res.error) return false;
   if (res.queuedOffline === true) return false;
-  if (res.status === 202 || res.status === 403) return false;
+  if (res.status === 202 || res.status === 403 || res.status === 404) return false;
+  if (hasZeroAffectedRows(res)) return false;
   return true;
 }
 
 export function getMutationOutcome(res: {
+  data?: unknown;
+  count?: number | null;
+  affectedRows?: number | null;
   error?: unknown;
   status?: number | null;
   queuedOffline?: boolean;
   serverConfirmed?: boolean;
 } | null | undefined): MutationOutcome {
-  if (!res || res.error || res.status === 403) return 'error';
+  if (!res || res.error || res.status === 403 || res.status === 404) return 'error';
   if (res.queuedOffline === true || res.status === 202) return 'queued_offline';
+  if (hasZeroAffectedRows(res)) return 'error';
   return 'confirmed';
 }
 
@@ -201,6 +253,8 @@ function wrapMutationBuilder(
         error: { message: check.reason || 'Unauthorized RBAC mutation blocked', code: 'MINA_RBAC_LOCK' },
         status: 403,
         statusText: 'Forbidden',
+        queuedOffline: false,
+        serverConfirmed: false,
       };
     }
 
@@ -274,7 +328,12 @@ function wrapMutationBuilder(
         }
       };
 
-      const result = await builder;
+      const hasSelect = Boolean((eqFilters as any).__hasSelect);
+      const targetBuilder =
+        !hasSelect && typeof builder?.select === 'function'
+          ? builder.select() ?? builder
+          : builder;
+      const result = await targetBuilder;
       if (result?.error && isNetworkFailure(result.error) && (operation === 'INSERT' || operation === 'UPDATE')) {
         const queuedPayload =
           operation === 'UPDATE' && eqFilters.id && payload && typeof payload === 'object'
@@ -296,8 +355,27 @@ function wrapMutationBuilder(
         };
       }
       if (!result?.error) {
+        if (hasZeroAffectedRows(result)) {
+          return {
+            ...result,
+            error: {
+              message: `هیچ رکوردی در جدول «${table}» تغییر نکرد (ممکن است رکورد حذف شده یا دسترسی شعبه محدود باشد).`,
+              code: 'MINA_ZERO_ROWS_AFFECTED',
+            },
+            affectedRows: 0,
+            queuedOffline: false,
+            serverConfirmed: false,
+          };
+        }
+        const affectedRows = Array.isArray(result?.data)
+          ? result.data.length
+          : result?.data
+          ? 1
+          : typeof result?.count === 'number'
+          ? result.count
+          : 1;
         emitMutationEvent(payload);
-        return { ...result, queuedOffline: false, serverConfirmed: true };
+        return { ...result, affectedRows, queuedOffline: false, serverConfirmed: true };
       }
       return { ...result, queuedOffline: false, serverConfirmed: false };
     } catch (err: any) {
@@ -355,6 +433,14 @@ function wrapMutationBuilder(
         return (...args: any[]) => {
           if (prop === 'eq' && args.length >= 2) {
             eqFilters[String(args[0])] = args[1];
+          }
+          if (prop === 'select') {
+            Object.defineProperty(eqFilters, '__hasSelect', {
+              value: true,
+              enumerable: false,
+              configurable: true,
+              writable: true,
+            });
           }
           const next = value.apply(target, args);
           if (next && (typeof next === 'object' || typeof next === 'function')) {
