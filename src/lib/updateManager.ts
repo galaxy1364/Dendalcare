@@ -299,5 +299,5 @@ export function injectTestUpdateCandidate(nextSequence = 231, nextVersion = '4.1
     origin: 'ci_pipeline' as const,
     rollbackPolicy: { strategy: 'forward_release' as const, minRollbackSequence: current.build, schemaBackwardCompatible: true, preserveUserData: true },
   };
-  return updateCoordinator.injectTestCandidate(testManifest);
+  return updateCoordinator.injectTestCandidate(testManifest as unknown as import('@/services/updates').AuthoritativeReleaseManifest);
 }

@@ -1,6 +1,7 @@
 import { getOfflineQueue } from '@/lib/offlineQueue';
 import { sanitizeLogMessage } from '@/app/bootstrapState';
 import type {
+  AuthoritativeReleaseManifest,
   CandidateReleaseRecord,
   CheckTriggerSource,
   LastCheckRecord,
@@ -1245,20 +1246,14 @@ export class UpdateCoordinator {
     const correlationId = createCorrelationId('test');
     this.candidate = {
       manifest,
-      pointer: {
-        schemaVersion: 2,
-        channel: manifest.channel,
-        platform: manifest.platform,
-        currentReleaseId: manifest.releaseId,
-        releaseSequence: manifest.releaseSequence,
-        manifestUrl: './release-manifest.json',
-        updatedAt: manifest.publishedAt,
-        revokedReleaseIds: [],
-        minSupportedSequence: 1,
-      },
+      manifestUrl: './release-manifest.json',
+      discoveredAt: new Date().toISOString(),
+      source: 'manual',
+      verifiedAssetsCount: 0,
+      totalAssetsCount: 0,
       integrityVerified: true,
-      verifiedAt: new Date().toISOString(),
-      stagedAssets: new Map(),
+      signatureVerified: true,
+      deferredUntil: null,
     };
     this.ledger.saveCandidate(this.candidate);
     this.transition('READY_TO_ACTIVATE', correlationId, 'TEST_CANDIDATE_INJECTED', manifest.releaseId);

@@ -73,7 +73,7 @@ export function ReleaseWatcher() {
   }, []);
 
   const handleUpdateAndReload = async () => {
-    PlatformHapticAdapter.notification();
+    PlatformHapticAdapter.success();
     setUpdating(true);
     try {
       await applyAppUpdateAtomically({ reloadPage: true });

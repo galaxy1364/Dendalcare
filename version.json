@@ -6,15 +6,15 @@
   "releaseSequence": 230,
   "androidVersionCode": 230,
   "androidVersionName": "4.18.0",
-  "buildId": "v4.18.0-3160d0338c",
-  "releaseId": "v4.18.0-3160d0338c",
-  "contentDigest": "3160d0338c77d8cc0802a8d40e528925448974a11fc18fcb68c4f21265143dd1",
+  "buildId": "v4.18.0-aeafc5a1b2",
+  "releaseId": "v4.18.0-aeafc5a1b2",
+  "contentDigest": "aeafc5a1b28f0c383e1cd13a76e5bf7be10f015b7782d264829b6d8d127ab400",
   "packageVersion": "4.18.0",
   "channel": "stable",
-  "publishedAt": "2026-11-26T22:23:48.603Z",
+  "publishedAt": "2026-11-26T22:43:25.442Z",
   "releaseNotes": "نسخه v4.18.0 (انتشار #224) — رفع دائمی خطای کش CDN و Service Worker در آپدیت خودکار، طراحی لبه به لبه (Edge-to-Edge)، لوگوی سه‌بعدی بدون کادر ۷-حالته، و یکپارچه‌سازی کامل انتشار وب و APK امضاشده (GE-0008)",
   "entryScripts": [
-    "./assets/index-h9TYJOUo.js"
+    "./assets/index-CylyFnfc.js"
   ],
   "entryStyles": [
     "./assets/index-BEpPobBr.css"
