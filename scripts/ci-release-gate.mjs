@@ -32,7 +32,7 @@ export function parseStrictPositiveInt(raw, label = 'MINA_RELEASE_SEQUENCE') {
 }
 
 export async function computeMonotonicSequence(options = {}) {
-  const baseSeq = parseStrictPositiveInt(options.baseSequence ?? 65, 'baseSequence');
+  const baseSeq = parseStrictPositiveInt(options.baseSequence ?? 167, 'baseSequence');
   const runNumber = options.runNumber ? parseStrictPositiveInt(options.runNumber, 'GITHUB_RUN_NUMBER') : 1;
   const overrideRaw = String(options.overrideInput ?? '').trim();
   const requireRemotePointer = Boolean(options.requireRemotePointer);
@@ -396,7 +396,7 @@ async function runCli() {
       args.includes('--bootstrap-first-release') ||
       String(process.env.MINA_BOOTSTRAP_FIRST_RELEASE || '').toLowerCase() === 'true';
     const res = await computeMonotonicSequence({
-      baseSequence: process.env.MINA_BASE_SEQUENCE || '65',
+      baseSequence: process.env.MINA_BASE_SEQUENCE || '167',
       runNumber: process.env.GITHUB_RUN_NUMBER || '1',
       overrideInput: process.env.MINA_RELEASE_SEQUENCE_INPUT || '',
       remotePointerUrl,

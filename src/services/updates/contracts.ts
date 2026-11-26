@@ -265,6 +265,33 @@ export interface PlatformUpdateCapabilities {
   honestLimitationFa: string | null;
 }
 
+export interface VersionIdentityReport {
+  installedWeb: {
+    semver: string;
+    releaseId: string;
+    releaseSequence: number;
+    channel: ReleaseChannel;
+    origin: 'ci_pipeline' | 'local_unreleased';
+    verifiedAt: string | null;
+  };
+  availableRelease: {
+    semver: string;
+    releaseId: string;
+    releaseSequence: number;
+    state: UpdateState;
+    releaseNotes: string;
+    manifestUrl: string | null;
+  } | null;
+  nativePackage: {
+    present: boolean;
+    channel: 'android_apk' | 'ios_ipa' | 'web_pwa_only';
+    versionName: string | null;
+    versionCode: number | null;
+    packageName: string | null;
+    storeUrl: string | null;
+  };
+}
+
 export interface UpdateSnapshot {
   state: UpdateState;
   isOnline: boolean;
@@ -273,6 +300,7 @@ export interface UpdateSnapshot {
   platform: ReleasePlatform;
   capabilities: PlatformUpdateCapabilities;
   installed: InstalledReleaseRecord;
+  versionReport: VersionIdentityReport;
   lastCheck: LastCheckRecord | null;
   candidate: CandidateReleaseRecord | null;
   pendingActivation: PendingActivationJournal | null;

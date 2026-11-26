@@ -126,48 +126,71 @@ export function DashboardPage() {
         />
       )}
 
-      {/* 1. Bright Colorful Smart Clinic Overview (with concise date, refresh control, & compact urgent fallback) */}
-      <SmartBrief
-        brief={metrics.smartBrief}
-        todayIso={metrics.todayIso}
-        todayCollected={metrics.revenue.todayCollected}
-        monthNetProfit={metrics.revenue.monthNetProfit}
-        todayApptsCount={metrics.todayApptsCount}
-        confirmedApptsCount={metrics.confirmedApptsCount}
-        monthLabel={metrics.monthLabel}
-        financialDataComplete={status.financialDataComplete}
-        isLoading={status.isLoading}
-        hiddenUrgentAction={
-          !showPriorityAlert && metrics.priorityAction.urgent ? metrics.priorityAction : null
-        }
-        onRefresh={refreshAll}
-        onNavigate={navigate}
-      />
+      {/* Intelligent Responsive Bento Grid (Mobile: QBank vertical stack • Desktop/Ultrawide: 12-col Bento) */}
+      <div
+        className="flex flex-col gap-2 lg:grid lg:grid-cols-12 lg:gap-4 lg:items-start flex-1"
+        data-testid="dashboard_adaptive_bento_grid"
+      >
+        <div className="flex flex-col gap-2 lg:col-span-5 xl:col-span-5 min-w-0">
+          {/* 1. Bright Colorful Smart Clinic Overview (with concise date, refresh control, & compact urgent fallback) */}
+          <SmartBrief
+            brief={metrics.smartBrief}
+            todayIso={metrics.todayIso}
+            todayCollected={metrics.revenue.todayCollected}
+            monthNetProfit={metrics.revenue.monthNetProfit}
+            todayApptsCount={metrics.todayApptsCount}
+            confirmedApptsCount={metrics.confirmedApptsCount}
+            monthLabel={metrics.monthLabel}
+            financialDataComplete={status.financialDataComplete}
+            isLoading={status.isLoading}
+            hiddenUrgentAction={
+              !showPriorityAlert && metrics.priorityAction.urgent ? metrics.priorityAction : null
+            }
+            onRefresh={refreshAll}
+            onNavigate={navigate}
+          />
 
-      {/* 2. Five Quick Actions Row */}
-      <QuickActionsRow userRole={userRole} onNavigate={navigate} />
+          {/* 4. One Important Alert — Shown on desktop Bento column or on mobile when viewport fits */}
+          {showPriorityAlert && (
+            <div className="hidden lg:block">
+              <PriorityAction
+                action={metrics.priorityAction}
+                revenue={metrics.revenue}
+                onNavigate={navigate}
+              />
+            </div>
+          )}
+        </div>
 
-      {/* 3. Four Favorite Curved QBank Modules + All Services Route Trigger */}
-      <FavoriteModules
-        selectedServices={selectedServices}
-        serviceValues={metrics.serviceValues}
-        draggingIndex={draggingIndex}
-        onDragStart={setDraggingIndex}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleReorderDrop}
-        onDragEnd={() => setDraggingIndex(null)}
-        onMoveToFirst={handleMoveToFirst}
-        onNavigate={navigate}
-      />
+        <div className="flex flex-col gap-2 lg:col-span-7 xl:col-span-7 min-w-0">
+          {/* 2. Five Quick Actions Row */}
+          <QuickActionsRow userRole={userRole} onNavigate={navigate} />
 
-      {/* 4. One Important Alert — Shown when hysteresis-stabilized viewport measurement confirms fit */}
-      {showPriorityAlert && (
-        <PriorityAction
-          action={metrics.priorityAction}
-          revenue={metrics.revenue}
-          onNavigate={navigate}
-        />
-      )}
+          {/* 3. Four Favorite Curved QBank Modules + All Services Route Trigger */}
+          <FavoriteModules
+            selectedServices={selectedServices}
+            serviceValues={metrics.serviceValues}
+            draggingIndex={draggingIndex}
+            onDragStart={setDraggingIndex}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleReorderDrop}
+            onDragEnd={() => setDraggingIndex(null)}
+            onMoveToFirst={handleMoveToFirst}
+            onNavigate={navigate}
+          />
+
+          {/* Mobile Priority Alert Slot */}
+          {showPriorityAlert && (
+            <div className="lg:hidden">
+              <PriorityAction
+                action={metrics.priorityAction}
+                revenue={metrics.revenue}
+                onNavigate={navigate}
+              />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

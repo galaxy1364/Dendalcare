@@ -232,14 +232,50 @@ export class UpdateCoordinator {
   public getSnapshot(): UpdateSnapshot {
     const runtime = this.adapter.getCurrentRuntimeIdentity();
     const installed = this.ledger.getInstalledRelease(runtime);
+    const capabilities = this.adapter.getCapabilities();
+    const nativeChannel: 'android_apk' | 'ios_ipa' | 'web_pwa_only' =
+      capabilities.platform === 'android'
+        ? 'android_apk'
+        : capabilities.platform === 'ios'
+        ? 'ios_ipa'
+        : 'web_pwa_only';
+    const versionReport = {
+      installedWeb: {
+        semver: installed.semver,
+        releaseId: installed.releaseId,
+        releaseSequence: installed.releaseSequence,
+        channel: installed.channel,
+        origin: runtime.origin,
+        verifiedAt: installed.verifiedAt,
+      },
+      availableRelease: this.candidate
+        ? {
+            semver: this.candidate.manifest.semver,
+            releaseId: this.candidate.manifest.releaseId,
+            releaseSequence: this.candidate.manifest.releaseSequence,
+            state: this.state,
+            releaseNotes: this.candidate.manifest.releaseNotes,
+            manifestUrl: this.candidate.manifestUrl ?? null,
+          }
+        : null,
+      nativePackage: {
+        present: nativeChannel !== 'web_pwa_only',
+        channel: nativeChannel,
+        versionName: capabilities.nativeVersionName,
+        versionCode: capabilities.nativeVersionCode,
+        packageName: capabilities.packageName,
+        storeUrl: capabilities.storeUrl,
+      },
+    };
     return {
       state: this.state,
       isOnline: this.isOnline(),
       autoUpdateEnabled: this.ledger.isAutoUpdateEnabled(),
       channel: runtime.channel,
       platform: runtime.platform,
-      capabilities: this.adapter.getCapabilities(),
+      capabilities,
       installed,
+      versionReport,
       lastCheck: this.lastCheck,
       candidate: this.candidate,
       pendingActivation: this.pendingActivation,

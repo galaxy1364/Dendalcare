@@ -3,7 +3,7 @@ import {
   Settings as SettingsIcon, Plus, Save, Megaphone, Building2,
   Phone, MapPin, Trash2, Eye, EyeOff, Calendar, Link,
   Download, Upload, Database, Clock, CheckCircle2, AlertCircle, Percent,
-  Activity, RefreshCw, HardDrive, Wifi, Server, ShieldCheck, Zap, RotateCcw, Smartphone,
+  Activity, RefreshCw, HardDrive, Wifi, Server, ShieldCheck, Zap, RotateCcw, Smartphone, ChevronDown,
 } from 'lucide-react';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { supabase, supabaseUrl, supabaseAnonKey, type ClinicSetting, type Advertisement } from '@/lib/supabase';
@@ -226,6 +226,8 @@ function ClinicSettingsTab({
   const [atomicProgress, setAtomicProgress] = useState<AtomicUpdateProgress | null>(null);
   const [updateMessage, setUpdateMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
   const [defsModalOpen, setDefsModalOpen] = useState(false);
+  const [technicalDisclosureOpen, setTechnicalDisclosureOpen] = useState(false);
+  const [updateDiagnosticsOpen, setUpdateDiagnosticsOpen] = useState(false);
 
   useEffect(() => {
     const unsub = updateCoordinator.subscribe((snap) => {
@@ -515,14 +517,14 @@ function ClinicSettingsTab({
                     HapticEngine.selection();
                     setThemeMode(id);
                   }}
-                  className={`py-2 px-2.5 rounded-2xl border text-xs font-black flex items-center justify-center gap-1.5 min-h-[44px] transition-all ${
+                  className={`py-2 px-2 rounded-2xl border text-[12px] font-black flex items-center justify-center gap-1 min-h-[44px] min-w-0 transition-all ${
                     active
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
                   }`}
                 >
-                  <Icon size={14} />
-                  <span>{label}</span>
+                  <Icon size={14} className="shrink-0" />
+                  <span className="truncate">{label}</span>
                 </button>
               );
             })}
@@ -531,15 +533,16 @@ function ClinicSettingsTab({
 
         <div className="space-y-2">
           <span className="text-[11px] font-extrabold text-slate-600 dark:text-slate-300 flex items-center gap-1">
-            <Type size={13} /> اندازه متن (Dynamic Type)
+            <Type size={13} /> اندازه متن (Dynamic Type تا ۲۰۰٪)
           </span>
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
             {(
               [
                 { id: 'compact' as FontScaleMode, label: 'فشرده' },
                 { id: 'default' as FontScaleMode, label: 'پیش‌فرض' },
                 { id: 'large' as FontScaleMode, label: 'درشت' },
-                { id: 'xlarge' as FontScaleMode, label: 'بسیار درشت' },
+                { id: 'xlarge' as FontScaleMode, label: 'خیلی درشت' },
+                { id: 'double' as FontScaleMode, label: '۲۰۰٪ (دو برابر)' },
               ] as const
             ).map(({ id, label }) => {
               const active = appearance.fontScale === id;
@@ -707,49 +710,72 @@ function ClinicSettingsTab({
         </div>
       </div>
 
-      {/* Honest Platform Capabilities Matrix */}
+      {/* Honest Platform Capabilities Matrix (Progressive Disclosure for Technical Details) */}
       <div
         data-testid="settings_platform_capabilities_card"
-        className="glass-card p-4 space-y-2.5 border border-slate-200/95"
+        className="glass-card p-3.5 sm:p-4 space-y-2.5 border border-slate-200/95"
       >
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Cpu size={16} className="text-indigo-600" />
-            قابلیت‌های دستگاه
-          </h3>
-          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
-            {platformCaps.runtimeKind}
+        <button
+          type="button"
+          data-testid="settings_technical_disclosure_toggle"
+          aria-expanded={technicalDisclosureOpen}
+          onClick={() => {
+            HapticEngine.selection();
+            setTechnicalDisclosureOpen((prev) => !prev);
+          }}
+          className="w-full flex items-center justify-between gap-2 text-right min-h-[40px]"
+        >
+          <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2 min-w-0">
+            <Cpu size={16} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span className="truncate">جزئیات فنی و قابلیت‌های سخت‌افزاری دستگاه</span>
           </span>
-        </div>
-        <div className="grid grid-cols-2 gap-1.5 text-[10.5px]">
-          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-            <span>Android Native Haptics</span>
-            <strong className={platformCaps.androidNativeHapticsBridge ? 'text-emerald-700' : 'text-slate-500'}>
-              {platformCaps.androidNativeHapticsBridge ? 'فعال' : 'غیرفعال'}
-            </strong>
+          <span className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+              {platformCaps.runtimeKind}
+            </span>
+            <ChevronDown
+              size={16}
+              className={`text-slate-500 transition-transform duration-200 ${
+                technicalDisclosureOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </span>
+        </button>
+
+        {technicalDisclosureOpen && (
+          <div
+            data-testid="settings_technical_disclosure_panel"
+            className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10.5px] pt-1 animate-fade-in"
+          >
+            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+              <span>Android Native Haptics</span>
+              <strong className={platformCaps.androidNativeHapticsBridge ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}>
+                {platformCaps.androidNativeHapticsBridge ? 'فعال' : 'غیرفعال'}
+              </strong>
+            </div>
+            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+              <span>Web Vibration / Audio</span>
+              <strong className={platformCaps.webVibrationApi || platformCaps.webAudioTactileSynth ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}>
+                {platformCaps.webVibrationApi || platformCaps.webAudioTactileSynth ? 'پشتیبانی' : 'ندارد'}
+              </strong>
+            </div>
+            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+              <span>Apple Liquid Glass</span>
+              <strong className="text-amber-700 dark:text-amber-300">
+                {platformCaps.nativeLiquidGlassAvailable ? 'فعال' : 'لایه وب تطبیقی'}
+              </strong>
+            </div>
+            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+              <span>Apple CoreHaptics</span>
+              <strong className="text-amber-700 dark:text-amber-300">
+                {platformCaps.nativeCoreHapticsAvailable ? 'فعال' : 'فقط iOS بومی'}
+              </strong>
+            </div>
           </div>
-          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-            <span>Web Vibration / Audio</span>
-            <strong className={platformCaps.webVibrationApi || platformCaps.webAudioTactileSynth ? 'text-emerald-700' : 'text-slate-500'}>
-              {platformCaps.webVibrationApi || platformCaps.webAudioTactileSynth ? 'پشتیبانی' : 'ندارد'}
-            </strong>
-          </div>
-          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-            <span>Apple Liquid Glass</span>
-            <strong className="text-amber-700">
-              {platformCaps.nativeLiquidGlassAvailable ? 'فعال' : 'فقط iOS بومی'}
-            </strong>
-          </div>
-          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-            <span>Apple CoreHaptics</span>
-            <strong className="text-amber-700">
-              {platformCaps.nativeCoreHapticsAvailable ? 'فعال' : 'فقط iOS بومی'}
-            </strong>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Single Verified Release & Update Center (V7 UpdateCoordinator) */}
+      {/* Single Verified Release & Update Center (GE-0004 Separated 3-Way Version Identity) */}
       <div
         data-testid="settings_unified_update_center"
         className="settings-update-center-card p-4 rounded-3xl text-slate-900 dark:text-slate-100 border border-slate-200/95 dark:border-slate-700/80 shadow-sm space-y-3"
@@ -761,19 +787,19 @@ function ClinicSettingsTab({
             </div>
             <div className="min-w-0">
               <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                به‌روزرسانی برنامه
+                به‌روزرسانی برنامه و تفکیک نسخه‌ها
               </h3>
               <div className="text-[11px] text-slate-600 dark:text-slate-300 font-semibold flex items-center flex-wrap gap-1.5 mt-1">
-                <span>نسخه:</span>
+                <span>وب/PWA نصب‌شده:</span>
                 <strong dir="ltr" className="rtl-bidi-isolate text-slate-900 dark:text-slate-100 font-mono">
-                  v{updateSnap.installed.semver}
+                  v{updateSnap.versionReport.installedWeb.semver}
                 </strong>
                 <strong
                   dir="ltr"
                   data-testid="installed_build_badge"
                   className="rtl-bidi-isolate px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 font-mono text-[10.5px]"
                 >
-                  #{updateSnap.installed.releaseSequence} ({updateSnap.installed.releaseId})
+                  #{updateSnap.versionReport.installedWeb.releaseSequence} ({updateSnap.versionReport.installedWeb.releaseId})
                 </strong>
               </div>
             </div>
@@ -786,36 +812,117 @@ function ClinicSettingsTab({
           </span>
         </div>
 
-        {/* Real Status Metadata Grid (Zero Fake Build/Install Dates) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10.5px] bg-white/90 dark:bg-slate-900/70 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700/80">
-          <div>
-            <span className="text-slate-500 dark:text-slate-400 block">وضعیت شبکه</span>
-            <strong className={updateSnap.isOnline ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}>
-              {updateSnap.isOnline ? 'آنلاین' : 'آفلاین'}
+        {/* GE-0004 Strictly Separated 3-Way Version Matrix: Installed Web | Available Server | Native Package */}
+        <div
+          data-testid="settings_version_separation_card"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]"
+        >
+          <div
+            data-testid="version_installed_web"
+            className="p-2.5 rounded-2xl bg-white/90 dark:bg-slate-900/75 border border-slate-200 dark:border-slate-700/80 space-y-0.5"
+          >
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block">
+              ۱. نسخه وب/PWA نصب‌شده
+            </span>
+            <strong dir="ltr" className="rtl-bidi-isolate text-xs font-mono font-black text-slate-900 dark:text-slate-100">
+              v{updateSnap.versionReport.installedWeb.semver} • #{updateSnap.versionReport.installedWeb.releaseSequence}
             </strong>
+            <span dir="ltr" className="block font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate">
+              {updateSnap.versionReport.installedWeb.releaseId}
+            </span>
           </div>
-          <div>
-            <span className="text-slate-500 dark:text-slate-400 block">آخرین بررسی</span>
-            <strong className="text-slate-800 dark:text-slate-200 font-mono">
-              {updateSnap.lastCheck?.checkedAt
-                ? new Date(updateSnap.lastCheck.checkedAt).toLocaleTimeString('fa-IR')
-                : 'بررسی نشده'}
+
+          <div
+            data-testid="version_available_release"
+            className="p-2.5 rounded-2xl bg-white/90 dark:bg-slate-900/75 border border-slate-200 dark:border-slate-700/80 space-y-0.5"
+          >
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block">
+              ۲. انتشار معتبر سرور
+            </span>
+            <strong dir="ltr" className="rtl-bidi-isolate text-xs font-mono font-black text-indigo-700 dark:text-indigo-300">
+              {updateSnap.versionReport.availableRelease
+                ? `v${updateSnap.versionReport.availableRelease.semver} • #${updateSnap.versionReport.availableRelease.releaseSequence}`
+                : 'به‌روز'}
             </strong>
+            <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">
+              {updateSnap.versionReport.availableRelease
+                ? updateSnap.versionReport.availableRelease.releaseId
+                : updateSnap.lastCheck?.checkedAt
+                ? `بررسی: ${new Date(updateSnap.lastCheck.checkedAt).toLocaleTimeString('fa-IR')}`
+                : 'آماده بررسی'}
+            </span>
           </div>
-          <div>
-            <span className="text-slate-500 dark:text-slate-400 block">وضعیت بررسی</span>
-            <strong className="text-slate-800 dark:text-slate-200">
-              {updateSnap.lastCheck?.outcome || '—'}
+
+          <div
+            data-testid="version_native_package"
+            className="p-2.5 rounded-2xl bg-white/90 dark:bg-slate-900/75 border border-slate-200 dark:border-slate-700/80 space-y-0.5"
+          >
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block">
+              ۳. بسته بومی (APK / IPA)
+            </span>
+            <strong dir="ltr" className="rtl-bidi-isolate text-xs font-mono font-black text-emerald-700 dark:text-emerald-300">
+              {updateSnap.versionReport.nativePackage.present
+                ? `v${updateSnap.versionReport.nativePackage.versionName ?? CURRENT_APP_VERSION} (code ${updateSnap.versionReport.nativePackage.versionCode ?? CURRENT_APP_BUILD})`
+                : 'وب / PWA مستقل'}
             </strong>
+            <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">
+              {updateSnap.versionReport.nativePackage.channel === 'android_apk'
+                ? 'پوسته بومی اندروید'
+                : updateSnap.versionReport.nativePackage.channel === 'ios_ipa'
+                ? 'پوسته بومی iOS'
+                : `هدف بومی مخزن: v${CURRENT_APP_VERSION} (code ${CURRENT_APP_BUILD})`}
+            </span>
           </div>
-          <div>
-            <span className="text-slate-500 dark:text-slate-400 block">نسخه آماده</span>
-            <strong className="text-indigo-700 dark:text-indigo-300 font-mono">
-              {updateSnap.candidate
-                ? `v${updateSnap.candidate.manifest.semver} (#${updateSnap.candidate.manifest.releaseSequence})`
-                : 'ندارد'}
-            </strong>
-          </div>
+        </div>
+
+        {/* Progressive Disclosure: Technical Release Diagnostics */}
+        <div className="rounded-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-700/80 px-3 py-2">
+          <button
+            type="button"
+            data-testid="settings_update_diagnostics_disclosure"
+            aria-expanded={updateDiagnosticsOpen}
+            onClick={() => {
+              HapticEngine.selection();
+              setUpdateDiagnosticsOpen((prev) => !prev);
+            }}
+            className="w-full flex items-center justify-between text-[11px] font-extrabold text-slate-700 dark:text-slate-200 min-h-[36px]"
+          >
+            <span>جزئیات فنی شبکه، مبدأ انتشار و آخرین بررسی</span>
+            <ChevronDown
+              size={15}
+              className={`transition-transform duration-200 ${updateDiagnosticsOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {updateDiagnosticsOpen && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10.5px] pt-2 mt-1.5 border-t border-slate-200/80 dark:border-slate-700/80">
+              <div>
+                <span className="text-slate-500 dark:text-slate-400 block">وضعیت شبکه</span>
+                <strong className={updateSnap.isOnline ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}>
+                  {updateSnap.isOnline ? 'آنلاین' : 'آفلاین'}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-slate-400 block">آخرین بررسی</span>
+                <strong className="text-slate-800 dark:text-slate-200 font-mono">
+                  {updateSnap.lastCheck?.checkedAt
+                    ? new Date(updateSnap.lastCheck.checkedAt).toLocaleTimeString('fa-IR')
+                    : 'بررسی نشده'}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-slate-400 block">وضعیت بررسی</span>
+                <strong className="text-slate-800 dark:text-slate-200">
+                  {updateSnap.lastCheck?.outcome || '—'}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-slate-400 block">مبدأ بیلد</span>
+                <strong dir="ltr" className="rtl-bidi-isolate text-indigo-700 dark:text-indigo-300 font-mono">
+                  {updateSnap.versionReport.installedWeb.origin}
+                </strong>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Auto Update at Safe Point Toggle */}

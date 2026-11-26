@@ -138,8 +138,8 @@ export const DEFAULT_CLINIC_USERS: ClinicUserAccount[] = [
 const USERS_STORAGE_KEY = 'minadental_clinic_users_v4';
 const ACTIVE_USER_STORAGE_KEY = 'minadental_active_user_id_v4';
 const BACKUP_CONFIG_STORAGE_KEY = 'minadental_auto_backup_config_v4';
-export const CURRENT_APP_VERSION = '4.16.0';
-export const CURRENT_APP_BUILD = 116;
+export const CURRENT_APP_VERSION = '4.17.0';
+export const CURRENT_APP_BUILD = 167;
 
 export type UserRole = ClinicUserRole;
 export const ROLE_LABELS: Record<UserRole, string> = {

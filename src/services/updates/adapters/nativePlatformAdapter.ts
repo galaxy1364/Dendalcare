@@ -207,9 +207,10 @@ export class NativePlatformUpdateAdapter implements PlatformUpdateAdapter {
     return {
       ...domIdentity,
       platform: this.platform,
-      semver: bridge?.versionName ?? domIdentity.semver,
+      // GE-0004: Strictly separate installed web bundle identity from native package versionName/versionCode
+      semver: domIdentity.semver,
+      releaseSequence: domIdentity.releaseSequence,
       nativeVersion: bridge?.versionName ?? domIdentity.nativeVersion,
-      releaseSequence: bridge?.versionCode ?? domIdentity.releaseSequence,
       schemaVersion: UPDATE_TIMING_POLICY.CLIENT_SCHEMA_VERSION,
     };
   }

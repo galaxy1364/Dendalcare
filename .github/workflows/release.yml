@@ -63,7 +63,7 @@ jobs:
       - name: Compute strict monotonic release sequence against deployed pointer (fail-closed)
         id: seq
         env:
-          MINA_BASE_SEQUENCE: '116'
+          MINA_BASE_SEQUENCE: '167'
           MINA_RELEASE_SEQUENCE_INPUT: ${{ inputs.release_sequence }}
           MINA_BOOTSTRAP_FIRST_RELEASE: ${{ inputs.bootstrap_first_release }}
         run: |

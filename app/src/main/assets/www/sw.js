@@ -2,7 +2,7 @@
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
 // NOTE: Structural HTML checks below prevent cache poisoning & raw-TSX contamination;
 // they are NOT a substitute for cryptographic ECDSA manifest signature verification.
-const BUILD_ID = "v4.16.0-2fa26e712c";
+const BUILD_ID = "v4.17.0-c39d6352f4";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
@@ -14,15 +14,15 @@ const VALID_BUILD_ID_RE = /^v\d+\.\d+\.\d+-[0-9a-f]{10}$/;
 const CRITICAL_PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-bKHsksjf.js",
-  "./assets/index-DAeNgq4i.css"
+  "./assets/index-BHNKyWat.js",
+  "./assets/index-B7y9VN1e.css"
 ];
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-bKHsksjf.js",
-  "./assets/index-DAeNgq4i.css",
+  "./assets/index-BHNKyWat.js",
+  "./assets/index-B7y9VN1e.css",
   "./manifest.json",
   "./favicon.svg",
   "./logo.png",

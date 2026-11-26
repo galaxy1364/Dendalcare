@@ -68,6 +68,19 @@ export interface VerifiedSessionState {
   tenantId: string;
   branchId: string;
   accessibleBranches?: string[];
+  allBranches?: boolean;
+}
+
+export function isBranchAuthorizedForSession(
+  session: Pick<VerifiedSessionState, 'status' | 'serverVerifiedRole' | 'branchId' | 'accessibleBranches' | 'allBranches'>,
+  targetBranchId: string
+): boolean {
+  if (session.status !== 'authenticated') return true;
+  if (session.serverVerifiedRole === 'manager' && session.allBranches === true) return true;
+  if (Array.isArray(session.accessibleBranches) && session.accessibleBranches.length > 0) {
+    return session.accessibleBranches.includes(targetBranchId);
+  }
+  return session.branchId === targetBranchId;
 }
 
 export function getActiveBranchId(): string {
@@ -235,6 +248,12 @@ export function resolveMembershipSession(params: {
   });
 
   const matched = scopedMatches[0];
+  const hasAllBranchesManager = validActive.some(
+    (m) =>
+      String(m.tenant_id).trim() === String(matched.tenant_id).trim() &&
+      String(m.role).trim() === 'manager' &&
+      m.all_branches === true
+  );
   return {
     status: 'authenticated',
     supabaseUserId: params.userId,
@@ -242,6 +261,7 @@ export function resolveMembershipSession(params: {
     serverVerifiedRole: String(matched.role).trim(),
     tenantId: String(matched.tenant_id).trim(),
     branchId: params.requestedBranchId,
+    allBranches: hasAllBranchesManager,
   };
 }
 
@@ -281,24 +301,50 @@ export async function getVerifiedSupabaseSession(
     };
     currentUnauthorizedFallback = unauthorizedFallback;
 
-    // Security (V12/V14): Membership-only server role resolution.
+    // Security (V12/V14/GE-0004): Membership-only server role resolution.
     // Never fall back to client/token app_metadata when clinic_memberships is missing, revoked, or unreachable.
-    const { data: memberships, error: memErr } = await client
+    const rpcFn = (
+      client as unknown as {
+        rpc?: (fn: string, args?: Record<string, unknown>) => Promise<{ data?: unknown; error?: unknown }>;
+      }
+    ).rpc;
+
+    let memberships: ClinicMembershipRow[] | null | undefined;
+    let memErr: unknown = null;
+
+    const directQuery = await client
       .from('clinic_memberships')
       .select('tenant_id,branch_id,role,active,all_branches')
       .eq('user_id', user.id)
       .eq('active', true);
 
+    memberships = directQuery.data as ClinicMembershipRow[] | null | undefined;
+    memErr = directQuery.error;
+
+    // If direct table read errored or returned empty due to strict RLS policy ordering,
+    // query the SECURITY DEFINER `app_get_my_verified_memberships()` RPC (still strictly auth.uid()-bound).
+    if ((memErr || !Array.isArray(memberships) || memberships.length === 0) && typeof rpcFn === 'function') {
+      try {
+        const rpcMem = await rpcFn.call(client, 'app_get_my_verified_memberships');
+        if (!rpcMem?.error && Array.isArray(rpcMem?.data) && rpcMem.data.length > 0) {
+          memberships = rpcMem.data as ClinicMembershipRow[];
+          memErr = null;
+        }
+      } catch {
+        // Keep fail-closed direct query outcome
+      }
+    }
+
     let resolved = resolveMembershipSession({
       userId: user.id,
       email: user.email ?? null,
       requestedBranchId: branchId,
-      memberships: memberships as ClinicMembershipRow[] | null | undefined,
+      memberships,
       membershipError: memErr,
     });
 
     const validActiveMemberships = Array.isArray(memberships)
-      ? (memberships as ClinicMembershipRow[]).filter((m) => {
+      ? memberships.filter((m) => {
           if (!m || m.active !== true) return false;
           const role = typeof m.role === 'string' ? m.role.trim() : '';
           const tId = typeof m.tenant_id === 'string' ? m.tenant_id.trim() : '';
@@ -352,7 +398,6 @@ export async function getVerifiedSupabaseSession(
     }
 
     // Cross-verify against authoritative Postgres membership-only role resolver when rpc is available
-    const rpcFn = (client as unknown as { rpc?: (fn: string, args: Record<string, unknown>) => Promise<{ data?: unknown; error?: unknown }> }).rpc;
     if (typeof rpcFn === 'function') {
       const rpcRes = await rpcFn.call(client, 'app_resolve_verified_role', {
         target_tenant: resolved.tenantId,

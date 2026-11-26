@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { test, expect } from '@playwright/test';
 
 const VIEWPORT_MATRIX = [
@@ -854,6 +856,100 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       );
       expect(noOverflow).toBe(true);
     }
+  });
+
+  test('GE-0004: 320px-1920px all-route matrix, 200% text scaling, light/dark, reduced motion, 3-way versions & Progressive Disclosure', async ({ page }) => {
+    const evidenceDir = path.resolve(process.cwd(), 'test-results', 'ge0004-evidence');
+    fs.mkdirSync(evidenceDir, { recursive: true });
+
+    const routes = [
+      '/#/',
+      '/#/services',
+      '/#/patients',
+      '/#/appointments',
+      '/#/treatments',
+      '/#/finance',
+      '/#/calendar',
+      '/#/lab',
+      '/#/implants',
+      '/#/inventory',
+      '/#/reminders',
+      '/#/staff',
+      '/#/messages',
+      '/#/settings',
+    ];
+
+    const viewports = [
+      { name: '320px', width: 320, height: 640 },
+      { name: '768px', width: 768, height: 1024 },
+      { name: '1920px', width: 1920, height: 1080 },
+    ];
+
+    for (const vp of viewports) {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      for (const route of routes) {
+        await page.goto(route, { waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+        const layout = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+          dir: document.documentElement.getAttribute('dir'),
+        }));
+        expect(layout.dir).toBe('rtl');
+        expect(
+          layout.scrollWidth,
+          `Horizontal overflow on ${route} at ${vp.name}: scrollWidth=${layout.scrollWidth} > clientWidth=${layout.clientWidth}`
+        ).toBeLessThanOrEqual(layout.clientWidth + 2);
+      }
+      await page.goto('/#/', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+      await page.screenshot({ path: path.join(evidenceDir, `dashboard-${vp.name}-light.png`) });
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/#/settings', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+
+    await expect(page.getByTestId('settings_version_separation_card')).toBeVisible();
+    await expect(page.getByTestId('version_installed_web')).toBeVisible();
+    await expect(page.getByTestId('version_available_release')).toBeVisible();
+    await expect(page.getByTestId('version_native_package')).toBeVisible();
+
+    const disclosureToggle = page.getByTestId('settings_technical_disclosure_toggle');
+    await expect(disclosureToggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId('settings_technical_disclosure_panel')).toBeHidden();
+    await disclosureToggle.click();
+    await expect(disclosureToggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('settings_technical_disclosure_panel')).toBeVisible();
+
+    await page.screenshot({ path: path.join(evidenceDir, 'settings-390px-light.png') });
+
+    await page.getByTestId('appearance_font_double').click();
+    await expect(page.locator('html')).toHaveAttribute('data-text-scale-200', 'true');
+    await page.getByTestId('appearance_theme_dark').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.getByTestId('appearance_motion_reduce').click();
+    await expect(page.locator('html')).toHaveAttribute('data-reduce-motion', 'true');
+
+    const scaledSettingsOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2
+    );
+    expect(scaledSettingsOverflow).toBe(true);
+    await page.screenshot({ path: path.join(evidenceDir, 'settings-390px-dark-200pct.png') });
+
+    await page.goto('/#/', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+    const scaledDashOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2
+    );
+    expect(scaledDashOverflow).toBe(true);
+    await page.screenshot({ path: path.join(evidenceDir, 'dashboard-390px-dark-200pct.png') });
+
+    await page.goto('/#/settings', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+    await page.getByTestId('appearance_font_default').click();
+    await page.getByTestId('appearance_theme_light').click();
+    await page.getByTestId('appearance_motion_system').click();
   });
 });
 

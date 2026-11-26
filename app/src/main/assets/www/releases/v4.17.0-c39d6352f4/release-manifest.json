@@ -1,0 +1,480 @@
+{
+  "schemaVersion": 2,
+  "releaseId": "v4.17.0-c39d6352f4",
+  "releaseSequence": 167,
+  "semver": "4.17.0",
+  "gitCommit": "local-uncommitted",
+  "channel": "stable",
+  "platform": "web",
+  "minNativeVersion": "4.9.0",
+  "minSchemaVersion": 4,
+  "publishedAt": "2026-11-26T17:01:07.228Z",
+  "expiresAt": "2027-11-26T17:01:07.228Z",
+  "contentDigest": "c39d6352f45472445213bcfe76dea7845c2a4c70121c6608c713260ba201acd1",
+  "releaseNotes": "نسخه v4.17.0 (انتشار #167) — هم‌ترازی یکنواخت توالی انتشار پس از #166، تفکیک سه‌گانه نسخه وب/سرور/بومی، بازیابی احراز هویت و RLS مدیر کلینیک، و بازمهندسی بنیادین اسکلت تطبیقی جهانی (GE-0004)",
+  "entryScripts": [
+    "./assets/index-BHNKyWat.js"
+  ],
+  "entryStyles": [
+    "./assets/index-B7y9VN1e.css"
+  ],
+  "assets": [
+    {
+      "path": "./index.html",
+      "sha256": "4e802a52f17585f19f0640cafc982b2c42fac5ac2b2c17046eb10e775f009762",
+      "size": 23988,
+      "critical": true,
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "./assets/AllServicesScreen-CZukHL0_.js",
+      "sha256": "ce3e3c9d8eddf81138077d61a3a55f16f1d8edd94305d72664efa7922d9f12c3",
+      "size": 7920,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/AppointmentForm-CdEpcsyC.js",
+      "sha256": "840f2bae597e8eb27c3c6d302622bef4abf2e4e9a7636131ef2dc87c08c743cb",
+      "size": 12360,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/Appointments-Ci8e4z3j.js",
+      "sha256": "f44f29392ae76acd0e135f38b744ea8e038855094d1b0f97ee25e1ed61c57d73",
+      "size": 34950,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/CalendarSection-BXUNPtGc.js",
+      "sha256": "03afedf27fd8e6d731e9381f372b1ffd641683973e7e0e5d5880b13fead0b76f",
+      "size": 33917,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/ClinicDefinitionsModal-D0ik0yJj.js",
+      "sha256": "66a61f8055f8dcd50276c8809b7e95a7030cf3595b906baa46a63847fe75457e",
+      "size": 23350,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/ContextMenu-BbVHBUlT.js",
+      "sha256": "7fc81531cc52a37e069c974579fdd097af91f617c93951a92c428ec6e97f2a9a",
+      "size": 3893,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/CustomizeServicesPage-C-utJWUG.js",
+      "sha256": "59723d76cde9f52479ee745f6918c1789bcdc6229a769a87b4705a123cd1fa8d",
+      "size": 6050,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/DashboardPage-frumGt9N.js",
+      "sha256": "2dfa7959c29dadb7a9e99e901f951c5fd467f909cd6120a343346a6a76fcd532",
+      "size": 23119,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/Finance-Ba9Q_gvh.js",
+      "sha256": "df6425a684c5ec7479c8db67f40f50a5575cc586aa684b75c4d1fb58fe353e4a",
+      "size": 149710,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/Implants-uUte_UxS.js",
+      "sha256": "bf1e42ffae8d12e472c2c3b9eab058e84616869f994ce8b3b9645767190c2bfd",
+      "size": 23923,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/Inventory-CExrDZ6I.js",
+      "sha256": "a8fb9ffa98a92f718c44855607cf00f8baed59616038a52bab00e57339d65ab6",
+      "size": 24441,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/JalaliDatePicker-CVCSvTPZ.js",
+      "sha256": "d1018dd68c53974fa2fb702d84ab141939a59028af88125fd1d42de5233ad13a",
+      "size": 5763,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/Lab-b3ci5AvG.js",
+      "sha256": "8ece0fc51ed36f9e79860f7b79f31a11c9f10840fcb0c0899de1732f2c3145e8",
+      "size": 21104,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/Messages-Cx5tfTcj.js",
+      "sha256": "850cd2f6291e94646320f18d55e148fdfb9da1e8cf864c14dccb80f509130418",
+      "size": 21542,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/OperationalFormRoutes-CoKJNFHZ.js",
+      "sha256": "908ae4dee5227c3d2ebd7261f34f7776b97b0da1cc3d05aad2d95fa9e538dc0f",
+      "size": 21968,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/PalmerChart-4UNzkswi.js",
+      "sha256": "1acbbcec0184f8b85cb46e0398b84dc11a94a54ffcaf43197318ae7fcac3c109",
+      "size": 33007,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/Patients-CTu4Z9eH.js",
+      "sha256": "bc55a3620a97a2e3f91b723a75a7ab087364b09039747fe840562f33229bfe6d",
+      "size": 191936,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/Reminders-DB7g7yWZ.js",
+      "sha256": "28c158788377613547190f2954f33dfaa459f84a5c4d9f55042684657caf75bb",
+      "size": 45124,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/ReportsPage-Bj3NtCSW.js",
+      "sha256": "9a4e425cf982951194728172712ef41af13be87df7dcd8643604f7e8700be0ae",
+      "size": 31439,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/SettingsSection-BOpELBmq.js",
+      "sha256": "201084203e46f3a5c0c228889954e26a137c6012fb1bcb4fcfea9b96ef5d7bf5",
+      "size": 163874,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/StaffSection-Dg3mI4qo.js",
+      "sha256": "f0d20abd45781bae18cc5913694fd37bb8636ca4e6a0c0aed3ca65524297495f",
+      "size": 59669,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/Treatments-GCGvtwjj.js",
+      "sha256": "7bc3bf35f6b49c05e6b7a5946252e01f26ac2149b39cf442f3e5344450a61231",
+      "size": 42284,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/activity-CfxA--HP.js",
+      "sha256": "178da753a770a1fb4440f515e200bae17ca2e237b5e19409c81bab00ec01210f",
+      "size": 233,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/anchor-_paDoXih.js",
+      "sha256": "8ecd777c23424b944aafaa3e9ae88b74d34ba1d2a1f6a5ebdbcded219c8ad816",
+      "size": 220,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/apple-touch-icon-Du1UqEvw.png",
+      "sha256": "695a51ebb31de43378da337d9cb4e15242ca6e7dd4a1cd757d7f2a87ae47e4e4",
+      "size": 42866,
+      "critical": false,
+      "contentType": "image/png"
+    },
+    {
+      "path": "./assets/arrow-up-right-DjTvqkcM.js",
+      "sha256": "b460c8b85cb905b720d82e4a837a46ccdf3cc45acdbe9b8460d29cc3b8df9622",
+      "size": 164,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/badge-check-SBl1cbzf.js",
+      "sha256": "1f93d267daccbe454491e3aea4ed5a59614e15bcf25aa2840b7e883252e36f8f",
+      "size": 314,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/bell-ring-BgKBjGLX.js",
+      "sha256": "40e6ebee211d05f2f56504e4c433cb163d0777f4e9b290e9ee5870a463b4cebf",
+      "size": 12270,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/calculator-BY7dPVac.js",
+      "sha256": "4f6d41beff6651e38252acb0c090f0b5bf794ae858d93f33864af4541e139e66",
+      "size": 529,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/calendar-clock-BDaZWrNF.js",
+      "sha256": "fe0da4dabe13b7dfef986d46a6bda60170513715d93e180526f1f5d9faef2641",
+      "size": 381,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/chevron-up-B_phOPUq.js",
+      "sha256": "7f933a2fc1c9f411c9d821efee3c22222474f6a03c0a21e51cdb05f2d5c1c337",
+      "size": 126,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/circle-x-CLY1WnJg.js",
+      "sha256": "b5d529b7f424c928fddda4b88637e1b643ac6b81679ed5e77932f1f526f55b32",
+      "size": 205,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/clinicDefinitions-4vhkHl85.js",
+      "sha256": "34e1de8709225a3b7340208f4bc66feffaaa01f7b83cece4bfcb1fd65592bb93",
+      "size": 4382,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/dashboard.metrics-BFw7wcs2.js",
+      "sha256": "c4f909719f6c37c84daa8eea87d7314b3fa20d464f418850b571cc76e1adba71",
+      "size": 15805,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/eye-DvvJ9cL6.js",
+      "sha256": "e96f6241356b4f00eb685925eb47b728cfd70ce724d43db60eeb659c7b86af55",
+      "size": 255,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/favicon-BZotrQQN.svg",
+      "sha256": "858420334691f7b6979cda58e133f5f4bf553d9b7f07d7a1749679e6f8ff8555",
+      "size": 1994,
+      "critical": false,
+      "contentType": "image/svg+xml"
+    },
+    {
+      "path": "./assets/file-plus-2-BRY6uc5p.js",
+      "sha256": "c3b07f827189870333a365a9a14cb9565142a4d798b4f31a5c87564ce4e73907",
+      "size": 283,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/financialCommandService-D68pG0ap.js",
+      "sha256": "5436995fb7952d83ea214ee80fc3075d596d753eca57f9e0f3b85d9a1db01241",
+      "size": 28691,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/globalFocus-DLb1CE1V.js",
+      "sha256": "354c6675a89b748c7d1f7c1a6f8e4a375e6dacb1b67899c226e8594e70c01715",
+      "size": 149,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/grip-vertical-b7Nav0ay.js",
+      "sha256": "1cb18d87fbee7ef8b65482976e2a125e9d243f6bdfff70f3744b9b5ec51f3066",
+      "size": 369,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/icon-192-6zbfWRWW.png",
+      "sha256": "7a39eda624bcb37be172bfe55e362454eb114569a68a5ff322d3db2a3f557332",
+      "size": 48139,
+      "critical": false,
+      "contentType": "image/png"
+    },
+    {
+      "path": "./assets/index-B7y9VN1e.css",
+      "sha256": "7b510f6ed8861560d05dda8f8a779d5efede013360db514007a35e1da6320e20",
+      "size": 134479,
+      "critical": true,
+      "contentType": "text/css; charset=utf-8"
+    },
+    {
+      "path": "./assets/index-BHNKyWat.js",
+      "sha256": "3cdad1a451e15c2c4acb6d94e0859acbfc71f02f9f08973ffebc936d4d172bff",
+      "size": 833206,
+      "critical": true,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/jsx-dev-runtime-DqUurfMK.js",
+      "sha256": "36478bf1b9be5b70529b171f46ad8896f659299f496efca81257a62064261e52",
+      "size": 334195,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/layers-D8JcxCdz.js",
+      "sha256": "0d9740834407536a8cee82f3b4bd73389ea7f7dfb1dc250a03444f22b57cd4c5",
+      "size": 363,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/manifest-B4Cn3fX3.json",
+      "sha256": "d0cd9fad3e9a02c281eeeeaec05ac7505d13ad6b2e4f716544b6b97e201ad51f",
+      "size": 2771,
+      "critical": false,
+      "contentType": "application/json; charset=utf-8"
+    },
+    {
+      "path": "./assets/map-pin-BBk24qGG.js",
+      "sha256": "0d719d03c59ba5072abed686643e7620a54a84c9ded8a3c58dca720ae17e1a86",
+      "size": 257,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/megaphone-D2Wxm60o.js",
+      "sha256": "86fd15eaa61cb142c54f3f15ee3cd504dedf2e369e38fd5c099f88f3b15dc1fd",
+      "size": 191,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/moon-2oRGXRNt.js",
+      "sha256": "622584ce5e099dd5b61e609fd71ddbe806a607222df79f102859cac113d9f540",
+      "size": 141,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/percent-Chnk4JgD.js",
+      "sha256": "b888166b5081a13e120297a6b213de1d9c0883406bf47af076c7f6b9a69be942",
+      "size": 241,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/send-B9YcqIck.js",
+      "sha256": "94d3952ef26490e78a4d8a25377a88f6558cf1abd380a31338c4cc8f63ea95af",
+      "size": 289,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/sliders-horizontal-D206oBgx.js",
+      "sha256": "07bd623fbd7d643441e3079c7954497a281f09cbe1c8fa6f924d030454335036",
+      "size": 583,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/target-DtV8GOT5.js",
+      "sha256": "03844fc0b6d163c0c39c16039b75774bba144f44ed13bcce2a694b36fa32262a",
+      "size": 225,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/trash-2-DkZublBE.js",
+      "sha256": "bbc34f7a5490c31c0b5e8491edafd2406ea83d21796a918a591464bb290dc2e0",
+      "size": 356,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/trending-down-DYTrLMvD.js",
+      "sha256": "e3bc42de132f1e5673323092aeaad5d1bd43aeb42795b0f06cf3cd3a5a8554c3",
+      "size": 206,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/trending-up-WF_vES15.js",
+      "sha256": "3325bcc6cd14fa9e6694bd2b40ff4029ee5fd1d1391edcd1bed9bbd54df4d20f",
+      "size": 203,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./assets/useDashboard-BztpUl-d.js",
+      "sha256": "f1c4e2861529f9bfd8fdf685a928e45d8751a0920efd0fa4ff960f0cbdeb0ae7",
+      "size": 8664,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    {
+      "path": "./fonts/vazirmatn-arabic.woff2",
+      "sha256": "84a382e46c30fb4f73d0e3800c16d0af15888e2731e57fa5f93e2c29a2c6a957",
+      "size": 46308,
+      "critical": false,
+      "contentType": "font/woff2"
+    },
+    {
+      "path": "./fonts/vazirmatn-latin-ext.woff2",
+      "sha256": "21529facfd236f6be527e4353623bdb889c96a7ebb7db1e148e28406be0ea004",
+      "size": 21860,
+      "critical": false,
+      "contentType": "font/woff2"
+    },
+    {
+      "path": "./fonts/vazirmatn-latin.woff2",
+      "sha256": "d29c041cd4294af893cf3c01dfab6d47202c667ab55d702f68782599918c651d",
+      "size": 34524,
+      "critical": false,
+      "contentType": "font/woff2"
+    },
+    {
+      "path": "./fonts/vazirmatn.ttf",
+      "sha256": "d03530ee663145ccc6367dfe20d1f1f8741a416e1dff55175d75f8e8542f997d",
+      "size": 33744,
+      "critical": false,
+      "contentType": "font/ttf"
+    },
+    {
+      "path": "./manifest.json",
+      "sha256": "a1b3c55af5926925d834afebdee987f067a38431803bc843bddbe644f96712bc",
+      "size": 2911,
+      "critical": false,
+      "contentType": "application/json; charset=utf-8"
+    },
+    {
+      "path": "./sw.js",
+      "sha256": "502ea0ed3b09fab65d12c911f4a59d4fd9e6805f9b69173b29620699e2872d08",
+      "size": 22223,
+      "critical": false,
+      "contentType": "application/javascript; charset=utf-8"
+    }
+  ],
+  "urgency": "standard",
+  "revoked": false,
+  "origin": "local_unreleased",
+  "rollbackPolicy": {
+    "strategy": "forward_release",
+    "minRollbackSequence": 167,
+    "schemaBackwardCompatible": true,
+    "preserveUserData": true
+  }
+}

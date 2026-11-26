@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import {
   Archive,
   BarChart3,
+  Bell,
   CalendarDays,
   CalendarPlus,
   CheckCircle2,
@@ -291,11 +292,11 @@ export function AppShell() {
         />
 
         <div className="flex-1 min-w-0 flex flex-col min-h-0 relative">
-          {/* Compact Non-Overlapping Header */}
-          <header className="shrink-0 z-20 bg-[#F4F7F9] dark:bg-[#0A141E] border-b border-[#D8E2EA] dark:border-[#25394D] px-2 md:px-4 py-1.5">
-            <div className="max-w-xl md:max-w-5xl xl:max-w-6xl mx-auto">
-              <div className="rounded-[20px] px-2.5 sm:px-3 py-1.5 flex items-center justify-between gap-2 bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] text-[#14283B] dark:text-[#F1F5F9] shadow-sm">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+          {/* Compact Non-Overlapping Adaptive Liquid-Glass Header (320px-1920px) */}
+          <header className="shrink-0 z-20 bg-[#F4F7F9]/95 dark:bg-[#0A141E]/95 liquid-glass-header border-b border-[#D8E2EA]/80 dark:border-[#25394D]/80 px-2 md:px-5 py-1.5">
+            <div className="adaptive-shell-container">
+              <div className="liquid-glass-bar rounded-[20px] px-2 sm:px-3 py-1.5 flex items-center justify-between gap-1.5 sm:gap-2 text-[#14283B] dark:text-[#F1F5F9]">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
                   {canGoBack && (
                     <button
                       type="button"
@@ -303,7 +304,7 @@ export function AppShell() {
                       onClick={goBack}
                       aria-label="بازگشت به صفحه قبل"
                       title="بازگشت"
-                      className="w-10 h-10 rounded-[12px] bg-[#EEF3F7] dark:bg-[#162738] border border-[#D8E2EA] dark:border-[#25394D] flex items-center justify-center text-[#14283B] dark:text-[#F1F5F9] shrink-0 active:scale-95"
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-[12px] bg-[#EEF3F7] dark:bg-[#162738] border border-[#D8E2EA] dark:border-[#25394D] flex items-center justify-center text-[#14283B] dark:text-[#F1F5F9] shrink-0 active:scale-95"
                     >
                       <ChevronRight size={18} strokeWidth={2.5} />
                     </button>
@@ -312,23 +313,23 @@ export function AppShell() {
                   <button
                     type="button"
                     data-testid="topbar_brand_logo_button"
-                    className="inline-flex items-center justify-center w-10 h-10 rounded-[14px] shrink-0 cursor-pointer active:scale-95 md:hidden"
+                    className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-[14px] shrink-0 cursor-pointer active:scale-95 md:hidden"
                     onClick={() => navigate('dashboard', undefined, { rootTab: true })}
                     aria-label="مینادنتال - صفحه اصلی"
                   >
-                    <MascotTooth mood={effectiveMascotMood} size={38} framed interactive={false} />
+                    <MascotTooth mood={effectiveMascotMood} size={36} framed interactive={false} />
                   </button>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <h1 className="text-[14px] sm:text-[15px] font-black leading-tight text-[#14283B] dark:text-[#F1F5F9] whitespace-nowrap truncate">
+                      <h1 className="text-[clamp(13px,3.6vw,16px)] font-black leading-tight text-[#14283B] dark:text-[#F1F5F9] whitespace-nowrap truncate">
                         <span className="md:hidden">
                           {activeRoute === 'dashboard' ? 'مینادنتال' : section.label}
                         </span>
                         <span className="hidden md:inline">{section.label}</span>
                       </h1>
                       <span
-                        className="hidden lg:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-md text-white truncate max-w-[150px]"
+                        className="hidden lg:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-md text-white truncate max-w-[160px]"
                         style={{ background: section.color }}
                       >
                         {currentUser.fullName || currentUser.name}
@@ -341,7 +342,7 @@ export function AppShell() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                   <button
                     type="button"
                     className="topbar-btn bg-[#F2FAFF] dark:bg-[#162738] border border-[#B5DBF7] dark:border-[#25394D]"
@@ -354,6 +355,25 @@ export function AppShell() {
                     data-testid="topbar_global_search_button"
                   >
                     <Search size={17} className="text-[#0369A1] dark:text-[#38BDF8]" />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="topbar-btn bg-[#FFF5F7] dark:bg-[#162738] border border-[#FECDD3] dark:border-[#25394D] hidden sm:flex"
+                    onClick={() => {
+                      PlatformHapticAdapter.selection();
+                      setNotifOpen(true);
+                    }}
+                    aria-label="مرکز اعلان‌ها و یادآوری‌ها"
+                    title="اعلان‌ها و یادآوری‌ها"
+                    data-testid="topbar_notifications_button"
+                  >
+                    <Bell size={17} className="text-[#AD293C] dark:text-[#FDA4AF]" />
+                    {notifCount > 0 && (
+                      <span className="notif-dot">
+                        {notifCount > 99 ? '99+' : notifCount.toLocaleString('fa-IR')}
+                      </span>
+                    )}
                   </button>
 
                   <button
@@ -411,11 +431,11 @@ export function AppShell() {
             onTouchCancel={() => {
               edgeSwipeRef.current = cancelRtlEdgeBackSwipe(edgeSwipeRef.current);
             }}
-            className={`app-shell-main pr-9 pl-2.5 sm:pr-10 sm:pl-3.5 md:px-5 desktop-scroll ${
+            className={`app-shell-main pr-9 pl-2.5 sm:pr-9 sm:pl-3.5 md:pr-9 md:pl-5 xl:pr-10 xl:pl-8 desktop-scroll ${
               activeRoute === 'dashboard' ? 'main-no-scroll-home py-1.5' : 'py-2.5 pb-6'
             }`}
           >
-            <div className="max-w-xl md:max-w-5xl xl:max-w-6xl mx-auto space-y-2 h-full">
+            <div className="adaptive-shell-container space-y-2 h-full">
               {!isOnline && (
                 <div className="rounded-[12px] bg-[#92510C] text-white text-xs font-bold py-1.5 px-3 flex items-center justify-center gap-2">
                   <WifiOff size={15} />

@@ -97,13 +97,13 @@ export function FloatingDock({
     <nav
       aria-label="ناوبری اصلی پایین"
       data-testid="floating_bottom_dock"
-      className="shrink-0 z-30 md:hidden px-2.5 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      className="shrink-0 z-30 md:hidden px-1.5 sm:px-2.5 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
     >
-      <div className="max-w-xl mx-auto flex items-center gap-2" dir="rtl">
+      <div className="max-w-xl mx-auto flex items-center gap-1.5 sm:gap-2 min-w-0" dir="rtl">
         {/* Main 4-Destination Role-Aware QBank Pill Bar */}
         {visibleDockIds.length > 0 && (
           <div
-            className="bottom-dock flex-1 min-h-[58px] rounded-full flex items-center justify-between px-1.5 py-1 gap-1"
+            className="bottom-dock flex-1 min-w-0 min-h-[58px] max-[349px]:min-h-[52px] rounded-full flex items-center justify-between px-1 sm:px-1.5 py-1 gap-0.5 sm:gap-1 overflow-hidden"
             data-testid="qbank_primary_pill_bar"
           >
             {visibleDockIds.map((id) => {
@@ -123,10 +123,10 @@ export function FloatingDock({
                   }}
                   aria-label={shortLabel}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`min-h-[48px] rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C76] ${
+                  className={`min-h-[44px] sm:min-h-[48px] min-w-0 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C76] overflow-hidden ${
                     isActive
-                      ? 'flex-[1.55] px-3 gap-1.5 shadow-sm'
-                      : 'flex-1 px-1.5 gap-1'
+                      ? 'flex-[1.35] sm:flex-[1.55] px-1.5 sm:px-3 gap-1 sm:gap-1.5 shadow-sm'
+                      : 'flex-1 px-1 sm:px-1.5 gap-0.5 sm:gap-1'
                   }`}
                   style={
                     isActive
@@ -145,16 +145,16 @@ export function FloatingDock({
                   <span className="shrink-0 flex items-center justify-center">
                     <ModuleDuotoneIcon
                       id={id}
-                      size={isActive ? 22 : 21}
+                      size={isActive ? 20 : 19}
                       primaryColor={isActive ? tok.primaryDark : '#526779'}
                       secondaryColor={isActive ? tok.primary : '#94A3B8'}
                     />
                   </span>
                   <span
-                    className={`leading-none whitespace-nowrap transition-all ${
+                    className={`leading-none truncate transition-all ${
                       isActive
-                        ? 'text-[12.5px] font-black'
-                        : 'text-[11.5px] font-bold opacity-90 dark:text-[#9FB1C1]'
+                        ? 'text-[clamp(10px,2.9vw,12.5px)] font-black'
+                        : 'text-[clamp(9.5px,2.6vw,11.5px)] font-bold opacity-90 dark:text-[#9FB1C1] max-[349px]:hidden'
                     }`}
                     style={isActive ? { color: tok.primaryDark } : undefined}
                   >
@@ -180,7 +180,7 @@ export function FloatingDock({
             }}
             aria-label="همه خدمات کلینیک"
             data-testid="dock_more_button"
-            className="w-[58px] h-[58px] rounded-full shrink-0 flex flex-col items-center justify-center transition-transform active:scale-92 bg-white dark:bg-[#11202E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C76]"
+            className="w-[58px] h-[58px] max-[349px]:w-[52px] max-[349px]:h-[52px] rounded-full shrink-0 flex flex-col items-center justify-center transition-transform active:scale-92 bg-white dark:bg-[#11202E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C76]"
             style={{
               background: !isPrimaryActive
                 ? `linear-gradient(155deg, ${activeToken.surfaceTintStart}, ${activeToken.surfaceTintEnd})`
@@ -194,11 +194,16 @@ export function FloatingDock({
           >
             <ModuleDuotoneIcon
               id={!isPrimaryActive ? active : 'services'}
-              size={22}
+              size={20}
               primaryColor={!isPrimaryActive ? activeToken.primaryDark : '#142E43'}
               secondaryColor={!isPrimaryActive ? activeToken.primary : '#087C76'}
             />
-            <span className="text-[10.5px] font-extrabold mt-0.5 leading-none truncate max-w-[48px] dark:text-[#E2E8F0]">
+            <span
+              className={`text-[10px] font-extrabold mt-0.5 leading-none truncate max-w-[44px] ${
+                isPrimaryActive ? 'dark:text-[#E2E8F0]' : ''
+              }`}
+              style={!isPrimaryActive ? { color: activeToken.primaryDark } : undefined}
+            >
               {!isPrimaryActive ? resolvedLabel : 'خدمات'}
             </span>
           </button>

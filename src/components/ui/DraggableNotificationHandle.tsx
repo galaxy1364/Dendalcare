@@ -177,41 +177,41 @@ export function DraggableNotificationHandle({ notifCount, open, onOpen }: Props)
         top: `${yPct}%`,
         transform: `translate(${pullOffsetX}px, -50%) scale(${dragging ? 1.05 : 1})`,
         width: '30px',
-        height: '76px',
+        height: '72px',
         transition: dragging ? 'none' : 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)',
       }}
     >
-      {/* Smooth Curved Right-Edge Ear Silhouette */}
+      {/* Smooth Curved Right-Edge Ear Silhouette (Non-Overlapping Safe Gutter) */}
       <svg
-        viewBox="0 0 32 76"
+        viewBox="0 0 28 72"
         aria-hidden="true"
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{
           filter: dragging
-            ? 'drop-shadow(-4px 5px 14px rgba(79, 70, 229, 0.28))'
-            : 'drop-shadow(-2px 3px 10px rgba(15, 23, 42, 0.14))',
+            ? 'drop-shadow(-4px 5px 12px rgba(79, 70, 229, 0.26))'
+            : 'drop-shadow(-2px 3px 8px rgba(15, 23, 42, 0.12))',
         }}
       >
         <path
           className="right-bell-ear-path"
-          d="M 32,0 C 32,12 24,14 16,17 C 6,20 2,28 2,38 C 2,48 6,56 16,59 C 24,62 32,64 32,76 Z"
+          d="M 28,0 C 28,11 21,13 14,16 C 5,19 2,26 2,36 C 2,46 5,53 14,56 C 21,59 28,61 28,72 Z"
           fill="#FFFFFF"
           stroke="#CBD5E1"
-          strokeWidth="1.3"
+          strokeWidth="1.25"
         />
       </svg>
 
       {/* Filled Dark-Slate Swinging Bell + Red Alert Badge */}
-      <div className="relative z-10 flex items-center justify-center pl-1 pointer-events-none">
+      <div className="relative z-10 flex items-center justify-center pl-0.5 pointer-events-none">
         <Bell
-          size={17}
+          size={15}
           strokeWidth={2.2}
           fill={notifCount > 0 ? '#0F172A' : 'none'}
           className={notifCount > 0 ? 'text-slate-900 right-bell-icon bell-swing' : 'text-slate-700 right-bell-icon'}
         />
         {notifCount > 0 && (
           <span
-            className="absolute -top-2 -left-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-600 text-white text-[8px] font-black flex items-center justify-center border-[1.5px] border-white dark:border-[#162738] shadow-sm"
+            className="absolute -top-2 -left-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-rose-600 text-white text-[8px] font-black flex items-center justify-center border-[1.5px] border-white dark:border-[#162738] shadow-sm"
             data-testid="right_edge_bell_badge"
           >
             {notifCount > 99 ? '99+' : notifCount.toLocaleString('fa-IR')}

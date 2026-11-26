@@ -1,20 +1,20 @@
 {
   "schemaVersion": 2,
-  "version": "4.16.0",
-  "semver": "4.16.0",
-  "build": 116,
-  "releaseSequence": 116,
-  "buildId": "v4.16.0-2fa26e712c",
-  "releaseId": "v4.16.0-2fa26e712c",
-  "contentDigest": "2fa26e712c50d9322bc6921048302898137040efd10f48e8affae420365688c0",
-  "packageVersion": "4.16.0",
+  "version": "4.17.0",
+  "semver": "4.17.0",
+  "build": 167,
+  "releaseSequence": 167,
+  "buildId": "v4.17.0-50fbe25445",
+  "releaseId": "v4.17.0-50fbe25445",
+  "contentDigest": "50fbe254454458f5ac1f2bf758499c0e88f8ee18dce19d746a996623eaf622c0",
+  "packageVersion": "4.17.0",
   "channel": "stable",
-  "publishedAt": "2026-11-26T16:08:34.052Z",
-  "releaseNotes": "نسخه v4.16.0 (انتشار #116) — ارتقای جامع هوش مالی، دفتر کل دوطرفه و تطبیق تراکنش‌ها (V16)، پایداری سرور پرونده بالینی و ادنتوگرام (V15) و موتور به‌روزرسانی امن در نقطه امن",
+  "publishedAt": "2026-11-26T16:55:00.706Z",
+  "releaseNotes": "نسخه v4.17.0 (انتشار #167) — هم‌ترازی یکنواخت توالی انتشار پس از #166، تفکیک سه‌گانه نسخه وب/سرور/بومی، بازیابی احراز هویت و RLS مدیر کلینیک، و بازمهندسی بنیادین اسکلت تطبیقی جهانی (GE-0004)",
   "entryScripts": [
-    "./assets/index-bKHsksjf.js"
+    "./assets/index-Dkip-LXb.js"
   ],
   "entryStyles": [
-    "./assets/index-DAeNgq4i.css"
+    "./assets/index-CHyMzQLn.css"
   ]
 }

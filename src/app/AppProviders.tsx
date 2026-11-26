@@ -77,6 +77,7 @@ import { NavigationProvider } from '@/navigation/NavigationStack';
 import {
   getActiveBranchId,
   getVerifiedSupabaseSession,
+  isBranchAuthorizedForSession,
   setActiveBranchId,
   signInWithSupabaseEmail,
   signOutSupabaseSession,
@@ -756,6 +757,18 @@ function ClinicShellProviders({
 
   const switchBranch = useCallback(
     (id: string) => {
+      if (
+        verifiedSession.status === 'authenticated' &&
+        !isBranchAuthorizedForSession(verifiedSession, id)
+      ) {
+        HapticEngine.warning();
+        setGuardianToast({
+          message: 'عضویت تاییدشده شما محدود به شعبه مجاز فعلی است و اجازه تغییر به این شعبه را ندارد.',
+          severity: 'security',
+          traceId: 'TRC-MINA-BRANCH-LOCK',
+        });
+        return;
+      }
       const next = setActiveBranchId(id);
       setBranchId(next);
       getVerifiedSupabaseSession(next)
@@ -775,7 +788,7 @@ function ClinicShellProviders({
       HapticEngine.selection();
       showSyncToast(`شعبه فعال تغییر یافت`, 2500);
     },
-    [showSyncToast, syncLocalUserToVerifiedSession]
+    [showSyncToast, syncLocalUserToVerifiedSession, verifiedSession]
   );
 
   const switchUser = useCallback(

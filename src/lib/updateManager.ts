@@ -19,10 +19,11 @@ import {
   type UpdateProgress,
   type UpdateSnapshot,
   type UpdateState,
+  type VersionIdentityReport,
 } from '@/services/updates';
 
 export { updateCoordinator, LEGACY_INSTALLED_RELEASE_KEY };
-export type { UpdateSnapshot, UpdateState, UpdateProgress };
+export type { UpdateSnapshot, UpdateState, UpdateProgress, VersionIdentityReport };
 
 export interface InstalledReleaseInfo {
   version: string;
@@ -80,6 +81,10 @@ export function getInstalledReleaseInfo(): InstalledReleaseInfo {
     installedAt: snap.installed.verifiedAt,
     lastCheckedAt: snap.lastCheck?.checkedAt ?? null,
   };
+}
+
+export function getSeparatedVersionReport(): VersionIdentityReport {
+  return updateCoordinator.getSnapshot().versionReport;
 }
 
 /**

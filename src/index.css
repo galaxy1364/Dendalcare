@@ -62,6 +62,16 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --keyboard-inset-bottom: 0px;
+
+  /* GE-0004 Semantic Layered Surface Defaults (Apple Liquid Glass / M3 Adaptive / Fluent 2) */
+  --surface-glass-bg: rgba(255, 255, 255, 0.88);
+  --surface-glass-elevated: rgba(255, 255, 255, 0.95);
+  --surface-glass-border: rgba(203, 213, 225, 0.82);
+  --surface-specular: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --surface-blur: 14px;
+  --surface-shadow: 0 4px 16px rgba(20, 46, 67, 0.055);
+  --surface-header-bg: rgba(244, 247, 249, 0.86);
+  --surface-dock-bg: rgba(255, 255, 255, 0.92);
 }
 
 * {
@@ -280,10 +290,11 @@ html[data-reduce-motion="true"] .aurora-mesh-blob {
   transition: background 0.35s var(--ease-out);
 }
 
-/* ===== Calibrated Surfaces (Max Blur Restraint + High Contrast) ===== */
+/* ===== Calibrated Layered Surfaces (Liquid Glass / M3 / Fluent + AA Contrast) ===== */
 .glass {
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid var(--md-border);
+  background: var(--surface-glass-bg, rgba(255, 255, 255, 0.96));
+  border: 1px solid var(--surface-glass-border, var(--md-border));
+  box-shadow: var(--surface-specular, none);
 }
 
 .glass-dark {
@@ -293,10 +304,12 @@ html[data-reduce-motion="true"] .aurora-mesh-blob {
 }
 
 .glass-card {
-  background: var(--md-surface);
-  border: 1px solid var(--md-border);
-  box-shadow: 0 2px 10px rgba(20, 46, 67, 0.045);
+  background: var(--surface-glass-bg, var(--md-surface));
+  border: 1px solid var(--surface-glass-border, var(--md-border));
+  box-shadow: var(--surface-shadow, 0 2px 10px rgba(20, 46, 67, 0.045)), var(--surface-specular, none);
   border-radius: var(--radius-card);
+  backdrop-filter: saturate(150%) blur(var(--surface-blur, 12px));
+  -webkit-backdrop-filter: saturate(150%) blur(var(--surface-blur, 12px));
   transition: border-color 0.2s ease, box-shadow 0.2s var(--ease-out);
 }
 
@@ -387,11 +400,11 @@ html[data-reduce-motion="true"] .aurora-mesh-blob {
 
 /* ===== Floating Dock ===== */
 .bottom-dock {
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--md-border);
-  box-shadow: 0 8px 24px rgba(20, 46, 67, 0.10);
+  background: var(--surface-dock-bg, rgba(255, 255, 255, 0.92));
+  backdrop-filter: saturate(165%) blur(var(--surface-blur, 14px));
+  -webkit-backdrop-filter: saturate(165%) blur(var(--surface-blur, 14px));
+  border: 1px solid var(--surface-glass-border, var(--md-border));
+  box-shadow: 0 8px 24px rgba(20, 46, 67, 0.10), var(--surface-specular, none);
 }
 
 .dock-item {
@@ -803,5 +816,73 @@ html[data-density="compact"] .glass-card {
 html[data-density="spacious"] .glass-card {
   padding: 1.15rem;
 }
+
+/* ===== GE-0004 Global Adaptive Foundation (320px-1920px, 200% Text Scaling, Liquid Glass Chrome) ===== */
+.liquid-glass-header {
+  background: var(--surface-header-bg, rgba(244, 247, 249, 0.88));
+  backdrop-filter: saturate(165%) blur(var(--surface-blur, 14px));
+  -webkit-backdrop-filter: saturate(165%) blur(var(--surface-blur, 14px));
+}
+
+.liquid-glass-bar {
+  background: var(--surface-glass-elevated, var(--md-surface));
+  border: 1px solid var(--surface-glass-border, var(--md-border));
+  box-shadow: var(--surface-shadow, 0 2px 10px rgba(20, 46, 67, 0.05)), var(--surface-specular, none);
+}
+
+.adaptive-shell-container {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+@media (min-width: 768px) {
+  .adaptive-shell-container {
+    max-width: 1040px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .adaptive-shell-container {
+    max-width: 1320px;
+  }
+}
+
+@media (min-width: 1536px) {
+  .adaptive-shell-container {
+    max-width: 1560px;
+  }
+}
+
+/* 200% Text Scaling & Narrow 320px Zero-Overflow Safeguards */
+html[data-text-scale-200="true"] .app-shell-main,
+html[data-large-text="true"] .app-shell-main {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+html[data-text-scale-200="true"] .no-scroll-home-shell {
+  height: auto !important;
+  min-height: 0 !important;
+  justify-content: flex-start;
+  gap: 0.5rem;
+}
+
+html[data-text-scale-200="true"] .topbar-btn {
+  min-width: 40px;
+  min-height: 40px;
+  width: 40px;
+  height: 40px;
+}
+
+@media (max-width: 359px) {
+  .topbar-btn {
+    min-width: 40px;
+    min-height: 40px;
+    width: 40px;
+    height: 40px;
+  }
+}
+
 
 

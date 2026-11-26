@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { CORE_PALETTE, DARK_PALETTE } from '@/design-system/tokens/colors';
+import { resolveSurfaceTokens } from '@/design-system/tokens/surfaces';
 import { detectPlatformFromUA } from '@/platform/capabilities';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
-export type FontScaleMode = 'compact' | 'default' | 'large' | 'xlarge';
+export type FontScaleMode = 'compact' | 'default' | 'large' | 'xlarge' | 'double';
 export type MotionMode = 'system' | 'reduce' | 'full';
 export type AuroraBackdropMode = 'live' | 'low_power' | 'static';
 export type DensityMode = 'compact' | 'comfortable' | 'spacious';
@@ -37,6 +38,7 @@ const FONT_SCALE_PX: Record<FontScaleMode, string> = {
   default: '16px',
   large: '18px',
   xlarge: '20px',
+  double: '32px',
 };
 
 const DENSITY_TOKENS: Record<
@@ -63,7 +65,15 @@ export function getFontScaleMode(): FontScaleMode {
   if (typeof window === 'undefined') return 'default';
   try {
     const val = localStorage.getItem(FONT_SCALE_KEY);
-    if (val === 'compact' || val === 'default' || val === 'large' || val === 'xlarge') return val;
+    if (
+      val === 'compact' ||
+      val === 'default' ||
+      val === 'large' ||
+      val === 'xlarge' ||
+      val === 'double'
+    ) {
+      return val;
+    }
   } catch {
     // ignore
   }
@@ -180,7 +190,7 @@ export function getAppearanceSettings(): AppearanceSettings {
     density,
     platformDesign,
     resolvedPlatformDesign: resolvePlatformDesign(platformDesign),
-    isLargeText: fontScale === 'large' || fontScale === 'xlarge',
+    isLargeText: fontScale === 'large' || fontScale === 'xlarge' || fontScale === 'double',
   };
 }
 
@@ -193,6 +203,7 @@ export function applyAppearanceToDocument(
   root.setAttribute('data-theme-mode', settings.themeMode);
   root.setAttribute('data-font-scale', settings.fontScale);
   root.setAttribute('data-large-text', settings.isLargeText ? 'true' : 'false');
+  root.setAttribute('data-text-scale-200', settings.fontScale === 'double' ? 'true' : 'false');
   root.setAttribute('data-reduce-motion', settings.resolvedReduceMotion ? 'true' : 'false');
   root.setAttribute('data-aurora-mode', settings.resolvedAuroraMode);
   root.setAttribute('data-density', settings.density);
@@ -204,6 +215,18 @@ export function applyAppearanceToDocument(
   root.style.setProperty('--md-density-section-gap', densityTok.sectionGap);
   root.style.setProperty('--md-density-row-gap', densityTok.rowGap);
   root.style.setProperty('--md-touch-min', densityTok.touchMin);
+
+  const surfaceTok = resolveSurfaceTokens(settings.resolvedPlatformDesign, settings.resolvedTheme);
+  root.style.setProperty('--surface-glass-bg', surfaceTok.glassBg);
+  root.style.setProperty('--surface-glass-elevated', surfaceTok.glassElevated);
+  root.style.setProperty('--surface-glass-border', surfaceTok.glassBorder);
+  root.style.setProperty('--surface-specular', surfaceTok.specularHighlight);
+  root.style.setProperty('--surface-blur', surfaceTok.blurRadius);
+  root.style.setProperty('--surface-shadow', surfaceTok.elevationShadow);
+  root.style.setProperty('--surface-header-bg', surfaceTok.headerBg);
+  root.style.setProperty('--surface-dock-bg', surfaceTok.dockBg);
+  root.style.setProperty('--radius-card', surfaceTok.cardRadius);
+  root.style.setProperty('--radius-btn', surfaceTok.controlRadius);
 
   const palette = settings.resolvedTheme === 'dark' ? DARK_PALETTE : CORE_PALETTE;
   root.style.setProperty('--md-primary', palette.primary);

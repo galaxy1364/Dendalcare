@@ -60,7 +60,7 @@ export function SmartBrief({
       className="rounded-[22px] p-3 border border-[#BDE2E8] dark:border-[#28455E] shadow-[0_8px_24px_-12px_rgba(8,124,118,0.28)] bg-gradient-to-br from-[#E6FAF7] via-[#EEF4FF] to-[#F7EEFF] dark:from-[#122638] dark:via-[#162742] dark:to-[#1F2142]"
     >
       {/* Top row: Smart Brief insight + refresh + full reports link */}
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-2">
         <button
           type="button"
           onClick={() => {
@@ -91,7 +91,7 @@ export function SmartBrief({
                 {brief.headline}
               </span>
               <span
-                className={`text-[12px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${badgeStyles}`}
+                className={`text-[12px] font-bold px-2 py-0.5 rounded-full border max-w-full truncate ${badgeStyles}`}
               >
                 {brief.source}
               </span>
