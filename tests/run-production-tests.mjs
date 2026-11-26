@@ -20,6 +20,7 @@ try {
   const uxMod = await server.ssrLoadModule('/tests/global-ux-audit.test.ts');
   const v13Mod = await server.ssrLoadModule('/tests/v13-universal-platform.test.ts');
   const v14Mod = await server.ssrLoadModule('/tests/v14-clinical-workflow-integrity.test.ts');
+  const v15Mod = await server.ssrLoadModule('/tests/v15-clinical-record-patient-safety.test.ts');
 
   const v4Results = await v4Mod.runAllV4ProductionTests();
   const v5Results = await v5Mod.runAllV5ReliabilityTests();
@@ -32,6 +33,7 @@ try {
   const uxResults = await uxMod.runAllGlobalUxAuditTests();
   const v13Results = await v13Mod.runAllV13UniversalPlatformTests();
   const v14Results = await v14Mod.runAllV14ClinicalWorkflowIntegrityTests();
+  const v15Results = await v15Mod.runAllV15ClinicalRecordPatientSafetyTests();
   const allResults = [
     ...v4Results,
     ...v5Results,
@@ -44,6 +46,7 @@ try {
     ...uxResults,
     ...v13Results,
     ...v14Results,
+    ...v15Results,
   ];
 
   let passed = 0;
@@ -60,7 +63,7 @@ try {
   }
 
   console.log(
-    `\nProduction-Import Tests (V4 + V5 + V7 + V8 + V9 + V10 + V11 + V12 + UX-Audit-V1 + V13 + V14): ${passed} passed, ${failed} failed (total ${allResults.length})`
+    `\nProduction-Import Tests (V4 + V5 + V7 + V8 + V9 + V10 + V11 + V12 + UX-Audit-V1 + V13 + V14 + V15): ${passed} passed, ${failed} failed (total ${allResults.length})`
   );
   if (failed > 0) {
     exitCode = 1;

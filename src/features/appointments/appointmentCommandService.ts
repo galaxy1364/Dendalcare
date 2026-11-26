@@ -85,9 +85,12 @@ export interface AppointmentValidationResult {
   };
 }
 
+export type AppointmentResolutionStatus = 'confirmed' | 'queued' | 'rejected' | 'unknown';
+
 export interface AppointmentCommandOutcome {
   ok: boolean;
   outcome: MutationOutcome;
+  resolutionStatus?: AppointmentResolutionStatus;
   errorMessage?: string;
   errorCode?: string;
   affectedRows?: number;
@@ -98,6 +101,7 @@ export interface AppointmentCommandOutcome {
 
 export interface PersistentIdempotencyEntry {
   clientRequestId: string;
+  actorScope: string;
   payloadFingerprint: string;
   status: 'in_flight' | 'completed';
   timestamp: number;
@@ -342,11 +346,13 @@ function isRpcNotDeployedError(error: any): boolean {
 
 export async function saveAppointmentCommand(params: {
   actorRole: string | undefined;
+  actorId?: string | null;
   draft: AppointmentDraftInput;
   editingId?: string | null;
   currentStatus?: string | null;
   idempotencyKey?: string | null;
   existingAppointments?: Appointment[];
+  blockOnMissingSchema?: boolean;
   client?: any;
   supabaseClient?: any;
 }): Promise<AppointmentCommandOutcome> {
@@ -354,6 +360,7 @@ export async function saveAppointmentCommand(params: {
     return {
       ok: false,
       outcome: 'error',
+      resolutionStatus: 'rejected',
       errorCode: 'MINA_APPT_UNAUTHORIZED',
       affectedRows: 0,
       errorMessage: 'نقش فعلی یا وضعیت عضویت شما مجوز ثبت یا ویرایش نوبت را ندارد.',
@@ -371,6 +378,7 @@ export async function saveAppointmentCommand(params: {
     return {
       ok: false,
       outcome: 'error',
+      resolutionStatus: 'rejected',
       errorCode: 'MINA_APPT_VALIDATION_FAILED',
       affectedRows: 0,
       errorMessage: validation.error || 'اطلاعات نوبت نامعتبر است.',
@@ -378,21 +386,34 @@ export async function saveAppointmentCommand(params: {
   }
 
   const payload = validation.payload;
+  const actorScope = `${payload.tenant_id}:${payload.branch_id}:${params.actorId || params.actorRole || 'unknown'}`;
   const fingerprint = computeAppointmentPayloadFingerprint(effectiveDraft.id, payload);
   const clientRequestId = String(
     effectiveDraft.clientRequestId ||
       `appt_v14_${effectiveDraft.id || 'new'}_${payload.tenant_id}_${payload.branch_id}_${payload.patient_id || 'none'}_${payload.appointment_date}_${payload.appointment_time}_${payload.room || 'any'}`
   ).trim();
 
-  // 1. Check persistent idempotency ledger (only when explicit clientRequestId is provided or in-flight)
+  // 1. Check persistent idempotency ledger (actor-scoped & payload-verified)
   if (effectiveDraft.clientRequestId) {
     const ledger = loadPersistentIdempotencyLedger();
     const existingEntry = ledger[clientRequestId];
     if (existingEntry) {
+      if (existingEntry.actorScope && existingEntry.actorScope !== actorScope) {
+        return {
+          ok: false,
+          outcome: 'error',
+          resolutionStatus: 'rejected',
+          errorCode: 'MINA_APPT_IDEMPOTENCY_ACTOR_MISMATCH',
+          affectedRows: 0,
+          clientRequestId,
+          errorMessage: 'شناسه درخواست متعلق به کاربر یا شعبه دیگری است و قابل بازپخش نیست.',
+        };
+      }
       if (existingEntry.payloadFingerprint !== fingerprint) {
         return {
           ok: false,
           outcome: 'error',
+          resolutionStatus: 'rejected',
           errorCode: 'MINA_APPT_IDEMPOTENCY_CONFLICT',
           affectedRows: 0,
           clientRequestId,
@@ -461,6 +482,7 @@ export async function saveAppointmentCommand(params: {
             return {
               ok: false,
               outcome: 'error',
+              resolutionStatus: 'rejected',
               errorCode: 'MINA_APPT_ZERO_ROWS',
               affectedRows: 0,
               clientRequestId,
@@ -470,6 +492,7 @@ export async function saveAppointmentCommand(params: {
           const confirmedOutcome: AppointmentCommandOutcome = {
             ok: true,
             outcome: 'confirmed',
+            resolutionStatus: 'confirmed',
             affectedRows: affected,
             clientRequestId,
             idempotentReplay: Boolean(rpcPayload.idempotentReplay ?? rpcPayload.idempotent_replay),
@@ -477,6 +500,7 @@ export async function saveAppointmentCommand(params: {
           };
           savePersistentIdempotencyEntry({
             clientRequestId,
+            actorScope,
             payloadFingerprint: fingerprint,
             status: 'completed',
             timestamp: Date.now(),
@@ -485,35 +509,84 @@ export async function saveAppointmentCommand(params: {
           return confirmedOutcome;
         }
 
-        if (rpcRes?.error && !isRpcNotDeployedError(rpcRes.error)) {
-          return {
-            ok: false,
-            outcome: 'error',
-            errorCode: String(rpcRes.error.code || 'MINA_APPT_RPC_REJECTED'),
-            clientRequestId,
-            errorMessage: rpcRes.error.message || 'ثبت نوبت توسط قوانین تراکنشی سرور رد شد.',
-          };
-        }
-      } catch (rpcErr: any) {
-        if (!isRpcNotDeployedError(rpcErr)) {
-          // If network failure, fall through to guarded table builder so offline queue handles it
-          const msg = String(rpcErr?.message || '').toLowerCase();
-          if (!msg.includes('fetch') && !msg.includes('network') && !msg.includes('timeout')) {
+        if (rpcRes?.error) {
+          if (isRpcNotDeployedError(rpcRes.error)) {
+            if (params.blockOnMissingSchema !== false && typeof dbClient.from !== 'function') {
+              return {
+                ok: false,
+                outcome: 'error',
+                resolutionStatus: 'rejected',
+                errorCode: 'MINA_APPT_SCHEMA_MISSING',
+                affectedRows: 0,
+                clientRequestId,
+                errorMessage: 'توابع تراکنشی نوبت‌دهی V14/V15 روی پایگاه داده فعال نشده‌اند؛ ثبت مستقیم مسدود شد.',
+              };
+            }
+            if (params.blockOnMissingSchema === true) {
+              return {
+                ok: false,
+                outcome: 'error',
+                resolutionStatus: 'rejected',
+                errorCode: 'MINA_APPT_SCHEMA_MISSING',
+                affectedRows: 0,
+                clientRequestId,
+                errorMessage: 'توابع تراکنشی نوبت‌دهی V14/V15 روی پایگاه داده فعال نشده‌اند؛ ثبت مستقیم مسدود شد.',
+              };
+            }
+          } else {
             return {
               ok: false,
               outcome: 'error',
-              errorCode: 'MINA_APPT_RPC_ERROR',
+              resolutionStatus: 'rejected',
+              errorCode: String(rpcRes.error.code || 'MINA_APPT_RPC_REJECTED'),
+              affectedRows: 0,
               clientRequestId,
-              errorMessage: rpcErr?.message || 'خطا در اجرای تراکنش نوبت‌دهی سرور.',
+              errorMessage: rpcRes.error.message || 'ثبت نوبت توسط قوانین تراکنشی سرور رد شد.',
             };
           }
+        }
+      } catch (rpcErr: any) {
+        const msg = String(rpcErr?.message || '').toLowerCase();
+        // Ambiguous timeout after RPC dispatch must NOT fall through to a non-idempotent direct table insert!
+        if (msg.includes('timeout') || msg.includes('abort') || rpcErr?.name === 'AbortError') {
+          return {
+            ok: false,
+            outcome: 'error',
+            resolutionStatus: 'unknown',
+            errorCode: 'MINA_APPT_AMBIGUOUS_COMMIT',
+            affectedRows: 0,
+            clientRequestId,
+            errorMessage: 'پاسخ سرور در زمان مقرر دریافت نشد (وضعیت تراکنش نامشخص است؛ با همین شناسه درخواست مجدداً بررسی شود).',
+          };
+        }
+        if (isRpcNotDeployedError(rpcErr) && params.blockOnMissingSchema === true) {
+          return {
+            ok: false,
+            outcome: 'error',
+            resolutionStatus: 'rejected',
+            errorCode: 'MINA_APPT_SCHEMA_MISSING',
+            affectedRows: 0,
+            clientRequestId,
+            errorMessage: 'توابع تراکنشی نوبت‌دهی V14/V15 روی پایگاه داده فعال نشده‌اند؛ ثبت مستقیم مسدود شد.',
+          };
+        }
+        if (!isRpcNotDeployedError(rpcErr) && !msg.includes('fetch') && !msg.includes('network')) {
+          return {
+            ok: false,
+            outcome: 'error',
+            resolutionStatus: 'rejected',
+            errorCode: 'MINA_APPT_RPC_ERROR',
+            affectedRows: 0,
+            clientRequestId,
+            errorMessage: rpcErr?.message || 'خطا در اجرای تراکنش نوبت‌دهی سرور.',
+          };
         }
       }
     }
 
-    // 3. Fallback / Offline-Guarded Table Mutation with explicit .select() canonical row verification
-    const baseQuery = params.draft.id
-      ? dbClient.from('appointments').update(payload).eq('id', params.draft.id)
+    // 3. Offline-Guarded Table Mutation with explicit .select() canonical row verification
+    const baseQuery = effectiveDraft.id
+      ? dbClient.from('appointments').update(payload).eq('id', effectiveDraft.id)
       : dbClient.from('appointments').insert(payload);
 
     const result =
@@ -525,6 +598,7 @@ export async function saveAppointmentCommand(params: {
       return {
         ok: false,
         outcome: 'error',
+        resolutionStatus: 'rejected',
         errorCode: isZeroRow
           ? 'MINA_APPT_ZERO_ROWS'
           : String(result?.error?.code || 'MINA_APPT_MUTATION_FAILED'),
@@ -540,6 +614,7 @@ export async function saveAppointmentCommand(params: {
       const queuedOutcome: AppointmentCommandOutcome = {
         ok: true,
         outcome: 'queued_offline',
+        resolutionStatus: 'queued',
         affectedRows: 0,
         clientRequestId,
         idempotentReplay: false,
@@ -547,6 +622,7 @@ export async function saveAppointmentCommand(params: {
       };
       savePersistentIdempotencyEntry({
         clientRequestId,
+        actorScope,
         payloadFingerprint: fingerprint,
         status: 'completed',
         timestamp: Date.now(),
@@ -560,6 +636,7 @@ export async function saveAppointmentCommand(params: {
       return {
         ok: false,
         outcome: 'error',
+        resolutionStatus: 'rejected',
         errorCode: 'MINA_APPT_ZERO_ROWS',
         affectedRows: 0,
         clientRequestId,
@@ -570,6 +647,7 @@ export async function saveAppointmentCommand(params: {
     const confirmedOutcome: AppointmentCommandOutcome = {
       ok: true,
       outcome: 'confirmed',
+      resolutionStatus: 'confirmed',
       affectedRows,
       clientRequestId,
       idempotentReplay: false,
@@ -578,6 +656,7 @@ export async function saveAppointmentCommand(params: {
 
     savePersistentIdempotencyEntry({
       clientRequestId,
+      actorScope,
       payloadFingerprint: fingerprint,
       status: 'completed',
       timestamp: Date.now(),

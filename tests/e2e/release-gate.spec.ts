@@ -457,5 +457,121 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       await context.close();
     }
   });
+
+  test('V15 Clinical Record: 4-state allergy verification, ISO 3950/Palmer odontogram & versioned consent lifecycle', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      viewport: { width: 393, height: 852 },
+      locale: 'fa-IR',
+    });
+    const page = await context.newPage();
+
+    try {
+      await page.addInitScript(() => {
+        window.localStorage.setItem(
+          'minadental_auth_user_v1',
+          JSON.stringify({
+            id: '00000000-0000-0000-0000-000000000101',
+            name: 'دکتر مهدی امیری',
+            role: 'owner',
+            title: 'مدیر کلینیک و جراح دندانپزشک',
+            email: 'mahdiamiri785@gmail.com',
+            phone: '09128446158',
+          })
+        );
+      });
+
+      await page.route('**/rest/v1/patients*', async (route) => {
+        if (route.request().method() !== 'GET') {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': '*',
+          },
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: '00000000-0000-0000-0000-000000000601',
+              tenant_id: 'minadental_clinic',
+              branch_id: 'main',
+              first_name: 'پریسا',
+              last_name: 'موسوی',
+              phone: '09125556677',
+              national_id: '0019988776',
+              birth_date: null,
+              gender: 'female',
+              blood_type: 'A+',
+              allergies: null,
+              medical_history: null,
+              medications: null,
+              insurance_provider: 'آزاد',
+              insurance_number: '1501',
+              address: null,
+              email: null,
+              notes: '[پرونده: 1501]',
+              status: 'active',
+              created_at: '2026-11-30T08:00:00Z',
+              updated_at: '2026-11-30T08:00:00Z',
+            },
+          ]),
+        });
+      });
+
+      await page.route('**/rest/v1/tooth_conditions*', async (route) => {
+        if (route.request().method() !== 'GET') {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          headers: { 'Access-Control-Allow-Origin': '*' },
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'legacy-ambig-6',
+              patient_id: '00000000-0000-0000-0000-000000000601',
+              tooth_number: 6,
+              condition: 'decay',
+              surface: 'O',
+              notes: 'رکورد قدیمی بدون ربع',
+              updated_at: '2026-11-29T10:00:00Z',
+            },
+          ]),
+        });
+      });
+
+      await page.goto('/#/patients', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+
+      await page.getByText('پرونده کامل ←').first().click();
+
+      // 1) Verify 4-state allergy card defaults to "حساسیت دارویی سؤال/بررسی نشده" on empty free text
+      const allergyCard = page.getByTestId('v15_allergy_verification_card');
+      await expect(allergyCard).toBeVisible();
+      await expect(page.getByTestId('v15_allergy_status_badge')).toContainText('بررسی نشده');
+
+      // 2) Switch to Odontogram Chart tab and verify ISO 3950 FDI teeth + ambiguous legacy banner
+      await page.getByRole('button', { name: 'چارت' }).click();
+      const odontogram = page.getByTestId('odontogram_v15_workspace');
+      await expect(odontogram).toBeVisible();
+      await expect(page.getByTestId('odontogram_ambiguous_reconciliation_banner')).toBeVisible();
+      await expect(page.getByTestId('odontogram_tooth_16')).toBeVisible();
+
+      // 3) Open versioned Consent Modal and verify printed_unsigned vs signed controls
+      await page.getByRole('button', { name: 'رضایت‌نامه A4' }).click();
+      await expect(page.getByTestId('consent_modal_v15')).toBeVisible();
+      await expect(page.getByTestId('consent_print_unsigned_btn')).toBeVisible();
+      await expect(page.getByTestId('consent_record_signed_btn')).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
 });
+
 

@@ -396,6 +396,24 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'موتور مسیر یکپارچه ۹ مرحله‌ای بیمار (پذیرش، نوبت، حضور، انتظار، معاینه، طرح درمان، اجرای درمان، تسویه مالی و پیگیری) منطبق بر HL7 FHIR R4',
     ],
   },
+  {
+    id: 'milestone-17',
+    traceId: 'TRC-MINA-V15-CLINICAL-SAFETY-9017-P',
+    phaseNumber: 17,
+    title: 'پرونده بالینی، ادنتوگرام ISO 3950/Palmer و ایمنی بیمار V15: دفتر کل غیرقابل‌حذف دندان، رضایت‌نامه نسخه‌دار و تفکیک ویزیت از سابقه',
+    titleEn: 'V15 Clinical Record, ISO 3950/Palmer Append-Only Odontogram, Versioned Consent & Encounter-Scoped Patient Safety',
+    description: 'پیاده‌سازی کامل استاندارد V15 شامل سخت‌سازی دفتر کل یکتایی نوبت V14، ادنتوگرام دوگانه ISO 3950 (FDI) و پالمر با دفتر کل مشاهدات Append-Only و تشخیص رکوردهای مبهم ۱..۸، رضایت‌نامه نسخه‌دار با تفکیک چاپ بدون امضا از امضای ثبت‌شده، تفکیک وضعیت ویزیت فعلی (Encounter) از سابقه طولی بیمار، تأیید ۴ حالته حساسیت دارویی، چرخه یادداشت بالینی (Draft/Signed/Amended)، حفاظت آرشیو پرونده بیمار و ماژولارسازی کامل Patients و PalmerChart زیر ۵۰۰ خط.',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/06',
+    checksum: 'q170v15safety',
+    deliverables: [
+      'سخت‌سازی مهاجرت V14 (قفل نوشتن مستقیم روی appointment_command_idempotency، تطبیق actor_id، مرز نیمه‌شب و وضعیت ۴گانه confirmed/queued/rejected/unknown)',
+      'موتور ادنتوگرام ISO 3950 (FDI) و پالمر (۳۲ دائمی + ۲۰ شیری) با تفکیک not_examined از healthy، دفتر کل Append-Only بدون DELETE و پرچم‌گذاری رکوردهای مبهم ۱..۸ برای تطبیق پزشک',
+      'رضایت‌نامه نسخه‌دار (printed_unsigned در برابر signed قفل‌شده، ابطال و بی‌اعتباری در تغییر طرح درمان) و یادداشت‌های بالینی امضاشده با اصلاحیه الحاقی (Amendment)',
+      'تفکیک Encounter فعال از سابقه طولی در patientJourney، تأیید ۴ حالته حساسیت (not_asked/unknown/no_known/present)، آرشیو حفاظت‌شده پرونده و ماژولارسازی Patients.tsx و PalmerChart.tsx زیر ۵۰۰ خط',
+    ],
+  },
 ]);
 
 export interface ModuleBenchmarkPhase {

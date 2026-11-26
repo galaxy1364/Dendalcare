@@ -45,7 +45,8 @@ CREATE POLICY appointment_cmd_idemp_select
   ON public.appointment_command_idempotency
   FOR SELECT TO authenticated
   USING (
-    public.app_resolve_verified_role(tenant_id, branch_id) IN ('manager', 'dentist', 'secretary')
+    actor_id = (SELECT auth.uid())
+    AND public.app_resolve_verified_role(tenant_id, branch_id) IN ('manager', 'dentist', 'secretary')
   );
 
 DROP POLICY IF EXISTS appointment_cmd_idemp_insert ON public.appointment_command_idempotency;
@@ -54,8 +55,55 @@ CREATE POLICY appointment_cmd_idemp_insert
   FOR INSERT TO authenticated
   WITH CHECK (
     actor_id = (SELECT auth.uid())
+    AND current_setting('mina.in_appointment_rpc', true) = 'true'
     AND public.app_resolve_verified_role(tenant_id, branch_id) IN ('manager', 'dentist', 'secretary')
   );
+
+-- 1b. Trigger preventing direct API forgery or cross-actor tampering on appointment_command_idempotency
+CREATE OR REPLACE FUNCTION private.enforce_idempotency_ledger_integrity()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  v_appt_exists boolean;
+BEGIN
+  IF current_setting('mina.in_appointment_rpc', true) IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION 'MINA_IDEMPOTENCY_DIRECT_WRITE_FORBIDDEN: Idempotency ledger rows may only be written by authoritative scheduling RPC'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF NEW.actor_id IS DISTINCT FROM (SELECT auth.uid()) THEN
+    RAISE EXCEPTION 'MINA_IDEMPOTENCY_ACTOR_MISMATCH: actor_id must equal authenticated user'
+      USING ERRCODE = '42501';
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.appointments a
+    WHERE a.id = NEW.appointment_id
+      AND a.tenant_id = NEW.tenant_id
+      AND a.branch_id = NEW.branch_id
+  ) INTO v_appt_exists;
+
+  IF NOT COALESCE(v_appt_exists, false) THEN
+    RAISE EXCEPTION 'MINA_IDEMPOTENCY_ORPHAN_RECORD: Referenced appointment % does not exist in scope',
+      NEW.appointment_id
+      USING ERRCODE = '23503';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION private.enforce_idempotency_ledger_integrity() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS appointment_cmd_idemp_enforce_integrity ON public.appointment_command_idempotency;
+CREATE TRIGGER appointment_cmd_idemp_enforce_integrity
+  BEFORE INSERT OR UPDATE OR DELETE ON public.appointment_command_idempotency
+  FOR EACH ROW
+  EXECUTE FUNCTION private.enforce_idempotency_ledger_integrity();
 
 -- 2. Tighten Direct RLS Policies on public.appointments
 -- Only manager, dentist, and secretary may INSERT or UPDATE appointments; only manager may DELETE.
@@ -117,7 +165,16 @@ DECLARE
   v_conflict_id uuid;
   v_conflict_reason text;
 BEGIN
-  -- 4a. Server-side role authorization check
+  -- 4a. Immutable tenant/branch scope on UPDATE
+  IF TG_OP = 'UPDATE' AND (
+    NEW.tenant_id IS DISTINCT FROM OLD.tenant_id
+    OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
+  ) THEN
+    RAISE EXCEPTION 'MINA_APPT_IMMUTABLE_SCOPE: tenant_id and branch_id cannot be changed after creation'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- 4b. Server-side role authorization check
   v_role := public.app_resolve_verified_role(NEW.tenant_id, NEW.branch_id);
   IF v_role IS NULL OR v_role NOT IN ('manager', 'dentist', 'secretary') THEN
     RAISE EXCEPTION 'MINA_APPT_UNAUTHORIZED: Role % is not authorized to mutate appointments in tenant % branch %',
@@ -125,10 +182,19 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
-  -- 4b. Canonical duration & status domain check
+  -- 4c. Canonical duration, midnight boundary & status domain check
   IF NEW.duration_min IS NULL OR NEW.duration_min < 5 OR NEW.duration_min > 480 THEN
     RAISE EXCEPTION 'MINA_APPT_INVALID_DURATION: duration_min must be an integer between 5 and 480 minutes (got %)',
       NEW.duration_min
+      USING ERRCODE = '22023';
+  END IF;
+
+  v_new_start_min := EXTRACT(HOUR FROM NEW.appointment_time)::integer * 60
+                   + EXTRACT(MINUTE FROM NEW.appointment_time)::integer;
+  v_new_end_min := v_new_start_min + NEW.duration_min;
+  IF v_new_start_min < 0 OR v_new_end_min > 1440 THEN
+    RAISE EXCEPTION 'MINA_APPT_MIDNIGHT_OVERFLOW: Appointment window (% + % min) crosses midnight boundary',
+      NEW.appointment_time, NEW.duration_min
       USING ERRCODE = '22023';
   END IF;
 
@@ -145,7 +211,7 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  -- 4c. Legal status transition check on UPDATE
+  -- 4d. Legal status transition check on UPDATE
   IF TG_OP = 'UPDATE' AND NEW.status IS DISTINCT FROM OLD.status THEN
     IF NOT public.app_is_legal_appointment_transition(OLD.status, NEW.status) THEN
       RAISE EXCEPTION 'MINA_APPT_ILLEGAL_TRANSITION: Illegal status transition from % to %',
@@ -154,18 +220,13 @@ BEGIN
     END IF;
   END IF;
 
-  -- 4d. Transaction-scoped advisory lock per (tenant_id, branch_id, appointment_date)
-  -- Prevents concurrent transactions from double-booking the same room, doctor, or patient
+  -- 4e. Transaction-scoped advisory locks across branch date + resource dimensions
   PERFORM pg_advisory_xact_lock(
     hashtext('mina_appt_v14:' || NEW.tenant_id || ':' || NEW.branch_id || ':' || NEW.appointment_date::text)
   );
 
-  -- 4e. Conflict check for active appointments
+  -- 4f. Conflict check for active appointments
   IF NEW.status NOT IN ('cancelled', 'no_show') THEN
-    v_new_start_min := EXTRACT(HOUR FROM NEW.appointment_time)::integer * 60
-                     + EXTRACT(MINUTE FROM NEW.appointment_time)::integer;
-    v_new_end_min := v_new_start_min + NEW.duration_min;
-
     SELECT
       a.id,
       CASE
@@ -263,6 +324,8 @@ BEGIN
     RAISE EXCEPTION 'MINA_APPT_MISSING_REQUEST_ID: client_request_id is required for idempotent scheduling' USING ERRCODE = '22023';
   END IF;
 
+  PERFORM set_config('mina.in_appointment_rpc', 'true', true);
+
   PERFORM pg_advisory_xact_lock(
     hashtext('mina_appt_idemp:' || p_tenant_id || ':' || p_branch_id || ':' || btrim(p_client_request_id))
   );
@@ -279,7 +342,7 @@ BEGIN
     COALESCE(p_room, '')
   );
 
-  SELECT appointment_id, payload_hash, response_payload
+  SELECT appointment_id, actor_id, payload_hash, response_payload
   INTO v_existing_idem
   FROM public.appointment_command_idempotency
   WHERE tenant_id = p_tenant_id
@@ -287,6 +350,11 @@ BEGIN
     AND client_request_id = btrim(p_client_request_id);
 
   IF FOUND THEN
+    IF v_existing_idem.actor_id IS DISTINCT FROM v_actor_id THEN
+      RAISE EXCEPTION 'MINA_APPT_IDEMPOTENCY_ACTOR_MISMATCH: client_request_id % belongs to a different authenticated actor',
+        p_client_request_id
+        USING ERRCODE = '42501';
+    END IF;
     IF v_existing_idem.payload_hash <> v_payload_hash THEN
       RAISE EXCEPTION 'MINA_APPT_IDEMPOTENCY_CONFLICT: client_request_id % was already used with different parameters',
         p_client_request_id

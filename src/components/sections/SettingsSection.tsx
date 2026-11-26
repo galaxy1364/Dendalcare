@@ -691,12 +691,15 @@ function ClinicSettingsTab({
               <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                 به‌روزرسانی تأییدشده برنامه مینادنتال
               </h3>
-              <p className="text-[11px] text-slate-600 font-semibold">
-                نسخه در حال اجرا: <strong className="text-slate-900 font-mono">v{updateSnap.installed.semver}</strong> • انتشار: <strong className="text-emerald-700 font-mono" data-testid="installed_build_badge">#{updateSnap.installed.releaseSequence} ({updateSnap.installed.releaseId})</strong>
+              <p className="text-[11px] text-slate-600 font-semibold flex items-center flex-wrap gap-1">
+                <span>نسخه در حال اجرا:</span>
+                <strong dir="ltr" className="inline-block text-slate-900 font-mono">v{updateSnap.installed.semver}</strong>
+                <span>• انتشار:</span>
+                <strong dir="ltr" className="inline-block text-emerald-700 font-mono" data-testid="installed_build_badge">#{updateSnap.installed.releaseSequence} ({updateSnap.installed.releaseId})</strong>
               </p>
             </div>
           </div>
-          <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-extrabold">
+          <span dir="ltr" className="inline-block text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-extrabold">
             {updateSnap.channel.toUpperCase()} • {updateSnap.state}
           </span>
         </div>
@@ -741,12 +744,12 @@ function ClinicSettingsTab({
         )}
 
         {/* Auto Update at Safe Point Toggle */}
-        <div className="p-3 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-sm">
-          <div>
+        <div className="p-3 pr-7 sm:pr-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-between gap-2.5 shadow-sm">
+          <div className="min-w-0 flex-1">
             <span className="text-xs font-extrabold text-slate-900 block">
               به‌روزرسانی خودکار در نقطه امن (Safe-Point Auto-Update)
             </span>
-            <span className="text-[10.5px] text-slate-600">
+            <span className="text-[10.5px] text-slate-600 leading-relaxed block">
               بررسی دوره‌ای هنگام باز بودن برنامه و فعال‌سازی فقط در نبود فرم باز یا صف آفلاین
             </span>
           </div>
