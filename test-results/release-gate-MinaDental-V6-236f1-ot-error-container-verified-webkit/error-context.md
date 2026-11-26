@@ -6,15 +6,36 @@
 # Error details
 
 ```
-Error: browserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/webkit-2158/pw_run.sh
-╔═════════════════════════════════════════════════════════════════════════╗
-║ Looks like Playwright Test or Playwright was just installed or updated. ║
-║ Please run the following command to download new browsers:              ║
-║                                                                         ║
-║     npx playwright install                                              ║
-║                                                                         ║
-║ <3 Playwright Team                                                      ║
-╚═════════════════════════════════════════════════════════════════════════╝
+Error: browserType.launch: 
+╔══════════════════════════════════════════════════════╗
+║ Host system is missing dependencies to run browsers. ║
+║ Missing libraries:                                   ║
+║     libgstreamer-1.0.so.0                            ║
+║     libgtk-4.so.1                                    ║
+║     libgraphene-1.0.so.0                             ║
+║     libatomic.so.1                                   ║
+║     libwoff2dec.so.1.0.2                             ║
+║     libevent-2.1.so.7                                ║
+║     libgstallocators-1.0.so.0                        ║
+║     libgstapp-1.0.so.0                               ║
+║     libgstbase-1.0.so.0                              ║
+║     libgstpbutils-1.0.so.0                           ║
+║     libgstaudio-1.0.so.0                             ║
+║     libgsttag-1.0.so.0                               ║
+║     libgstvideo-1.0.so.0                             ║
+║     libgstgl-1.0.so.0                                ║
+║     libgstcodecparsers-1.0.so.0                      ║
+║     libgstfft-1.0.so.0                               ║
+║     libavif.so.15                                    ║
+║     libharfbuzz-icu.so.0                             ║
+║     libepoxy.so.0                                    ║
+║     libjpeg.so.62                                    ║
+║     libsecret-1.so.0                                 ║
+║     libhyphen.so.0                                   ║
+║     libmanette-0.2.so.0                              ║
+║     libGLESv2.so.2                                   ║
+║     libx264.so                                       ║
+╚══════════════════════════════════════════════════════╝
 ```
 
 # Test source
@@ -121,7 +142,7 @@ Error: browserType.launch: Executable doesn't exist at /root/.cache/ms-playwrigh
   190 |   });
   191 |
 > 192 |   test('V7/V8 authoritative pointers, immutable manifest, boot milestones & independent #boot-error container verified', async ({ page }) => {
-      |   ^ Error: browserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/webkit-2158/pw_run.sh
+      |   ^ Error: browserType.launch: 
   193 |     await page.setViewportSize({ width: 390, height: 844 });
   194 |     await page.goto('/', { waitUntil: 'domcontentloaded' });
   195 |     await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });

@@ -9,7 +9,7 @@
   "contentDigest": "03065d63bce331dd0116a359991ecca5832e5d1e1b045ec12262e1e450e7973a",
   "packageVersion": "4.9.6",
   "channel": "staging",
-  "publishedAt": "2026-11-25T22:54:24.705Z",
+  "publishedAt": "2026-11-25T23:29:09.857Z",
   "releaseNotes": "نسخه v4.9.6 (انتشار #65) — موتور به‌روزرسانی تأییدشده V7 با مانیفست رسمی، اعتبارسنجی SHA-256/امضا، هماهنگ‌کننده واحد بین‌تبی، حفظ داده‌ها در نقطه امن و بررسی واقعی پس از راه‌اندازی",
   "entryScripts": [
     "./assets/index-C7J9au59.js"

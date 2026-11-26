@@ -1,0 +1,191 @@
+# Test info
+
+- Name: MinaDental V6 Release Gate E2E >> Phase A UX routes (dashboard, appointments, calendar, appointment_form) render cleanly on mobile & desktop and validate duration strictly
+- Location: /app/applet/tests/e2e/release-gate.spec.ts:326:3
+
+# Error details
+
+```
+Error: browserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1169/chrome-linux/headless_shell
+╔═════════════════════════════════════════════════════════════════════════╗
+║ Looks like Playwright Test or Playwright was just installed or updated. ║
+║ Please run the following command to download new browsers:              ║
+║                                                                         ║
+║     npx playwright install                                              ║
+║                                                                         ║
+║ <3 Playwright Team                                                      ║
+╚═════════════════════════════════════════════════════════════════════════╝
+```
+
+# Test source
+
+```ts
+  226 |     expect(v8Check.androidPtrStatus).toBe(200);
+  227 |     expect(v8Check.iosPtrStatus).toBe(200);
+  228 |     expect(v8Check.manifestStatus).toBe(200);
+  229 |     expect(v8Check.manifestSchema).toBe(2);
+  230 |     expect(v8Check.pointerReleaseId).toBe(v8Check.runtimeBuildId);
+  231 |     expect(v8Check.manifestReleaseId).toBe(v8Check.runtimeBuildId);
+  232 |     expect(v8Check.manifestDigest).toBe(v8Check.runtimeDigest);
+  233 |     expect(v8Check.assetCount).toBeGreaterThan(0);
+  234 |     expect(v8Check.watchdogCleared).toBe(true);
+  235 |     expect(v8Check.bootErrorExists).toBe(true);
+  236 |     expect(v8Check.bootErrorInsideSplash).toBe(false);
+  237 |     expect(Boolean(v8Check.milestones.moduleEvaluatedAt)).toBe(true);
+  238 |     expect(Boolean(v8Check.milestones.shellCommittedAt)).toBe(true);
+  239 |   });
+  240 |
+  241 |   test('V9 fault-injection: font, icon, and manifest 404 NEVER trigger #boot-error and app boots in Persian', async ({ page }) => {
+  242 |     await page.route('**/fonts/*.woff2', (route) =>
+  243 |       route.fulfill({ status: 404, contentType: 'text/plain', body: 'Font Missing' })
+  244 |     );
+  245 |     await page.route('**/manifest.json', (route) =>
+  246 |       route.fulfill({ status: 404, contentType: 'text/plain', body: 'Manifest Missing' })
+  247 |     );
+  248 |     await page.route('**/icon-192.png', (route) =>
+  249 |       route.fulfill({ status: 404, contentType: 'text/plain', body: 'Icon Missing' })
+  250 |     );
+  251 |
+  252 |     await page.setViewportSize({ width: 390, height: 844 });
+  253 |     await page.goto('/', { waitUntil: 'domcontentloaded' });
+  254 |     await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+  255 |     await expect(page.locator('#app-splash')).toHaveCount(0);
+  256 |     await expect(page.locator('#boot-error')).toBeHidden();
+  257 |
+  258 |     const bodyText = await page.evaluate(() => document.body.innerText.trim());
+  259 |     expect(bodyText.length).toBeGreaterThan(0);
+  260 |   });
+  261 |
+  262 |   test('V12 membership-only auth fails closed when app_metadata exists without active clinic_membership', async ({ browser }) => {
+  263 |     const context = await browser.newContext({
+  264 |       serviceWorkers: 'block',
+  265 |       viewport: { width: 390, height: 844 },
+  266 |     });
+  267 |     const page = await context.newPage();
+  268 |     try {
+  269 |       const corsHeaders = {
+  270 |         'access-control-allow-origin': '*',
+  271 |         'access-control-allow-headers': 'apikey,authorization,content-type,x-client-info,prefer',
+  272 |         'access-control-allow-methods': 'GET,POST,OPTIONS',
+  273 |       };
+  274 |       await page.route(/\/auth\/v1\/token/, async (route) => {
+  275 |         if (route.request().method() === 'OPTIONS') {
+  276 |           await route.fulfill({ status: 204, headers: corsHeaders });
+  277 |           return;
+  278 |         }
+  279 |         await route.fulfill({
+  280 |           status: 200,
+  281 |           headers: corsHeaders,
+  282 |           contentType: 'application/json',
+  283 |           body: JSON.stringify({
+  284 |             access_token: 'test.jwt.token',
+  285 |             token_type: 'bearer',
+  286 |             expires_in: 3600,
+  287 |             refresh_token: 'test-refresh',
+  288 |             user: {
+  289 |               id: '00000000-0000-0000-0000-000000000999',
+  290 |               email: 'revoked@minadental.ir',
+  291 |               app_metadata: { clinic_role: 'manager', tenant_id: 'minadental_clinic' },
+  292 |             },
+  293 |           }),
+  294 |         });
+  295 |       });
+  296 |       await page.route(/\/rest\/v1\/clinic_memberships/, async (route) => {
+  297 |         if (route.request().method() === 'OPTIONS') {
+  298 |           await route.fulfill({ status: 204, headers: corsHeaders });
+  299 |           return;
+  300 |         }
+  301 |         await route.fulfill({ status: 200, headers: corsHeaders, contentType: 'application/json', body: '[]' });
+  302 |       });
+  303 |
+  304 |       await page.goto('/', { waitUntil: 'domcontentloaded' });
+  305 |       await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+  306 |
+  307 |       await page.getByTestId('topbar_user_avatar_button').click();
+  308 |       await page.getByPlaceholder('ایمیل حساب Supabase').fill('revoked@minadental.ir');
+  309 |       await page.getByPlaceholder('رمز عبور سرور').fill('TestPassword!123');
+  310 |       await page.getByRole('button', { name: 'ورود تاییدشده به نشست سرور' }).click();
+  311 |
+  312 |       await expect(page.getByText('فاقد عضویت فعال')).toBeVisible();
+  313 |       await expect(page.getByText('تایید سرور')).toHaveCount(0);
+  314 |
+  315 |       // Close modal & navigate in-app (without full reload) to verify finance route is denied fail-closed
+  316 |       await page.getByTestId('close_fullscreen_modal_btn').click();
+  317 |       await page.evaluate(() => {
+  318 |         window.location.hash = '#/finance';
+  319 |       });
+  320 |       await expect(page.getByText('دسترسی نقش فعلی به بخش «finance» محدود شده است.')).toBeVisible();
+  321 |     } finally {
+  322 |       await context.close();
+  323 |     }
+  324 |   });
+  325 |
+> 326 |   test('Phase A UX routes (dashboard, appointments, calendar, appointment_form) render cleanly on mobile & desktop and validate duration strictly', async ({ page }) => {
+      |   ^ Error: browserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1169/chrome-linux/headless_shell
+  327 |     for (const vp of [
+  328 |       { width: 390, height: 844 },
+  329 |       { width: 1366, height: 768 },
+  330 |     ]) {
+  331 |       await page.setViewportSize(vp);
+  332 |       for (const routeHash of ['/#/', '/#/appointments', '/#/calendar', '/#/appointment_form']) {
+  333 |         await page.goto(routeHash, { waitUntil: 'domcontentloaded' });
+  334 |         await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+  335 |         const scrollOk = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2);
+  336 |         expect(scrollOk).toBe(true);
+  337 |       }
+  338 |     }
+  339 |
+  340 |     // Verify AppointmentFormPage enforces shared command validation (rejects out-of-range duration instead of silent 30m coercion)
+  341 |     await page.setViewportSize({ width: 390, height: 844 });
+  342 |     await page.goto('/#/appointment_form', { waitUntil: 'domcontentloaded' });
+  343 |     await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+  344 |     await expect(page.getByTestId('appointment_form_fullscreen_page')).toBeVisible();
+  345 |   });
+  346 |
+  347 |   test('V13 adaptive window classes, dock/rail switching across 320/390/768/1366/1440, dark theme & role-aware dock hiding', async ({ page }) => {
+  348 |     const viewChecks = [
+  349 |       { width: 320, height: 640, expectedClass: 'compact', dockVisible: true, sidebarVisible: false },
+  350 |       { width: 390, height: 844, expectedClass: 'compact', dockVisible: true, sidebarVisible: false },
+  351 |       { width: 768, height: 1024, expectedClass: 'medium', dockVisible: false, sidebarVisible: true },
+  352 |       { width: 1366, height: 768, expectedClass: 'expanded', dockVisible: false, sidebarVisible: true },
+  353 |       { width: 1440, height: 900, expectedClass: 'wide', dockVisible: false, sidebarVisible: true },
+  354 |     ];
+  355 |
+  356 |     for (const check of viewChecks) {
+  357 |       await page.setViewportSize({ width: check.width, height: check.height });
+  358 |       await page.goto('/', { waitUntil: 'domcontentloaded' });
+  359 |       await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+  360 |
+  361 |       const domState = await page.evaluate(() => ({
+  362 |         windowClass: document.documentElement.dataset.windowClass,
+  363 |         overflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2,
+  364 |       }));
+  365 |       expect(domState.windowClass).toBe(check.expectedClass);
+  366 |       expect(domState.overflow).toBe(true);
+  367 |
+  368 |       if (check.dockVisible) {
+  369 |         await expect(page.getByTestId('floating_bottom_dock')).toBeVisible();
+  370 |         await expect(page.getByTestId('adaptive_desktop_sidebar')).toBeHidden();
+  371 |       } else {
+  372 |         await expect(page.getByTestId('floating_bottom_dock')).toBeHidden();
+  373 |         await expect(page.getByTestId('adaptive_desktop_sidebar')).toBeVisible();
+  374 |       }
+  375 |     }
+  376 |
+  377 |     // Verify Dark Mode tokens render cleanly across key sections without overflow
+  378 |     await page.setViewportSize({ width: 390, height: 844 });
+  379 |     await page.evaluate(() => {
+  380 |       document.documentElement.setAttribute('data-theme', 'dark');
+  381 |     });
+  382 |     for (const routeHash of ['/#/', '/#/services', '/#/patients', '/#/appointments', '/#/settings']) {
+  383 |       await page.goto(routeHash, { waitUntil: 'domcontentloaded' });
+  384 |       await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+  385 |       const overflowOk = await page.evaluate(
+  386 |         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2
+  387 |       );
+  388 |       expect(overflowOk).toBe(true);
+  389 |     }
+  390 |   });
+  391 | });
+  392 |
+```
