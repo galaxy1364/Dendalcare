@@ -24,7 +24,7 @@ concurrency:
 jobs:
   build_verify_and_deploy:
     name: Build, Verify Release Assurance Gates & Deploy GitHub Pages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -80,7 +80,7 @@ jobs:
           npm run build
           node scripts/ci-release-gate.mjs --compare dist-check-a dist
           rm -rf dist-check-a
-          node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin
+          node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin --verify-parity
           node -e '
             const fs = require("node:fs");
             const m = JSON.parse(fs.readFileSync("dist/release-manifest.json", "utf8"));
@@ -96,7 +96,7 @@ jobs:
       - name: Mandatory Pre-Deploy Unit, Audit & Release Assurance Tests
         run: npm test
 
-      - name: Install Playwright Browsers (Chromium & WebKit)
+      - name: Install Playwright Browsers (Chromium & WebKit on Ubuntu 24.04)
         run: npx playwright install --with-deps chromium webkit
 
       - name: Mandatory Pre-Deploy Real Browser E2E Verification

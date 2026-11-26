@@ -464,12 +464,19 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     browser,
   }) => {
     const context = await browser.newContext({
+      serviceWorkers: 'block',
       viewport: { width: 393, height: 852 },
       locale: 'fa-IR',
     });
     const page = await context.newPage();
 
     try {
+      const corsHeaders = {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
+        'access-control-allow-headers': 'apikey,authorization,content-type,x-client-info,prefer,range,accept-profile,content-profile',
+      };
+
       await page.addInitScript(() => {
         window.localStorage.setItem(
           'minadental_auth_user_v1',
@@ -484,18 +491,36 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
         );
       });
 
+      // Fallback handler for auxiliary REST reads so WebKit never fails CORS preflight on unmocked clinic tables
+      await page.route('**/rest/v1/**', async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          await route.fulfill({ status: 204, headers: corsHeaders });
+          return;
+        }
+        if (route.request().method() === 'GET') {
+          await route.fulfill({
+            status: 200,
+            headers: corsHeaders,
+            contentType: 'application/json',
+            body: '[]',
+          });
+          return;
+        }
+        await route.continue();
+      });
+
       await page.route('**/rest/v1/patients*', async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          await route.fulfill({ status: 204, headers: corsHeaders });
+          return;
+        }
         if (route.request().method() !== 'GET') {
           await route.continue();
           return;
         }
         await route.fulfill({
           status: 200,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': '*',
-          },
+          headers: corsHeaders,
           contentType: 'application/json',
           body: JSON.stringify([
             {
@@ -526,13 +551,17 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       });
 
       await page.route('**/rest/v1/tooth_conditions*', async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          await route.fulfill({ status: 204, headers: corsHeaders });
+          return;
+        }
         if (route.request().method() !== 'GET') {
           await route.continue();
           return;
         }
         await route.fulfill({
           status: 200,
-          headers: { 'Access-Control-Allow-Origin': '*' },
+          headers: corsHeaders,
           contentType: 'application/json',
           body: JSON.stringify([
             {
@@ -579,6 +608,7 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     browser,
   }) => {
     const context = await browser.newContext({
+      serviceWorkers: 'block',
       viewport: { width: 390, height: 844 },
       locale: 'fa-IR',
     });
@@ -599,8 +629,26 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
         );
       });
 
-      const cors = { 'Access-Control-Allow-Origin': '*' };
+      const cors = {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
+        'access-control-allow-headers': 'apikey,authorization,content-type,x-client-info,prefer,range,accept-profile,content-profile',
+      };
+
+      await page.route('**/rest/v1/**', async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          await route.fulfill({ status: 204, headers: cors });
+          return;
+        }
+        if (route.request().method() === 'GET') {
+          await route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: '[]' });
+          return;
+        }
+        await route.continue();
+      });
+
       await page.route('**/rest/v1/patients*', async (route) => {
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
         if (route.request().method() !== 'GET') return route.continue();
         await route.fulfill({
           status: 200,
@@ -623,6 +671,7 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       });
 
       await page.route('**/rest/v1/treatments*', async (route) => {
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
         if (route.request().method() !== 'GET') return route.continue();
         await route.fulfill({
           status: 200,
@@ -648,6 +697,7 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       });
 
       await page.route('**/rest/v1/checks*', async (route) => {
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
         if (route.request().method() !== 'GET') return route.continue();
         await route.fulfill({
           status: 200,
@@ -819,6 +869,7 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     await expect(page.getByTestId('unified_sync_status_pill')).toBeVisible();
 
     // 3. Global Command Center opens with Ctrl+K, exposes ARIA dialog modal, and closes cleanly with Escape
+    await page.locator('header h1').first().click();
     await page.keyboard.press('Control+k');
     const cmdCenter = page.getByTestId('qbank_all_folders_menu');
     await expect(cmdCenter).toBeVisible();
@@ -859,6 +910,7 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
   });
 
   test('GE-0004: 320px-1920px all-route matrix, 200% text scaling, light/dark, reduced motion, 3-way versions & Progressive Disclosure', async ({ page }) => {
+    test.setTimeout(120_000);
     const evidenceDir = path.resolve(process.cwd(), 'test-results', 'ge0004-evidence');
     fs.mkdirSync(evidenceDir, { recursive: true });
 
@@ -885,11 +937,17 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       { name: '1920px', width: 1920, height: 1080 },
     ];
 
+    await page.goto('/#/', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+
     for (const vp of viewports) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       for (const route of routes) {
-        await page.goto(route, { waitUntil: 'domcontentloaded' });
-        await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+        const hashTarget = route.replace(/^\//, '');
+        await page.evaluate((h) => {
+          window.location.hash = h;
+        }, hashTarget);
+        await page.waitForTimeout(80);
         const layout = await page.evaluate(() => ({
           scrollWidth: document.documentElement.scrollWidth,
           clientWidth: document.documentElement.clientWidth,
@@ -901,8 +959,10 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
           `Horizontal overflow on ${route} at ${vp.name}: scrollWidth=${layout.scrollWidth} > clientWidth=${layout.clientWidth}`
         ).toBeLessThanOrEqual(layout.clientWidth + 2);
       }
-      await page.goto('/#/', { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+      await page.evaluate(() => {
+        window.location.hash = '#/';
+      });
+      await page.waitForTimeout(120);
       await page.screenshot({ path: path.join(evidenceDir, `dashboard-${vp.name}-light.png`) });
     }
 

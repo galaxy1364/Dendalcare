@@ -117,7 +117,7 @@ jobs:
           VITE_IOS_APP_STORE_URL: ${{ vars.VITE_IOS_APP_STORE_URL }}
         run: |
           npm run build
-          node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin
+          node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin --verify-parity
           node -e '
             const fs = require("node:fs");
             const manifest = JSON.parse(fs.readFileSync("dist/release-manifest.json", "utf8"));
@@ -138,10 +138,11 @@ jobs:
       - name: Run Audit + V4 + V5 + V7 + V8 Release Assurance tests
         run: npm test
 
-      - name: Install Playwright browsers & run release gate E2E
-        run: |
-          npx playwright install --with-deps chromium webkit
-          npm run test:e2e
+      - name: Install Playwright browsers (Chromium & WebKit on Ubuntu 24.04)
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run release gate E2E (Chromium + WebKit)
+        run: npm run test:e2e
 
       - name: Upload verified immutable release bundle
         uses: actions/upload-artifact@v4
@@ -154,7 +155,7 @@ jobs:
 
   staging-promotion-and-health-gate:
     name: Staging Artifact Verification & Coherence Gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build-verify-and-package
     environment:
       name: staging
@@ -179,7 +180,7 @@ jobs:
 
   production-promotion:
     name: Production Promotion & Post-Deploy Live HTTP Verification
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - build-verify-and-package
       - staging-promotion-and-health-gate

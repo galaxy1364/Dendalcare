@@ -49,7 +49,7 @@ jobs:
           MINA_GIT_COMMIT: ${{ github.sha }}
         run: |
           npm run build
-          node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin
+          node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin --verify-parity
 
       - name: Verify inline JS syntax, subpath asset graph, 404.html & font magic bytes
         run: npm run verify:assets
@@ -57,7 +57,8 @@ jobs:
       - name: Run V4 + V5 + V7 + V8 + V9 automated unit & fault-injection tests
         run: npm test
 
-      - name: Install Playwright browsers & run release gate E2E (Chromium + WebKit)
-        run: |
-          npx playwright install --with-deps chromium webkit
-          npm run test:e2e
+      - name: Install Playwright browsers (Chromium & WebKit on Ubuntu 24.04)
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run release gate E2E (Chromium + WebKit)
+        run: npm run test:e2e

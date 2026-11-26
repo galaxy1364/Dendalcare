@@ -271,6 +271,37 @@ export function verifyLocalReleaseDirectory(distDir, options = {}) {
   };
 }
 
+export function verifyCrossTargetParity(reference, rootDir = process.cwd()) {
+  const absRoot = path.resolve(rootDir);
+  const targets = [
+    ['root/version.json', path.join(absRoot, 'version.json')],
+    ['gh-pages-dist/version.json', path.join(absRoot, 'gh-pages-dist', 'version.json')],
+    ['android-www/version.json', path.join(absRoot, 'app', 'src', 'main', 'assets', 'www', 'version.json')],
+  ];
+  const checked = [];
+  for (const [label, filePath] of targets) {
+    if (!fs.existsSync(filePath)) continue;
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    assert.equal(
+      data.releaseId,
+      reference.releaseId,
+      `Build identity drift detected in ${label}: ${data.releaseId} !== ${reference.releaseId}`
+    );
+    assert.equal(
+      data.contentDigest,
+      reference.contentDigest,
+      `Content digest drift detected in ${label}: ${data.contentDigest} !== ${reference.contentDigest}`
+    );
+    assert.equal(
+      data.releaseSequence,
+      reference.releaseSequence,
+      `Release sequence drift detected in ${label}: #${data.releaseSequence} !== #${reference.releaseSequence}`
+    );
+    checked.push(label);
+  }
+  return checked;
+}
+
 export function compareReleaseDeterminism(dirA, dirB) {
   const a = verifyLocalReleaseDirectory(dirA);
   const b = verifyLocalReleaseDirectory(dirB);
@@ -415,9 +446,12 @@ async function runCli() {
   if (cmd === '--verify-local') {
     const targetDir = args[1] || 'dist';
     const requireCiOrigin = args.includes('--require-ci-origin');
+    const verifyParity = args.includes('--verify-parity');
     const res = verifyLocalReleaseDirectory(targetDir, { requireCiOrigin });
+    const parityChecked = verifyParity ? verifyCrossTargetParity(res) : [];
+    const paritySuffix = parityChecked.length > 0 ? `, parity=${parityChecked.join('+')}` : '';
     console.log(
-      `✔ [ci-release-gate] Local release verified: ${res.releaseId} (seq=#${res.releaseSequence}, origin=${res.origin}, ${res.assetCount} dual-verified assets)`
+      `✔ [ci-release-gate] Local release verified: ${res.releaseId} (seq=#${res.releaseSequence}, origin=${res.origin}, ${res.assetCount} dual-verified assets${paritySuffix})`
     );
     return;
   }

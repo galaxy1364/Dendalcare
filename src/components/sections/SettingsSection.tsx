@@ -1179,7 +1179,10 @@ function ClinicSettingsTab({
               نصب روی دستگاه‌ها
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              نسخه v{CURRENT_APP_VERSION} (#{CURRENT_APP_BUILD})
+              نسخه وب{' '}
+              <span dir="ltr" className="rtl-bidi-isolate font-mono font-bold">
+                v{updateSnap.versionReport.installedWeb.semver} (#{updateSnap.versionReport.installedWeb.releaseSequence})
+              </span>
             </p>
           </div>
           <button
