@@ -112,19 +112,19 @@ export function Sheet({
       >
         {/* Top Grabber Pill */}
         <div
-          className="pt-2 pb-1 flex flex-col items-center justify-center bg-white/92 backdrop-blur-2xl shrink-0 cursor-pointer"
+          className="pt-2 pb-1 flex flex-col items-center justify-center bg-white/92 dark:bg-[#11202E]/95 backdrop-blur-2xl shrink-0 cursor-pointer"
           onClick={() => {
             playTactileFeedback('soft');
             onClose();
           }}
           data-testid="ios27_sheet_grabber_pill"
         >
-          <div className="w-10 h-1.5 rounded-full bg-slate-300/90 transition-transform active:scale-95" />
+          <div className="w-10 h-1.5 rounded-full bg-slate-300/90 dark:bg-slate-600/90 transition-transform active:scale-95" />
         </div>
 
         {/* Sticky Navigation Bar Header */}
         <header
-          className="ios27-sheet-navbar sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-white/92 backdrop-blur-2xl border-b border-slate-200/85 shrink-0"
+          className="ios27-sheet-navbar sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-white/92 dark:bg-[#11202E]/95 backdrop-blur-2xl border-b border-slate-200/85 dark:border-[#25394D] shrink-0"
         >
           <div className="flex items-center gap-2.5 min-w-0">
             <button
@@ -134,7 +134,7 @@ export function Sheet({
                 onClose();
               }}
               aria-label="بازگشت و بستن"
-              className="w-11 h-11 rounded-full flex items-center justify-center bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200/80 transition-all haptic active:scale-90 shrink-0"
+              className="w-11 h-11 rounded-full flex items-center justify-center bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 transition-all haptic active:scale-90 shrink-0"
             >
               <ArrowRight size={18} />
             </button>
@@ -167,7 +167,7 @@ export function Sheet({
             }}
             aria-label="بستن پنجره"
             data-testid="close_fullscreen_modal_btn"
-            className="px-3.5 py-2 rounded-full flex items-center gap-1 bg-slate-100 hover:bg-slate-200/90 text-slate-700 font-extrabold text-xs border border-slate-200/80 transition-all haptic active:scale-92 shrink-0 min-h-[40px]"
+            className="px-3.5 py-2 rounded-full flex items-center gap-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/90 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-extrabold text-xs border border-slate-200/80 dark:border-slate-700 transition-all haptic active:scale-92 shrink-0 min-h-[40px]"
           >
             <X size={15} />
             <span>بستن</span>
@@ -175,7 +175,10 @@ export function Sheet({
         </header>
 
         {/* Scrollable Inset Grouped Content Area */}
-        <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 pb-24 safe-bottom desktop-scroll">
+        <div
+          className="flex-1 overflow-y-auto p-3.5 sm:p-5 pb-24 safe-bottom desktop-scroll"
+          style={{ paddingBottom: 'calc(6rem + var(--keyboard-inset-bottom, 0px))' }}
+        >
           <div className="max-w-2xl mx-auto space-y-3">{children}</div>
         </div>
       </div>
@@ -248,14 +251,14 @@ export function ConfirmDialog({
     >
       <div className="absolute inset-0 sheet-overlay animate-fade-in" />
       <div
-        className="relative glass-card p-6 w-full max-w-sm animate-bounce-in bg-white/98 shadow-2xl"
+        className="relative glass-card p-6 w-full max-w-sm animate-bounce-in bg-white/98 dark:bg-[#11202E] shadow-2xl border border-slate-200 dark:border-[#25394D]"
         style={{ borderRadius: 28 }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Two-Step Progress Pill */}
         {twoStep && (
           <div className="flex items-center justify-between mb-3">
-            <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
+            <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">
               {step === 1 ? <ShieldCheck size={12} className="text-amber-600" /> : <Lock size={12} className="text-rose-600" />}
               {step === 1 ? 'تایید دو مرحله‌ای (گام ۱ از ۲)' : 'تایید نهایی (گام ۲ از ۲)'}
             </span>
@@ -269,8 +272,8 @@ export function ConfirmDialog({
           </div>
         )}
 
-        <h3 className="text-base font-black text-slate-800 mb-2">{title}</h3>
-        <p className="text-sm text-slate-600 mb-4 leading-relaxed">
+        <h3 className="text-base font-black text-slate-800 dark:text-slate-100 mb-2">{title}</h3>
+        <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">
           {step === 1
             ? message
             : 'برای اطمینان کامل و حفظ یکپارچگی اطلاعات کلینیک، تایید نهایی را لمس کنید (نسخه پشتیبان خودکار در گاوصندوق ضدحذف ذخیره می‌شود).'}
@@ -278,7 +281,7 @@ export function ConfirmDialog({
 
         {step === 2 && expectedPin && (
           <div className="mb-4">
-            <label className="text-[11px] font-bold text-slate-600 block mb-1">
+            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">
               رمز تایید مدیر کلینیک:
             </label>
             <input
@@ -290,10 +293,10 @@ export function ConfirmDialog({
                 setPinError(false);
               }}
               placeholder="رمز ۴ رقمی..."
-              className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-center font-mono font-black tracking-widest text-sm"
+              className="ios27-input w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-center font-mono font-black tracking-widest text-sm"
             />
             {pinError && (
-              <p className="text-[11px] font-bold text-rose-600 mt-1 text-center">
+              <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400 mt-1 text-center">
                 رمز تایید اشتباه است.
               </p>
             )}
@@ -307,7 +310,7 @@ export function ConfirmDialog({
               playTactileFeedback('soft');
               onClose();
             }}
-            className="flex-1 py-2.5 rounded-2xl bg-slate-100 text-slate-700 font-bold text-sm hover:bg-slate-200 transition-all haptic active:scale-95"
+            className="flex-1 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-all haptic active:scale-95"
           >
             انصراف
           </button>

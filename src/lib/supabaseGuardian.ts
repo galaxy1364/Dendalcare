@@ -115,11 +115,12 @@ function readActiveActor(): ActiveActorInfo {
     };
   }
 
+  const isVerifiedManager = strictRole === 'manager';
   return {
     role: strictRole,
     fullName,
-    canEditPricesAfterSave: (localCanEditPrices ?? strictRole === 'manager') && strictRole === 'manager',
-    canDeleteCriticalRecords: (localCanDeleteRecords ?? strictRole === 'manager') && strictRole === 'manager',
+    canEditPricesAfterSave: isVerifiedManager,
+    canDeleteCriticalRecords: isVerifiedManager,
     sessionStatus,
   };
 }

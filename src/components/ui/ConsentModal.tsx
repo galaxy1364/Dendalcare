@@ -10,7 +10,9 @@ import {
   persistWithdrawPatientConsentCommand,
   type ConsentSignatureMethod,
 } from '@/features/clinical-record/clinicalRecordService';
-import { getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
+import { getRuntimeAuthStatus, getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
+import { resolveEffectiveRole } from '@/services/permissions/accessControl';
+import { loadActiveUser } from '@/lib/cloudSyncEngine';
 
 type Props = {
   open: boolean;
@@ -51,7 +53,13 @@ export function ConsentModal({ open, onClose, patient, actorRole, actorName }: P
 
   if (!open || !patient) return null;
 
-  const effectiveRole = actorRole || getRuntimeServerVerifiedRole() || 'dentist';
+  const effectiveRole =
+    actorRole ||
+    resolveEffectiveRole({
+      sessionStatus: getRuntimeAuthStatus(),
+      serverVerifiedRole: getRuntimeServerVerifiedRole(),
+      localRole: loadActiveUser().role,
+    });
   const effectiveActor = actorName || 'دکتر مهدی امیری';
   const today = todayGregorian();
   const jalaliToday = toJalaliStr(today);

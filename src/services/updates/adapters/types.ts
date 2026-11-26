@@ -38,6 +38,7 @@ export interface PlatformUpdateAdapter {
   getDefaultPointerUrl?(): string;
   stageAndVerify(input: {
     manifest: AuthoritativeReleaseManifest;
+    manifestUrl?: string | null;
     baseUrl: string;
     signal?: AbortSignal;
     onProgress?: (progress: UpdateProgress) => void;

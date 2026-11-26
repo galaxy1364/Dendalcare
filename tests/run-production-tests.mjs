@@ -22,6 +22,7 @@ try {
   const v14Mod = await server.ssrLoadModule('/tests/v14-clinical-workflow-integrity.test.ts');
   const v15Mod = await server.ssrLoadModule('/tests/v15-clinical-record-patient-safety.test.ts');
   const v16Mod = await server.ssrLoadModule('/tests/v16-financial-intelligence.test.ts');
+  const ge0002Mod = await server.ssrLoadModule('/tests/ge0002-p0-recovery.test.ts');
 
   const v4Results = await v4Mod.runAllV4ProductionTests();
   const v5Results = await v5Mod.runAllV5ReliabilityTests();
@@ -29,13 +30,14 @@ try {
   const v8Results = await v8Mod.runAllV8ReleaseAssuranceTests();
   const v9Results = await v9Mod.runAllV9ResilientBootTests();
   const v10Results = await v10Mod.runAllV10ArchitectureTests();
-  const v11Results = await v11Mod.runAllV11SupabaseFoundationTests();
+  const v11ModResults = await v11Mod.runAllV11SupabaseFoundationTests();
   const v12ModResults = await v12Mod.runAllV12MembershipAuthTests();
   const uxResults = await uxMod.runAllGlobalUxAuditTests();
   const v13Results = await v13Mod.runAllV13UniversalPlatformTests();
   const v14Results = await v14Mod.runAllV14ClinicalWorkflowIntegrityTests();
   const v15Results = await v15Mod.runAllV15ClinicalRecordPatientSafetyTests();
   const v16Results = await v16Mod.runAllV16FinancialIntelligenceTests();
+  const ge0002Results = await ge0002Mod.runAllGe0002P0RecoveryTests();
   const allResults = [
     ...v4Results,
     ...v5Results,
@@ -43,13 +45,14 @@ try {
     ...v8Results,
     ...v9Results,
     ...v10Results,
-    ...v11Results,
+    ...v11ModResults,
     ...v12ModResults,
     ...uxResults,
     ...v13Results,
     ...v14Results,
     ...v15Results,
     ...v16Results,
+    ...ge0002Results,
   ];
 
   let passed = 0;
@@ -66,7 +69,7 @@ try {
   }
 
   console.log(
-    `\nProduction-Import Tests (V4 + V5 + V7 + V8 + V9 + V10 + V11 + V12 + UX-Audit-V1 + V13 + V14 + V15 + V16): ${passed} passed, ${failed} failed (total ${allResults.length})`
+    `\nProduction-Import Tests (V4..V16 + GE-0002): ${passed} passed, ${failed} failed (total ${allResults.length})`
   );
   if (failed > 0) {
     exitCode = 1;

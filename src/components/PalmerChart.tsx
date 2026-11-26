@@ -17,7 +17,9 @@ import {
   type OdontogramFindingCode,
   type ToothSurfaceKey,
 } from '@/features/clinical-record/odontogramDomain';
-import { getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
+import { getRuntimeAuthStatus, getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
+import { resolveEffectiveRole } from '@/services/permissions/accessControl';
+import { loadActiveUser } from '@/lib/cloudSyncEngine';
 
 export type ToothMeta = CanonicalToothCoordinate;
 
@@ -39,7 +41,13 @@ export function PalmerChart({ patientId, actorRole, actorName }: Props) {
   const [amendmentReason, setAmendmentReason] = useState('');
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
-  const effectiveRole = actorRole || getRuntimeServerVerifiedRole() || 'dentist';
+  const effectiveRole =
+    actorRole ||
+    resolveEffectiveRole({
+      sessionStatus: getRuntimeAuthStatus(),
+      serverVerifiedRole: getRuntimeServerVerifiedRole(),
+      localRole: loadActiveUser().role,
+    });
   const effectiveAuthor = actorName || 'دکتر مهدی امیری';
 
   const fetchLegacyRows = useCallback(async () => {

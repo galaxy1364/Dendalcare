@@ -61,6 +61,7 @@
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --keyboard-inset-bottom: 0px;
 }
 
 * {
@@ -684,3 +685,59 @@ html[data-reduce-motion="true"] *::after {
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
 }
+
+/* ===== GE-0002 Global Adaptive Shell: Bidi Isolation, Keyboard Insets, Focus & Dark Parity ===== */
+.rtl-bidi-isolate {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+html[data-keyboard-open="true"] [data-testid="floating_bottom_dock"] {
+  display: none;
+}
+
+html[data-keyboard-open="true"] .app-shell-main {
+  padding-bottom: calc(1.5rem + var(--keyboard-inset-bottom, 0px));
+}
+
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #087C76;
+  outline-offset: 2px;
+}
+
+.settings-update-center-card {
+  background: linear-gradient(155deg, #FFFFFF 0%, #F5F3FF 60%, #EDE9FE 100%);
+}
+
+html[data-theme="dark"] .settings-update-center-card {
+  background: linear-gradient(155deg, #11202E 0%, #152538 65%, #1A2C42 100%);
+}
+
+html[data-theme="dark"] .right-bell-ear-path {
+  fill: #162738;
+  stroke: #334155;
+}
+
+html[data-theme="dark"] .right-bell-icon {
+  color: #E2E8F0;
+}
+
+html[data-theme="dark"] .ios27-input,
+html[data-theme="dark"] .ios27-select {
+  background: #0F1C2A;
+  border-color: #2A4056;
+  color: #F1F5F9;
+}
+
+html[data-theme="dark"] .ios27-input::placeholder {
+  color: #94A3B8;
+}
+

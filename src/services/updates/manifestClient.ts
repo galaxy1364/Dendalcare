@@ -509,6 +509,7 @@ export async function fetchAuthoritativeRelease(
  */
 export async function verifyReleaseAssets(input: {
   manifest: AuthoritativeReleaseManifest;
+  manifestUrl?: string | null;
   baseUrl: string;
   verifyAllAssets?: boolean;
   fetchFn?: typeof fetch;
@@ -593,6 +594,29 @@ export async function verifyReleaseAssets(input: {
     });
   };
 
+  let primaryBaseUrl = input.baseUrl;
+  if (input.manifestUrl) {
+    try {
+      const resolvedManifestUrl = new URL(input.manifestUrl, input.baseUrl).toString();
+      if (
+        new URL(resolvedManifestUrl).pathname.includes('/releases/') &&
+        isAllowedReleaseUrl(resolvedManifestUrl) &&
+        isSameOriginUrl(resolvedManifestUrl, input.baseUrl)
+      ) {
+        primaryBaseUrl = new URL('./', resolvedManifestUrl).toString();
+      }
+    } catch {
+      primaryBaseUrl = input.baseUrl;
+    }
+  }
+
+  const swControllerState =
+    typeof navigator !== 'undefined' && 'serviceWorker' in navigator
+      ? navigator.serviceWorker.controller
+        ? 'active'
+        : 'none'
+      : 'unavailable';
+
   const verifySingleAsset = async (asset: ReleaseAssetEntry) => {
     if (failureBox.current || stageController.signal.aborted) return;
     if (hasUnsafePathTraversal(asset.path)) {
@@ -614,7 +638,8 @@ export async function verifyReleaseAssets(input: {
       return;
     }
 
-    const assetUrl = resolveAgainstBase(asset.path, input.baseUrl);
+    const assetUrl = resolveAgainstBase(asset.path, primaryBaseUrl);
+    const rootFallbackUrl = resolveAgainstBase(asset.path, input.baseUrl);
     if (!isAllowedReleaseUrl(assetUrl) || !isSameOriginUrl(assetUrl, input.baseUrl)) {
       failureBox.current = {
         errorCode: 'ORIGIN_NOT_ALLOWED',
@@ -629,13 +654,28 @@ export async function verifyReleaseAssets(input: {
 
     // Single deadline wrapping fetch() + response.arrayBuffer() + SHA-256 digest!
     const wrapped = await runWithDeadline(timeoutMs, stageController.signal, async (attemptSignal) => {
-      const res = await fetchFn(assetUrl, {
+      let targetUrl = assetUrl;
+      let res = await fetchFn(targetUrl, {
         method: 'GET',
         cache: 'no-store',
         signal: attemptSignal,
       });
 
-      const finalUrl = res.url || assetUrl;
+      if (
+        res.status === 404 &&
+        rootFallbackUrl !== assetUrl &&
+        isAllowedReleaseUrl(rootFallbackUrl) &&
+        isSameOriginUrl(rootFallbackUrl, input.baseUrl)
+      ) {
+        targetUrl = rootFallbackUrl;
+        res = await fetchFn(targetUrl, {
+          method: 'GET',
+          cache: 'no-store',
+          signal: attemptSignal,
+        });
+      }
+
+      const finalUrl = res.url || targetUrl;
       if (res.redirected && (!isAllowedReleaseUrl(finalUrl) || !isSameOriginUrl(finalUrl, input.baseUrl))) {
         return { kind: 'redirect_blocked' as const, finalUrl };
       }
@@ -649,12 +689,24 @@ export async function verifyReleaseAssets(input: {
         return { kind: 'mime_invalid' as const, ct };
       }
 
+      const contentEncoding = res.headers.get('content-encoding') || 'none';
+      const contentLengthHeader = res.headers.get('content-length') || 'absent';
+      const cacheControl = res.headers.get('cache-control') || 'absent';
+
       const buffer = await res.arrayBuffer();
       if (buffer.byteLength > maxSingleAssetBytes) {
         return { kind: 'size_limit' as const, actual: buffer.byteLength };
       }
       if (asset.size > 0 && buffer.byteLength !== asset.size) {
-        return { kind: 'size_mismatch' as const, expected: asset.size, actual: buffer.byteLength };
+        return {
+          kind: 'size_mismatch' as const,
+          expected: asset.size,
+          actual: buffer.byteLength,
+          finalUrl,
+          contentEncoding,
+          contentLengthHeader,
+          cacheControl,
+        };
       }
 
       const actualSha = await computeSha256Hex(buffer);
@@ -702,7 +754,10 @@ export async function verifyReleaseAssets(input: {
         },
         size_mismatch: {
           code: 'SIZE_MISMATCH' as UpdateErrorCode,
-          detail: `Byte length mismatch for ${asset.path}: expected ${'expected' in resVal ? resVal.expected : '?'}, got ${'actual' in resVal ? resVal.actual : '?'}`,
+          detail:
+            resVal.kind === 'size_mismatch'
+              ? `Byte length mismatch for ${asset.path}: expected ${resVal.expected}, got ${resVal.actual} (url=${resVal.finalUrl}, content-encoding=${resVal.contentEncoding}, content-length=${resVal.contentLengthHeader}, cache-control=${resVal.cacheControl}, sw=${swControllerState})`
+              : `Byte length mismatch for ${asset.path}`,
         },
         digest_mismatch: {
           code: 'DIGEST_MISMATCH' as UpdateErrorCode,

@@ -97,13 +97,13 @@ export function FloatingDock({
     <nav
       aria-label="ناوبری اصلی پایین"
       data-testid="floating_bottom_dock"
-      className="shrink-0 z-30 md:hidden px-2.5 pt-1 pb-2"
+      className="shrink-0 z-30 md:hidden px-2.5 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
     >
       <div className="max-w-xl mx-auto flex items-center gap-2" dir="rtl">
         {/* Main 4-Destination Role-Aware QBank Pill Bar */}
         {visibleDockIds.length > 0 && (
           <div
-            className="bottom-dock flex-1 rounded-full flex items-center justify-between px-1.5 py-1 gap-1"
+            className="bottom-dock flex-1 min-h-[58px] rounded-full flex items-center justify-between px-1.5 py-1 gap-1"
             data-testid="qbank_primary_pill_bar"
           >
             {visibleDockIds.map((id) => {
@@ -180,25 +180,25 @@ export function FloatingDock({
             }}
             aria-label="همه خدمات کلینیک"
             data-testid="dock_more_button"
-            className="w-[56px] h-[56px] rounded-full shrink-0 flex flex-col items-center justify-center transition-transform active:scale-92 bg-white dark:bg-[#11202E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C76]"
+            className="w-[58px] h-[58px] rounded-full shrink-0 flex flex-col items-center justify-center transition-transform active:scale-92 bg-white dark:bg-[#11202E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C76]"
             style={{
               background: !isPrimaryActive
-                ? activeToken.surfaceTintEnd
+                ? `linear-gradient(155deg, ${activeToken.surfaceTintStart}, ${activeToken.surfaceTintEnd})`
                 : undefined,
               border: !isPrimaryActive || isServicesActive
-                ? `2px solid ${activeToken.primary}`
+                ? `1.5px solid ${activeToken.surfaceBorder}`
                 : '1px solid var(--md-border)',
               color: !isPrimaryActive ? activeToken.primaryDark : 'var(--md-text)',
-              boxShadow: '0 8px 20px rgba(20, 46, 67, 0.14)',
+              boxShadow: '0 6px 18px rgba(20, 46, 67, 0.10)',
             }}
           >
             <ModuleDuotoneIcon
               id={!isPrimaryActive ? active : 'services'}
-              size={23}
+              size={22}
               primaryColor={!isPrimaryActive ? activeToken.primaryDark : '#142E43'}
               secondaryColor={!isPrimaryActive ? activeToken.primary : '#087C76'}
             />
-            <span className="text-[11px] font-extrabold mt-0.5 leading-none truncate max-w-[48px] dark:text-[#E2E8F0]">
+            <span className="text-[10.5px] font-extrabold mt-0.5 leading-none truncate max-w-[48px] dark:text-[#E2E8F0]">
               {!isPrimaryActive ? resolvedLabel : 'خدمات'}
             </span>
           </button>

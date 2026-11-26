@@ -699,7 +699,79 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       await context.close();
     }
   });
+
+  test('GE-0002 Adaptive Shell: topbar title readability, bell-ear gutter, 58px dock alignment, bidi badge, dark drawer & branch sync', async ({
+    page,
+  }) => {
+    for (const vp of [
+      { width: 360, height: 740 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(vp);
+      await page.goto('/#/settings', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+
+      // 1. Header title must not clip/truncate horizontally
+      const heading = page.locator('header h1').first();
+      await expect(heading).toBeVisible();
+      const headingMetrics = await heading.evaluate((el) => ({
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+        text: el.textContent?.trim() || '',
+      }));
+      expect(headingMetrics.text).toContain('تنظیمات');
+      expect(headingMetrics.scrollWidth).toBeLessThanOrEqual(headingMetrics.clientWidth + 2);
+
+      // 2. Installed build badge isolates LTR token without clipping or horizontal overflow
+      const badge = page.getByTestId('installed_build_badge');
+      await expect(badge).toBeVisible();
+      const badgeDir = await badge.getAttribute('dir');
+      expect(badgeDir).toBe('ltr');
+
+      // 3. Dock pill bar and dock_more_button must align cleanly at matching 58px height
+      const pillBox = await page.getByTestId('qbank_primary_pill_bar').boundingBox();
+      const moreBox = await page.getByTestId('dock_more_button').boundingBox();
+      expect(pillBox).not.toBeNull();
+      expect(moreBox).not.toBeNull();
+      expect(Math.abs((pillBox?.height ?? 0) - (moreBox?.height ?? 0))).toBeLessThanOrEqual(2);
+
+      // 4. Right-edge bell ear must NOT overlap the auto-update toggle switch inside main gutter
+      const bellBox = await page.getByTestId('right_edge_draggable_bell_handle').boundingBox();
+      const toggleBox = await page.getByTestId('toggle_auto_update_switch').boundingBox();
+      expect(bellBox).not.toBeNull();
+      expect(toggleBox).not.toBeNull();
+      if (bellBox && toggleBox) {
+        const horizOverlap =
+          Math.min(bellBox.x + bellBox.width, toggleBox.x + toggleBox.width) -
+          Math.max(bellBox.x, toggleBox.x);
+        const vertOverlap =
+          Math.min(bellBox.y + bellBox.height, toggleBox.y + toggleBox.height) -
+          Math.max(bellBox.y, toggleBox.y);
+        expect(horizOverlap > 0 && vertOverlap > 0).toBe(false);
+      }
+
+      const noOverflow = await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2
+      );
+      expect(noOverflow).toBe(true);
+    }
+
+    // 5. Dark mode parity across Settings + Notification Drawer + branch selection sync
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByTestId('appearance_theme_dark').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+    await page.getByTestId('branch_switch_north').click();
+    await expect(page.locator('header')).toContainText('شعبه تخصصی ایمپلنت');
+
+    await page.getByTestId('right_edge_draggable_bell_handle').click();
+    const drawer = page.getByTestId('slide_over_notification_drawer');
+    await expect(drawer).toBeVisible();
+    const drawerBg = await drawer.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(drawerBg).not.toBe('rgb(244, 247, 249)');
+  });
 });
+
 
 
 

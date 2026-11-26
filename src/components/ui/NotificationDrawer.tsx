@@ -162,7 +162,7 @@ function SwipeableAlertRow({
           setDragging(false);
           setDragX(0);
         }}
-        className="relative z-10 w-full text-right rounded-[20px] bg-white border border-slate-200/95 p-3 shadow-sm cursor-pointer touch-pan-y"
+        className="relative z-10 w-full text-right rounded-[20px] bg-white dark:bg-[#11202E] border border-slate-200/95 dark:border-[#25394D] p-3 shadow-sm cursor-pointer touch-pan-y"
         style={{
           borderRightWidth: '4px',
           borderRightColor: accentColor,
@@ -178,21 +178,21 @@ function SwipeableAlertRow({
             >
               {badge.label}
             </span>
-            <span className="text-[10px] font-bold text-slate-500 truncate">
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">
               {alert.patientName}
             </span>
           </div>
-          <span className="text-[10px] font-extrabold text-slate-600 tabular-nums shrink-0">
+          <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-300 tabular-nums shrink-0">
             {toJalaliStr(alert.dueDate)}
           </span>
         </div>
 
-        <p className="text-xs font-black text-slate-900 leading-snug line-clamp-1">
+        <p className="text-xs font-black text-slate-900 dark:text-slate-100 leading-snug line-clamp-1">
           {alert.title}
         </p>
 
         <div className="flex items-center justify-between gap-2 mt-1">
-          <p className="text-[10.5px] font-medium text-slate-600 line-clamp-1 flex-1">
+          <p className="text-[10.5px] font-medium text-slate-600 dark:text-slate-300 line-clamp-1 flex-1">
             {alert.subtitle}
           </p>
           <div className="flex items-center gap-1 shrink-0">
@@ -204,7 +204,7 @@ function SwipeableAlertRow({
                 playTactileFeedback('soft');
                 onSnooze(alert.id, 15);
               }}
-              className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-800 flex items-center justify-center transition-colors"
+              className="w-7 h-7 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-slate-700 dark:text-slate-200 hover:text-amber-800 dark:hover:text-amber-300 flex items-center justify-center transition-colors"
             >
               <Clock size={12} />
             </button>
@@ -216,7 +216,7 @@ function SwipeableAlertRow({
                 playTactileFeedback('success');
                 onAcknowledge(alert.id);
               }}
-              className="w-7 h-7 rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 flex items-center justify-center transition-colors"
+              className="w-7 h-7 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-600 text-emerald-700 dark:text-emerald-300 hover:text-white border border-emerald-200 dark:border-emerald-800 flex items-center justify-center transition-colors"
             >
               <CheckCircle2 size={13} />
             </button>
@@ -345,7 +345,7 @@ export function NotificationDrawer({
         }}
       >
         {/* Clean Modern Header */}
-        <div className="px-4 pt-3.5 pb-3 bg-white border-b border-slate-200/90 shrink-0 space-y-2.5">
+        <div className="px-4 pt-3.5 pb-3 bg-white dark:bg-[#11202E] border-b border-slate-200/90 dark:border-[#25394D] shrink-0 space-y-2.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-9 h-9 rounded-2xl bg-rose-600 flex items-center justify-center text-white shadow-sm shrink-0">
@@ -353,12 +353,12 @@ export function NotificationDrawer({
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h3 className="text-sm font-black text-slate-900 truncate">اعلان‌ها و یادآوری‌ها</h3>
-                  <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-black tabular-nums">
+                  <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 truncate">اعلان‌ها و یادآوری‌ها</h3>
+                  <span className="px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-[10px] font-black tabular-nums">
                     {notifCount.toLocaleString('fa-IR')}
                   </span>
                 </div>
-                <p className="text-[10px] font-semibold text-slate-500">
+                <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
                   سوایپ چپ: تایید • سوایپ راست: تعویق
                 </p>
               </div>
@@ -371,7 +371,7 @@ export function NotificationDrawer({
                 onClose();
               }}
               aria-label="بستن"
-              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center justify-center text-slate-700 shrink-0 transition-colors"
+              className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shrink-0 transition-colors"
             >
               <X size={16} />
             </button>
@@ -382,12 +382,12 @@ export function NotificationDrawer({
             <div
               className={`flex-1 flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-extrabold ${
                 deviceNotifOn
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                  : 'bg-slate-50 border-slate-200 text-slate-800'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                  : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
               }`}
             >
               <span className="flex items-center gap-1 truncate">
-                <Smartphone size={13} className={deviceNotifOn ? 'text-emerald-700' : 'text-slate-600'} />
+                <Smartphone size={13} className={deviceNotifOn ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'} />
                 {deviceNotifPerm === 'denied'
                   ? 'اعلان مرورگر مسدود است'
                   : deviceNotifOn
@@ -407,7 +407,7 @@ export function NotificationDrawer({
                   <button
                     type="button"
                     onClick={() => onToggleDeviceNotif(false)}
-                    className="px-1.5 py-0.5 rounded-lg bg-white border border-slate-200 text-slate-700"
+                    className="px-1.5 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200"
                   >
                     خاموش
                   </button>
@@ -440,7 +440,7 @@ export function NotificationDrawer({
               data-testid="reset_acknowledged_reminders_btn"
               onClick={onResetQueue}
               title="بازگردانی همه یادآوری‌ها"
-              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center justify-center text-slate-700 shrink-0"
+              className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shrink-0"
             >
               <RefreshCw size={13} />
             </button>
@@ -456,7 +456,7 @@ export function NotificationDrawer({
               {spotlightQueue.length > 1 && (
                 <div
                   aria-hidden="true"
-                  className="absolute inset-x-3 top-2.5 bottom-0 rounded-[22px] bg-[#E9EEF5] border border-slate-200 shadow-sm pointer-events-none"
+                  className="absolute inset-x-3 top-2.5 bottom-0 rounded-[22px] bg-[#E9EEF5] dark:bg-[#162738] border border-slate-200 dark:border-[#25394D] shadow-sm pointer-events-none"
                 />
               )}
 
@@ -499,7 +499,7 @@ export function NotificationDrawer({
                   setDeckDragging(false);
                   setDeckDragX(0);
                 }}
-                className="relative z-10 rounded-[22px] bg-white border-2 p-3 shadow-md select-none touch-pan-y cursor-grab active:cursor-grabbing"
+                className="relative z-10 rounded-[22px] bg-white dark:bg-[#11202E] border-2 p-3 shadow-md select-none touch-pan-y cursor-grab active:cursor-grabbing"
                 style={{
                   borderColor:
                     activeSlide.urgency === 'critical'
@@ -520,7 +520,7 @@ export function NotificationDrawer({
                     >
                       {activeSlide.urgency === 'critical' ? <ShieldAlert size={13} /> : <BellRing size={13} />}
                     </span>
-                    <span className="text-[10px] font-black text-slate-800">
+                    <span className="text-[10px] font-black text-slate-800 dark:text-slate-200">
                       {(safeSlide + 1).toLocaleString('fa-IR')} از {spotlightQueue.length.toLocaleString('fa-IR')}
                     </span>
                   </div>
@@ -534,7 +534,7 @@ export function NotificationDrawer({
                           playTactileFeedback('soft');
                           setSlideIdx(prev => (prev > 0 ? prev - 1 : spotlightQueue.length - 1));
                         }}
-                        className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700"
+                        className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200"
                       >
                         <ChevronRight size={13} />
                       </button>
@@ -545,7 +545,7 @@ export function NotificationDrawer({
                           playTactileFeedback('soft');
                           setSlideIdx(prev => (prev + 1) % spotlightQueue.length);
                         }}
-                        className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700"
+                        className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200"
                       >
                         <ChevronLeft size={13} />
                       </button>
@@ -553,8 +553,8 @@ export function NotificationDrawer({
                   )}
                 </div>
 
-                <p className="text-xs font-black text-slate-900 leading-snug">{activeSlide.title}</p>
-                <p className="text-[10.5px] font-semibold text-slate-600 mt-0.5 line-clamp-2">{activeSlide.subtitle}</p>
+                <p className="text-xs font-black text-slate-900 dark:text-slate-100 leading-snug">{activeSlide.title}</p>
+                <p className="text-[10.5px] font-semibold text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">{activeSlide.subtitle}</p>
 
                 <div className="flex items-center justify-between gap-2 mt-2.5">
                   <div className="flex items-center gap-1.5">
@@ -574,7 +574,7 @@ export function NotificationDrawer({
                         playTactileFeedback('soft');
                         onSnooze(activeSlide.id, 15);
                       }}
-                      className="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-amber-100 text-slate-800 text-[10px] font-extrabold"
+                      className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-slate-800 dark:text-slate-200 text-[10px] font-extrabold"
                     >
                       ۱۵ دقیقه بعد
                     </button>
@@ -609,7 +609,7 @@ export function NotificationDrawer({
           )}
 
           {/* Segmented Category Pill Filter */}
-          <div className="flex items-center gap-1 p-1 rounded-2xl bg-slate-200/70 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800/80 overflow-x-auto no-scrollbar">
             {[
               { id: 'all' as const, label: 'همه', count: alerts.length },
               {
@@ -637,8 +637,8 @@ export function NotificationDrawer({
                 }}
                 className={`flex-1 px-2 py-1.5 rounded-xl text-[10.5px] font-extrabold whitespace-nowrap transition-all ${
                   drawerTab === tab.id
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white dark:bg-[#11202E] text-slate-900 dark:text-slate-100 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 {tab.label} ({tab.count.toLocaleString('fa-IR')})
@@ -648,15 +648,15 @@ export function NotificationDrawer({
 
           {/* Smart Grouped Swipeable Notification Cards */}
           {filteredAlerts.length === 0 && unreadMessages.length === 0 ? (
-            <div className="text-center py-10 bg-white rounded-2xl border border-slate-200">
-              <p className="text-sm text-slate-900 font-black">همه یادآوری‌ها بررسی شده‌اند</p>
-              <p className="text-xs text-slate-500 mt-1">مورد فوری فعالی وجود ندارد</p>
+            <div className="text-center py-10 bg-white dark:bg-[#11202E] rounded-2xl border border-slate-200 dark:border-[#25394D]">
+              <p className="text-sm text-slate-900 dark:text-slate-100 font-black">همه یادآوری‌ها بررسی شده‌اند</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">مورد فوری فعالی وجود ندارد</p>
             </div>
           ) : (
             <div className="space-y-3">
               {urgentGroup.length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-[10.5px] font-black text-rose-700 px-1">
+                  <p className="text-[10.5px] font-black text-rose-700 dark:text-rose-400 px-1">
                     فوری و امروز ({urgentGroup.length.toLocaleString('fa-IR')})
                   </p>
                   {urgentGroup.map(alert => (
@@ -676,7 +676,7 @@ export function NotificationDrawer({
 
               {upcomingGroup.length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-[10.5px] font-black text-slate-600 px-1">
+                  <p className="text-[10.5px] font-black text-slate-600 dark:text-slate-300 px-1">
                     برنامه پیش‌رو ({upcomingGroup.length.toLocaleString('fa-IR')})
                   </p>
                   {upcomingGroup.map(alert => (
@@ -702,14 +702,14 @@ export function NotificationDrawer({
                     onNavigate('messages');
                     onClose();
                   }}
-                  className="w-full text-right rounded-[20px] bg-white hover:bg-sky-50 border border-sky-200 p-3 shadow-sm transition-all"
+                  className="w-full text-right rounded-[20px] bg-white dark:bg-[#11202E] hover:bg-sky-50 dark:hover:bg-[#162738] border border-sky-200 dark:border-sky-800/70 p-3 shadow-sm transition-all"
                   style={{ borderRightWidth: '4px', borderRightColor: '#0284C7' }}
                 >
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-sky-600 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-black text-slate-900 truncate">پیام جدید: {m.subject}</p>
-                      <p className="text-[10.5px] font-semibold text-slate-600 truncate">{m.body?.slice(0, 50)}</p>
+                      <p className="text-xs font-black text-slate-900 dark:text-slate-100 truncate">پیام جدید: {m.subject}</p>
+                      <p className="text-[10.5px] font-semibold text-slate-600 dark:text-slate-300 truncate">{m.body?.slice(0, 50)}</p>
                     </div>
                   </div>
                 </button>
@@ -719,7 +719,7 @@ export function NotificationDrawer({
         </div>
 
         {/* Footer CTA */}
-        <div className="p-3 bg-white border-t border-slate-200 shrink-0">
+        <div className="p-3 bg-white dark:bg-[#11202E] border-t border-slate-200 dark:border-[#25394D] shrink-0">
           <button
             type="button"
             onClick={() => {

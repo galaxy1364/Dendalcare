@@ -214,7 +214,7 @@ export function AppShell() {
           <header className="shrink-0 z-20 bg-[#F4F7F9] dark:bg-[#0A141E] border-b border-[#D8E2EA] dark:border-[#25394D] px-2 md:px-4 py-1.5">
             <div className="max-w-xl md:max-w-5xl xl:max-w-6xl mx-auto">
               <div className="rounded-[20px] px-3 py-1.5 flex items-center justify-between bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] text-[#14283B] dark:text-[#F1F5F9] shadow-sm">
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
                   {activeRoute !== 'dashboard' && (
                     <button
                       type="button"
@@ -230,30 +230,31 @@ export function AppShell() {
 
                   <button
                     type="button"
-                    className="cursor-pointer shrink-0 active:scale-95 md:hidden"
+                    className={`${activeRoute === 'dashboard' ? 'inline-flex' : 'hidden sm:inline-flex'} cursor-pointer shrink-0 active:scale-95 md:hidden`}
                     onClick={() => navigate('dashboard')}
                     aria-label="مینادنتال - صفحه اصلی"
                   >
-                    <MascotTooth mood={mascotMood} size={36} />
+                    <MascotTooth mood={mascotMood} size={34} />
                   </button>
 
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <h1 className="text-sm font-bold leading-tight truncate">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <h1 className="text-[13.5px] sm:text-sm font-black leading-tight whitespace-nowrap shrink-0">
                         <span className="md:hidden">
                           {activeRoute === 'dashboard' ? 'مینادنتال' : section.label}
                         </span>
                         <span className="hidden md:inline">{section.label}</span>
                       </h1>
                       <span
-                        className="text-[10px] font-bold px-2 py-0.5 rounded-md text-white truncate max-w-[120px]"
+                        className="text-[9.5px] sm:text-[10px] font-bold px-2 py-0.5 rounded-md text-white truncate max-w-[106px] sm:max-w-[140px]"
                         style={{ background: section.color }}
                       >
                         {currentUser.fullName || currentUser.name}
                       </span>
                     </div>
-                    <p className="text-[10px] font-medium text-[#526779] dark:text-[#9FB1C1] leading-tight truncate">
-                      {activeBranch.name} • {onlinePeersCount.toLocaleString('fa-IR')} کاربر آنلاین
+                    <p className="text-[10px] font-medium text-[#526779] dark:text-[#9FB1C1] leading-tight truncate mt-0.5">
+                      <span>{activeBranch.name}</span>
+                      <span className="hidden sm:inline"> • {onlinePeersCount.toLocaleString('fa-IR')} کاربر آنلاین</span>
                     </p>
                   </div>
                 </div>
@@ -328,7 +329,7 @@ export function AppShell() {
             onTouchCancel={() => {
               edgeSwipeRef.current = cancelRtlEdgeBackSwipe(edgeSwipeRef.current);
             }}
-            className={`app-shell-main px-2 md:px-5 desktop-scroll ${
+            className={`app-shell-main pr-8 pl-2.5 sm:pr-9 sm:pl-3.5 md:px-5 desktop-scroll ${
               activeRoute === 'dashboard' ? 'main-no-scroll-home py-1.5' : 'py-2.5 pb-6'
             }`}
           >
@@ -343,14 +344,14 @@ export function AppShell() {
               {deniedRouteNotice && (
                 <div
                   role="alert"
-                  className="px-3 py-2 rounded-[12px] bg-[#FFF1F2] border border-[#FECDD3] text-[#AD293C] text-xs font-bold flex items-center justify-between gap-2"
+                  className="px-3 py-2 rounded-[12px] bg-[#FFF1F2] dark:bg-[#2A1218] border border-[#FECDD3] dark:border-[#7F1D1D] text-[#AD293C] dark:text-[#FDA4AF] text-xs font-bold flex items-center justify-between gap-2"
                 >
                   <span>دسترسی نقش فعلی به بخش «{deniedRouteNotice}» محدود شده است.</span>
                   <button
                     type="button"
                     onClick={clearDeniedNotice}
                     aria-label="بستن پیام محدودیت"
-                    className="p-1 rounded-lg bg-white border border-[#FECDD3]"
+                    className="p-1 rounded-lg bg-white dark:bg-[#11202E] border border-[#FECDD3] dark:border-[#7F1D1D]"
                   >
                     <X size={13} />
                   </button>
@@ -360,8 +361,8 @@ export function AppShell() {
               {!notifOpen && (
                 <>
                   {liveSyncToast && (
-                    <div className="px-3.5 py-2 rounded-[14px] bg-[#ECFDF5] border border-[#B7E4CE] text-[#0F4B39] text-xs font-bold flex items-center justify-center gap-2 animate-fade-in">
-                      <CheckCircle2 size={15} className="text-[#176B52] shrink-0" />
+                    <div className="px-3.5 py-2 rounded-[14px] bg-[#ECFDF5] dark:bg-[#0D2B22] border border-[#B7E4CE] dark:border-[#1B5E48] text-[#0F4B39] dark:text-[#6EE7B7] text-xs font-bold flex items-center justify-center gap-2 animate-fade-in">
+                      <CheckCircle2 size={15} className="text-[#176B52] dark:text-[#34D399] shrink-0" />
                       <span>{liveSyncToast}</span>
                     </div>
                   )}
@@ -371,10 +372,10 @@ export function AppShell() {
                       data-testid="guardian_security_toast"
                       className={`px-3.5 py-2 rounded-[14px] text-xs font-bold flex items-center justify-between gap-2 border animate-fade-in ${
                         guardianToast.severity === 'security'
-                          ? 'bg-[#FFF1F2] border-[#FECDD3] text-[#AD293C]'
+                          ? 'bg-[#FFF1F2] dark:bg-[#2A1218] border-[#FECDD3] dark:border-[#7F1D1D] text-[#AD293C] dark:text-[#FDA4AF]'
                           : guardianToast.severity === 'offline'
-                          ? 'bg-[#FFFBEB] border-[#FDE0A6] text-[#92510C]'
-                          : 'bg-[#ECFDF5] border-[#B7E4CE] text-[#176B52]'
+                          ? 'bg-[#FFFBEB] dark:bg-[#291E0B] border-[#FDE0A6] dark:border-[#78350F] text-[#92510C] dark:text-[#FCD34D]'
+                          : 'bg-[#ECFDF5] dark:bg-[#0D2B22] border-[#B7E4CE] dark:border-[#1B5E48] text-[#176B52] dark:text-[#6EE7B7]'
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
@@ -394,7 +395,7 @@ export function AppShell() {
                         type="button"
                         onClick={dismissGuardianToast}
                         aria-label="بستن هشدار"
-                        className="p-1.5 rounded-lg bg-white border border-[#D8E2EA] text-[#14283B] shrink-0"
+                        className="p-1.5 rounded-lg bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] text-[#14283B] dark:text-[#F1F5F9] shrink-0"
                       >
                         <X size={13} />
                       </button>
@@ -404,7 +405,7 @@ export function AppShell() {
                   {offlineQueueCount > 0 && (
                     <div
                       data-testid="offline_queue_pending_pill"
-                      className="px-3.5 py-2 rounded-[14px] bg-[#FFFBEB] border border-[#FDE0A6] text-[#92510C] text-[11px] font-bold flex items-center justify-between gap-2 animate-fade-in"
+                      className="px-3.5 py-2 rounded-[14px] bg-[#FFFBEB] dark:bg-[#291E0B] border border-[#FDE0A6] dark:border-[#78350F] text-[#92510C] dark:text-[#FCD34D] text-[11px] font-bold flex items-center justify-between gap-2 animate-fade-in"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <UploadCloud size={15} className="shrink-0" />
@@ -426,7 +427,7 @@ export function AppShell() {
                           type="button"
                           onClick={clearQueue}
                           data-testid="clear_offline_queue_button"
-                          className="min-h-[36px] px-2 py-1 rounded-[10px] bg-white border border-[#FDE0A6] text-[#92510C] font-bold text-[11px]"
+                          className="min-h-[36px] px-2 py-1 rounded-[10px] bg-white dark:bg-[#11202E] border border-[#FDE0A6] dark:border-[#78350F] text-[#92510C] dark:text-[#FCD34D] font-bold text-[11px]"
                         >
                           پاک‌سازی
                         </button>

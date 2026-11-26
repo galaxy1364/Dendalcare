@@ -2,7 +2,7 @@
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
 // NOTE: Structural HTML checks below prevent cache poisoning & raw-TSX contamination;
 // they are NOT a substitute for cryptographic ECDSA manifest signature verification.
-const BUILD_ID = "v4.16.0-899b85e85f";
+const BUILD_ID = "v4.16.0-d2a06199ad";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
@@ -14,15 +14,15 @@ const VALID_BUILD_ID_RE = /^v\d+\.\d+\.\d+-[0-9a-f]{10}$/;
 const CRITICAL_PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-CXcmpSP3.js",
-  "./assets/index-C8z3FoUm.css"
+  "./assets/index-D74ecgnF.js",
+  "./assets/index-BQel2boK.css"
 ];
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-CXcmpSP3.js",
-  "./assets/index-C8z3FoUm.css",
+  "./assets/index-D74ecgnF.js",
+  "./assets/index-BQel2boK.css",
   "./manifest.json",
   "./favicon.svg",
   "./logo.png",
@@ -209,7 +209,9 @@ async function fetchAndCacheAsset(cache, assetUrl, isCritical) {
   const isHtmlAsset = assetUrl === './' || assetUrl.endsWith('.html');
 
   // Reuse verified candidate bytes already written by UpdateCoordinator if valid in CACHE_NAME
-  const preStaged = await cache.match(assetUrl);
+  const preStaged =
+    (await cache.match(assetUrl)) ||
+    (assetUrl === './' ? await cache.match('./index.html') : undefined);
   if (preStaged && preStaged.ok && preStaged.status === 200) {
     const parsedExisting = new URL(assetUrl, self.location.href);
     const modeExisting = isHtmlAsset ? 'navigate' : 'cors';
@@ -217,7 +219,12 @@ async function fetchAndCacheAsset(cache, assetUrl, isCritical) {
     if (isValidMimeForPath(parsedExisting.pathname, ctExisting, modeExisting)) {
       if (!isHtmlAsset) return;
       const existingHtml = await preStaged.clone().text().catch(() => '');
-      if (validateNavigationHtml(existingHtml).valid) return;
+      if (validateNavigationHtml(existingHtml).valid) {
+        if (assetUrl === './' && !(await cache.match('./'))) {
+          await safeCachePut(cache, './', preStaged.clone());
+        }
+        return;
+      }
       await cache.delete(assetUrl).catch(() => {});
     }
   }
@@ -259,7 +266,9 @@ async function verifyOwnStagedInventory() {
   const cache = await caches.open(CACHE_NAME);
   const missing = [];
   for (const assetUrl of CRITICAL_PRECACHE_ASSETS) {
-    const matched = await cache.match(assetUrl);
+    const matched =
+      (await cache.match(assetUrl)) ||
+      (assetUrl === './' ? await cache.match('./index.html') : undefined);
     if (!matched || matched.status !== 200) {
       missing.push(assetUrl);
       continue;
@@ -550,6 +559,26 @@ self.addEventListener('fetch', (event) => {
           new Response(JSON.stringify({ offline: true }), {
             status: 503,
             headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          })
+      )
+    );
+    return;
+  }
+
+  // P0-02 OTA Fix: Never serve stale active CACHE_NAME bytes for no-store/reload checks
+  // or immutable versioned /releases/<releaseId>/... assets.
+  if (
+    request.cache === 'no-store' ||
+    request.cache === 'reload' ||
+    url.pathname.includes('/releases/')
+  ) {
+    event.respondWith(
+      fetchWithTimeout(request, { cache: 'no-store' }, ASSET_TIMEOUT_MS).catch(
+        () =>
+          new Response('Versioned asset unavailable offline', {
+            status: 503,
+            statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
           })
       )
     );

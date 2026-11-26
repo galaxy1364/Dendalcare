@@ -327,8 +327,49 @@ function ClinicShellProviders({
     if (typeof document !== 'undefined') {
       document.documentElement.dataset.keyboardOpen = viewport.keyboardOpen ? 'true' : 'false';
       document.documentElement.dataset.windowClass = viewport.adaptiveClass;
+      document.documentElement.style.setProperty('--keyboard-inset-bottom', `${viewport.keyboardInsetPx}px`);
     }
-  }, [viewport.keyboardOpen, viewport.adaptiveClass]);
+  }, [viewport.keyboardOpen, viewport.keyboardInsetPx, viewport.adaptiveClass]);
+
+  const syncLocalUserToVerifiedSession = useCallback((session: VerifiedSessionState) => {
+    if (session.status !== 'authenticated' || !session.serverVerifiedRole) return;
+    if (session.branchId) {
+      setBranchId((prev) => (prev === session.branchId ? prev : session.branchId));
+    }
+    const targetRole = session.serverVerifiedRole as ClinicUserRole;
+    const emailLower = (session.supabaseEmail || '').trim().toLowerCase();
+    const candidateUsers = loadClinicUsers();
+    const matched =
+      (emailLower
+        ? candidateUsers.find(
+            (u) => (u.email || '').trim().toLowerCase() === emailLower && u.role === targetRole
+          )
+        : undefined) ||
+      candidateUsers.find((u) => u.role === targetRole) ||
+      (emailLower
+        ? candidateUsers.find((u) => (u.email || '').trim().toLowerCase() === emailLower)
+        : undefined);
+    if (matched) {
+      const aligned: ClinicUserAccount = {
+        ...matched,
+        role: targetRole,
+        branchId: session.branchId || matched.branchId,
+        tenantId: session.tenantId || matched.tenantId,
+      };
+      setCurrentUser((prev) => {
+        if (
+          prev.id === aligned.id &&
+          prev.role === aligned.role &&
+          prev.tenantId === aligned.tenantId &&
+          prev.branchId === aligned.branchId
+        ) {
+          return prev;
+        }
+        saveActiveUser(aligned);
+        return aligned;
+      });
+    }
+  }, []);
 
   // Post-commit shell handshake & explicit Auth bootstrap state machine
   // (Runs before parent UpdateProvider's useEffect so markShellCommitted() always precedes updateCoordinator.start())
@@ -341,6 +382,7 @@ function ClinicShellProviders({
       .then((session) => {
         setVerifiedSession(session);
         if (session.status === 'authenticated') {
+          syncLocalUserToVerifiedSession(session);
           appBootstrap.transition('READY');
         } else {
           appBootstrap.transition('DEGRADED', {
@@ -720,6 +762,7 @@ function ClinicShellProviders({
         .then((session) => {
           setVerifiedSession(session);
           if (session.status === 'authenticated') {
+            syncLocalUserToVerifiedSession(session);
             appBootstrap.transition('READY');
           } else {
             appBootstrap.transition('DEGRADED', {
@@ -732,7 +775,7 @@ function ClinicShellProviders({
       HapticEngine.selection();
       showSyncToast(`شعبه فعال تغییر یافت`, 2500);
     },
-    [showSyncToast]
+    [showSyncToast, syncLocalUserToVerifiedSession]
   );
 
   const switchUser = useCallback(
@@ -804,6 +847,7 @@ function ClinicShellProviders({
     if (res.session) {
       setVerifiedSession(res.session);
       if (res.session.status === 'authenticated') {
+        syncLocalUserToVerifiedSession(res.session);
         appBootstrap.transition('READY');
       } else {
         appBootstrap.transition('DEGRADED', {
@@ -817,7 +861,7 @@ function ClinicShellProviders({
     } else {
       HapticEngine.error();
     }
-  }, []);
+  }, [syncLocalUserToVerifiedSession]);
 
   const signOutSupabase = useCallback(async () => {
     setAuthBusy(true);

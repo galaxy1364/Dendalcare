@@ -9,7 +9,9 @@ import { Field, Input, Textarea, Select, Button, Badge } from '@/components/ui/F
 import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
 import { toJalaliStr } from '@/lib/jalali';
 import { getMutationOutcome } from '@/lib/supabaseGuardian';
-import { getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
+import { getRuntimeAuthStatus, getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
+import { resolveEffectiveRole } from '@/services/permissions/accessControl';
+import { loadActiveUser } from '@/lib/cloudSyncEngine';
 import {
   assessPatientAllergySafety,
   getPatientAllergyReviews,
@@ -172,7 +174,11 @@ export function PatientForm({
 
 // ==================== INFO TAB (WITH V15 4-STATE ALLERGY VERIFICATION) ====================
 export function InfoTab({ patient }: { patient: Patient }) {
-  const effectiveRole = getRuntimeServerVerifiedRole() || 'manager';
+  const effectiveRole = resolveEffectiveRole({
+    sessionStatus: getRuntimeAuthStatus(),
+    serverVerifiedRole: getRuntimeServerVerifiedRole(),
+    localRole: loadActiveUser().role,
+  });
   const [structuredReviews, setStructuredReviews] = useState<StructuredAllergyReview[] | undefined>(() =>
     getPatientAllergyReviews(patient.id)
   );
@@ -317,7 +323,11 @@ export function InfoTab({ patient }: { patient: Patient }) {
 
 // ==================== TREATMENTS TAB (VERIFIED WRITES + CLINICAL NOTES LIFECYCLE) ====================
 export function TreatmentsTab({ patientId, treatments }: { patientId: string; treatments: Treatment[] }) {
-  const effectiveRole = getRuntimeServerVerifiedRole() || 'manager';
+  const effectiveRole = resolveEffectiveRole({
+    sessionStatus: getRuntimeAuthStatus(),
+    serverVerifiedRole: getRuntimeServerVerifiedRole(),
+    localRole: loadActiveUser().role,
+  });
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

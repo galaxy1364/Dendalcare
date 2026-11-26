@@ -15,6 +15,7 @@ import {
 import {
   ACTIVE_TENANT_ID,
   getActiveBranchId,
+  getActiveTenantId,
 } from '@/services/authentication/authService';
 import {
   clearScopedCacheEntry,
@@ -421,7 +422,7 @@ export function reconcileServerRows<T>(params: {
 function resolveCurrentScope(table: TableName, filter?: { column: string; value: string | null } | null) {
   const activeUser = getActiveClinicUser();
   const branchId = getActiveBranchId();
-  const tenantId = activeUser.tenantId || ACTIVE_TENANT_ID;
+  const tenantId = getActiveTenantId() || activeUser.tenantId || ACTIVE_TENANT_ID;
   const userId = activeUser.id;
   return {
     tenantId,
@@ -744,6 +745,7 @@ export function useRealtimeTable<T extends { id: string }>(
     window.addEventListener('minadental-sync-event', handleSyncEvent);
     window.addEventListener('minadental-user-changed', handleScopeSwitch);
     window.addEventListener('minadental-branch-changed', handleScopeSwitch);
+    window.addEventListener('minadental-auth-changed', handleScopeSwitch);
 
     const activeScope = resolveCurrentScope(table, filter);
     const unsubscribeRealtime = subscribeToTableRealtime<T>(table, {

@@ -833,6 +833,7 @@ export class UpdateCoordinator {
 
         this.candidate = {
           manifest,
+          manifestUrl: fetchRes.endpointUrl,
           discoveredAt: new Date().toISOString(),
           source,
           verifiedAssetsCount: alreadyVerifiedSame ? this.candidate!.verifiedAssetsCount : 0,
@@ -948,6 +949,7 @@ export class UpdateCoordinator {
 
         const stageRes = await this.adapter.stageAndVerify({
           manifest,
+          manifestUrl: snapshotCandidate.manifestUrl ?? null,
           baseUrl: this.getBaseUrl(),
           signal: this.activeAbortController.signal,
           onProgress: (p) => {

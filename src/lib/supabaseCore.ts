@@ -49,7 +49,9 @@ export const SUPABASE_AUTH_STORAGE_KEY = `sb-${SUPABASE_PROJECT_REF}-auth-token`
 
 export const rawSupabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false,
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
     storageKey: SUPABASE_AUTH_STORAGE_KEY,
   },
   realtime: {

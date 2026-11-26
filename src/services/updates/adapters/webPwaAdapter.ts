@@ -324,6 +324,7 @@ export class WebPwaUpdateAdapter implements PlatformUpdateAdapter {
 
   public async stageAndVerify(input: {
     manifest: AuthoritativeReleaseManifest;
+    manifestUrl?: string | null;
     baseUrl: string;
     signal?: AbortSignal;
     onProgress?: (progress: UpdateProgress) => void;
@@ -365,6 +366,7 @@ export class WebPwaUpdateAdapter implements PlatformUpdateAdapter {
 
     const assetRes = await verifyReleaseAssets({
       manifest: input.manifest,
+      manifestUrl: input.manifestUrl ?? null,
       baseUrl: input.baseUrl,
       fetchFn: this.deps.fetchFn,
       timeoutMs: this.deps.assetTimeoutMs,

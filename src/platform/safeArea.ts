@@ -8,6 +8,7 @@ export interface ViewportMetrics {
   height: number;
   visualHeight: number;
   keyboardOpen: boolean;
+  keyboardInsetPx: number;
   breakpoint: ViewportBreakpoint;
   adaptiveClass: AdaptiveWindowClass;
   isCompactHeight: boolean;
@@ -21,6 +22,7 @@ function readViewportMetrics(): ViewportMetrics {
       height: 844,
       visualHeight: 844,
       keyboardOpen: false,
+      keyboardInsetPx: 0,
       breakpoint: 'mobile',
       adaptiveClass: 'compact',
       isCompactHeight: false,
@@ -30,7 +32,8 @@ function readViewportMetrics(): ViewportMetrics {
   const width = window.innerWidth;
   const height = window.innerHeight;
   const visualHeight = window.visualViewport?.height ?? height;
-  const keyboardOpen = height - visualHeight > 130;
+  const keyboardInsetPx = Math.max(0, Math.round(height - visualHeight));
+  const keyboardOpen = keyboardInsetPx > 130;
   const breakpoint: ViewportBreakpoint =
     width >= 1024 ? 'desktop' : width >= 768 ? 'tablet' : 'mobile';
 
@@ -39,6 +42,7 @@ function readViewportMetrics(): ViewportMetrics {
     height,
     visualHeight,
     keyboardOpen,
+    keyboardInsetPx: keyboardOpen ? keyboardInsetPx : 0,
     breakpoint,
     adaptiveClass: getAdaptiveBreakpoint(width),
     isCompactHeight: height < 660,

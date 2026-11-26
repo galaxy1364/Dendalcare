@@ -158,6 +158,7 @@ export interface LastCheckRecord {
 
 export interface CandidateReleaseRecord {
   manifest: AuthoritativeReleaseManifest;
+  manifestUrl?: string | null;
   discoveredAt: string;
   source: CheckTriggerSource;
   verifiedAssetsCount: number;

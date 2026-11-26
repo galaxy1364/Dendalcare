@@ -9,6 +9,8 @@ import {
 } from '@/lib/treatmentServices';
 import { HapticEngine } from '@/lib/hapticsAudio';
 import { loadActiveUser } from '@/lib/cloudSyncEngine';
+import { getRuntimeAuthStatus, getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
+import { resolveEffectiveRole } from '@/services/permissions/accessControl';
 
 const fmt = (n: number) => Number(n).toLocaleString('fa-IR');
 
@@ -28,8 +30,17 @@ type Props = {
 
 export function TreatmentForm({ treatment, treatmentServices, patients, onSaved }: Props) {
   const activeUser = useMemo(() => loadActiveUser(), []);
-  // Only Manager (Dr. Mehdi Amiri) can alter prices/discounts after initial record creation
-  const isPriceLocked = Boolean(treatment?.id && activeUser.role !== 'manager' && !activeUser.permissions?.canEditPricesAfterSave);
+  const effectiveRole = resolveEffectiveRole({
+    sessionStatus: getRuntimeAuthStatus(),
+    serverVerifiedRole: getRuntimeServerVerifiedRole(),
+    localRole: activeUser.role,
+  });
+  // Only verified Clinic Manager (Dr. Mehdi Amiri) can alter prices/discounts after initial record creation
+  const isPriceLocked = Boolean(
+    treatment?.id &&
+      effectiveRole !== 'manager' &&
+      !activeUser.permissions?.canEditPricesAfterSave
+  );
 
   const [patientId, setPatientId] = useState(treatment?.patient_id ?? '');
   const [toothNumbers, setToothNumbers] = useState(treatment?.tooth_numbers ?? '');

@@ -37,10 +37,24 @@ export function setRuntimeAuthSnapshot(params: {
   serverVerifiedRole?: string | null;
   tenantId?: string | null;
 }): void {
-  verifiedSessionAuthStatus = params.status;
-  verifiedSessionServerRole = params.serverVerifiedRole ?? null;
-  if (params.tenantId !== undefined) {
-    verifiedSessionTenantId = params.tenantId;
+  const nextStatus = params.status;
+  const nextRole = params.serverVerifiedRole ?? null;
+  const nextTenant = params.tenantId !== undefined ? params.tenantId : verifiedSessionTenantId;
+  const changed =
+    verifiedSessionAuthStatus !== nextStatus ||
+    verifiedSessionServerRole !== nextRole ||
+    verifiedSessionTenantId !== nextTenant;
+
+  verifiedSessionAuthStatus = nextStatus;
+  verifiedSessionServerRole = nextRole;
+  verifiedSessionTenantId = nextTenant;
+
+  if (changed && typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('minadental-auth-changed', {
+        detail: { status: nextStatus, serverVerifiedRole: nextRole, tenantId: nextTenant },
+      })
+    );
   }
 }
 
@@ -53,6 +67,7 @@ export interface VerifiedSessionState {
   serverVerifiedRole: string | null;
   tenantId: string;
   branchId: string;
+  accessibleBranches?: string[];
 }
 
 export function getActiveBranchId(): string {
@@ -274,7 +289,7 @@ export async function getVerifiedSupabaseSession(
       .eq('user_id', user.id)
       .eq('active', true);
 
-    const resolved = resolveMembershipSession({
+    let resolved = resolveMembershipSession({
       userId: user.id,
       email: user.email ?? null,
       requestedBranchId: branchId,
@@ -282,9 +297,58 @@ export async function getVerifiedSupabaseSession(
       membershipError: memErr,
     });
 
+    const validActiveMemberships = Array.isArray(memberships)
+      ? (memberships as ClinicMembershipRow[]).filter((m) => {
+          if (!m || m.active !== true) return false;
+          const role = typeof m.role === 'string' ? m.role.trim() : '';
+          const tId = typeof m.tenant_id === 'string' ? m.tenant_id.trim() : '';
+          const bId = typeof m.branch_id === 'string' ? m.branch_id.trim() : '';
+          if (!VALID_CLINIC_ROLES.has(role as AuthoritativeClinicRole)) return false;
+          if (!tId || !bId) return false;
+          if (m.all_branches === true && role !== 'manager') return false;
+          return true;
+        })
+      : [];
+
+    const branchSet = new Set<string>();
+    for (const m of validActiveMemberships) {
+      if (String(m.role).trim() === 'manager' && m.all_branches === true) {
+        for (const br of CLINIC_BRANCHES) branchSet.add(br.id);
+      } else if (m.branch_id) {
+        branchSet.add(String(m.branch_id).trim());
+      }
+    }
+    const accessibleBranches = Array.from(branchSet);
+
+    // If boot/sign-in did not pin an explicit branch and localStorage held a stale branch,
+    // recover to the user's highest-precedence active clinic membership branch instead of locking them out.
+    let recoveredBranchId: string | null = null;
+    if (!explicitBranchId && (resolved.status !== 'authenticated' || !resolved.tenantId) && validActiveMemberships.length > 0) {
+      const ranked = [...validActiveMemberships].sort((a, b) => {
+        const rankA = ROLE_PRECEDENCE[String(a.role).trim() as AuthoritativeClinicRole] ?? 99;
+        const rankB = ROLE_PRECEDENCE[String(b.role).trim() as AuthoritativeClinicRole] ?? 99;
+        return rankA - rankB;
+      });
+      const candidateBranch = String(ranked[0].branch_id).trim();
+      const fallbackResolved = resolveMembershipSession({
+        userId: user.id,
+        email: user.email ?? null,
+        requestedBranchId: candidateBranch,
+        memberships: memberships as ClinicMembershipRow[] | null | undefined,
+        membershipError: memErr,
+      });
+      if (fallbackResolved.status === 'authenticated' && fallbackResolved.tenantId) {
+        resolved = fallbackResolved;
+        recoveredBranchId = candidateBranch;
+      }
+    }
+
     if (resolved.status !== 'authenticated' || !resolved.tenantId) {
       setRuntimeAuthSnapshot({ status: 'unauthorized', serverVerifiedRole: null, tenantId: null });
-      return unauthorizedFallback;
+      return {
+        ...unauthorizedFallback,
+        accessibleBranches,
+      };
     }
 
     // Cross-verify against authoritative Postgres membership-only role resolver when rpc is available
@@ -299,6 +363,9 @@ export async function getVerifiedSupabaseSession(
         setRuntimeAuthSnapshot({ status: 'unauthorized', serverVerifiedRole: null, tenantId: null });
         return unauthorizedFallback;
       }
+      if (recoveredBranchId) {
+        setActiveBranchId(recoveredBranchId);
+      }
       setRuntimeAuthSnapshot({
         status: 'authenticated',
         serverVerifiedRole: rpcRole,
@@ -307,15 +374,22 @@ export async function getVerifiedSupabaseSession(
       return {
         ...resolved,
         serverVerifiedRole: rpcRole,
+        accessibleBranches,
       };
     }
 
+    if (recoveredBranchId) {
+      setActiveBranchId(recoveredBranchId);
+    }
     setRuntimeAuthSnapshot({
       status: 'authenticated',
       serverVerifiedRole: resolved.serverVerifiedRole,
       tenantId: resolved.tenantId,
     });
-    return resolved;
+    return {
+      ...resolved,
+      accessibleBranches,
+    };
   } catch {
     if (currentUnauthorizedFallback) {
       setRuntimeAuthSnapshot({ status: 'unauthorized', serverVerifiedRole: null, tenantId: null });

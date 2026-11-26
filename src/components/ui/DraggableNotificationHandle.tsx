@@ -176,14 +176,14 @@ export function DraggableNotificationHandle({ notifCount, open, onOpen }: Props)
       style={{
         top: `${yPct}%`,
         transform: `translate(${pullOffsetX}px, -50%) scale(${dragging ? 1.05 : 1})`,
-        width: '42px',
-        height: '86px',
+        width: '30px',
+        height: '76px',
         transition: dragging ? 'none' : 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)',
       }}
     >
       {/* Smooth Curved Right-Edge Ear Silhouette */}
       <svg
-        viewBox="0 0 40 86"
+        viewBox="0 0 32 76"
         aria-hidden="true"
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{
@@ -193,24 +193,25 @@ export function DraggableNotificationHandle({ notifCount, open, onOpen }: Props)
         }}
       >
         <path
-          d="M 40,0 C 40,13 31,15 20,18 C 8,21 3,30 3,43 C 3,56 8,65 20,68 C 31,71 40,73 40,86 Z"
+          className="right-bell-ear-path"
+          d="M 32,0 C 32,12 24,14 16,17 C 6,20 2,28 2,38 C 2,48 6,56 16,59 C 24,62 32,64 32,76 Z"
           fill="#FFFFFF"
           stroke="#CBD5E1"
-          strokeWidth="1.4"
+          strokeWidth="1.3"
         />
       </svg>
 
       {/* Filled Dark-Slate Swinging Bell + Red Alert Badge */}
-      <div className="relative z-10 flex items-center justify-center pl-1.5 pointer-events-none">
+      <div className="relative z-10 flex items-center justify-center pl-1 pointer-events-none">
         <Bell
-          size={19}
+          size={17}
           strokeWidth={2.2}
           fill={notifCount > 0 ? '#0F172A' : 'none'}
-          className={notifCount > 0 ? 'text-slate-900 bell-swing' : 'text-slate-700'}
+          className={notifCount > 0 ? 'text-slate-900 right-bell-icon bell-swing' : 'text-slate-700 right-bell-icon'}
         />
         {notifCount > 0 && (
           <span
-            className="absolute -top-2 -left-1.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-600 text-white text-[8.5px] font-black flex items-center justify-center border-2 border-white shadow-sm"
+            className="absolute -top-2 -left-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-600 text-white text-[8px] font-black flex items-center justify-center border-[1.5px] border-white dark:border-[#162738] shadow-sm"
             data-testid="right_edge_bell_badge"
           >
             {notifCount > 99 ? '99+' : notifCount.toLocaleString('fa-IR')}

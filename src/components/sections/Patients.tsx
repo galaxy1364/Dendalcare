@@ -20,7 +20,9 @@ import { subscribeGlobalFocus, emitGlobalFocus } from '@/lib/globalFocus';
 import { getMutationOutcome } from '@/lib/supabaseGuardian';
 import { HapticEngine } from '@/lib/hapticsAudio';
 import { ContextMenuTrigger } from '@/components/ui/ContextMenu';
-import { getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
+import { getRuntimeAuthStatus, getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
+import { resolveEffectiveRole } from '@/services/permissions/accessControl';
+import { loadActiveUser } from '@/lib/cloudSyncEngine';
 import { computePatientClinicalJourney } from '@/features/clinical-journey/patientJourney';
 import {
   assessPatientAllergySafety,
@@ -128,8 +130,13 @@ export function Patients() {
 
   const handleDeleteOrArchive = async () => {
     if (!deleteId) return;
+    const actorRole = resolveEffectiveRole({
+      sessionStatus: getRuntimeAuthStatus(),
+      serverVerifiedRole: getRuntimeServerVerifiedRole(),
+      localRole: loadActiveUser().role,
+    });
     const res = await archiveOrDeletePatientCommand({
-      actorRole: getRuntimeServerVerifiedRole() || 'manager',
+      actorRole,
       patientId: deleteId,
       treatments: treatments.filter((t) => t.patient_id === deleteId),
       appointments: appointments.filter((a) => a.patient_id === deleteId),

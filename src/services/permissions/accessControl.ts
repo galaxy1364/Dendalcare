@@ -67,8 +67,8 @@ export function isAuthorizedRole(role: ClinicUserRole | EffectiveClinicRole | st
  * V14 Strict fail-closed RBAC role resolver (zero permissive fallback):
  * - When sessionStatus is `'unauthorized'`, returns `'unauthorized'` (never `'assistant'`).
  * - When sessionStatus is `'authenticated'`, requires a verified `serverVerifiedRole` from `clinic_memberships`;
- *   if missing or invalid, returns `'unauthorized'` (never `'secretary'`).
- * - When sessionStatus is `'authenticated'`, `localRole` may only downgrade within the verified server role rank, never escalate.
+ *   if missing or invalid, returns `'unauthorized'` (never `'secretary'`). When valid, `serverVerifiedRole` is strictly authoritative
+ *   so stale `localStorage` persona state can neither escalate nor silently downgrade an authenticated manager.
  * - Only allows local user switching inside `'unauthenticated'` offline/single-device workflow when a valid role is present; otherwise fails closed to `'unauthorized'`.
  */
 export function resolveEffectiveRole(params: {
@@ -102,9 +102,6 @@ export function resolveStrictMembershipRole(params: {
   }
   if (params.sessionStatus === 'authenticated') {
     if (!serverRole) return 'unauthorized';
-    if (localRole && ROLE_PRIVILEGE_RANK[localRole] < ROLE_PRIVILEGE_RANK[serverRole]) {
-      return localRole;
-    }
     return serverRole;
   }
   if (serverRole) return serverRole;

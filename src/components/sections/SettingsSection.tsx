@@ -68,7 +68,8 @@ import { detectPlatformCapabilities } from '@/lib/platformEngine';
 import { HapticEngine } from '@/lib/hapticsAudio';
 import { verifyServerMutation } from '@/lib/supabaseGuardian';
 import { Sun, Moon, Monitor, Type, Gauge, Cpu, Target } from 'lucide-react';
-import { ACTIVE_TENANT_ID, CLINIC_BRANCHES, getActiveBranchId, setActiveBranchId } from '@/services/authentication/authService';
+import { ACTIVE_TENANT_ID, CLINIC_BRANCHES, getActiveBranchId } from '@/services/authentication/authService';
+import { useClinicShell } from '@/app/AppProviders';
 
 type SettingsTab = 'clinic' | 'diagnostics' | 'integrations' | 'ads';
 
@@ -153,8 +154,8 @@ export function SettingsSection({
               onClick={() => setTab(ch.key)}
               className={`px-3 py-1.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all haptic shrink-0 flex items-center gap-1.5 ${
                 tab === ch.key
-                  ? 'bg-gradient-to-r from-slate-700 to-slate-900 text-white shadow-sm'
-                  : 'bg-gray-100/90 text-gray-600'
+                  ? 'bg-gradient-to-r from-slate-700 to-slate-900 dark:from-indigo-600 dark:to-violet-700 text-white shadow-sm'
+                  : 'bg-gray-100/90 dark:bg-slate-800 text-gray-600 dark:text-slate-300'
               }`}
             >
               {ch.icon}
@@ -334,7 +335,7 @@ function ClinicSettingsTab({
   }, [settings]);
 
   const [settingsMsg, setSettingsMsg] = useState<{ type: 'success' | 'warning' | 'error'; text: string } | null>(null);
-  const [branchId, setBranchId] = useState<string>(() => getActiveBranchId());
+  const { effectiveRole, verifiedSession, branchId, switchBranch } = useClinicShell();
   const appearance = useAppearanceSettings();
   const platformCaps = detectPlatformCapabilities();
 
@@ -483,7 +484,7 @@ function ClinicSettingsTab({
             <Sun size={17} className="text-amber-500" />
             ظاهر سیستم، Dynamic Type و Reduce Motion
           </h3>
-          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200">
+          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800">
             {appearance.resolvedTheme === 'dark' ? 'تیره فعال' : 'روشن فعال'}
           </span>
         </div>
@@ -679,56 +680,66 @@ function ClinicSettingsTab({
       {/* Single Verified Release & Update Center (V7 UpdateCoordinator) */}
       <div
         data-testid="settings_unified_update_center"
-        className="p-4 rounded-3xl bg-white text-slate-900 border border-slate-200/95 shadow-sm space-y-3"
-        style={{ background: 'linear-gradient(155deg, #FFFFFF 0%, #F5F3FF 60%, #EDE9FE 100%)' }}
+        className="settings-update-center-card p-4 rounded-3xl text-slate-900 dark:text-slate-100 border border-slate-200/95 dark:border-slate-700/80 shadow-sm space-y-3"
       >
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shadow-sm">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-700 dark:text-indigo-300 shadow-sm shrink-0">
               <RefreshCw size={20} className={checkingUpdates || updateSnap.state === 'CHECKING' ? 'animate-spin' : ''} />
             </div>
-            <div>
-              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+            <div className="min-w-0">
+              <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 به‌روزرسانی تأییدشده برنامه مینادنتال
               </h3>
-              <p className="text-[11px] text-slate-600 font-semibold flex items-center flex-wrap gap-1">
+              <div className="text-[11px] text-slate-600 dark:text-slate-300 font-semibold flex items-center flex-wrap gap-1.5 mt-1">
                 <span>نسخه در حال اجرا:</span>
-                <strong dir="ltr" className="inline-block text-slate-900 font-mono">v{updateSnap.installed.semver}</strong>
+                <strong dir="ltr" className="rtl-bidi-isolate text-slate-900 dark:text-slate-100 font-mono">
+                  v{updateSnap.installed.semver}
+                </strong>
                 <span>• انتشار:</span>
-                <strong dir="ltr" className="inline-block text-emerald-700 font-mono" data-testid="installed_build_badge">#{updateSnap.installed.releaseSequence} ({updateSnap.installed.releaseId})</strong>
-              </p>
+                <strong
+                  dir="ltr"
+                  data-testid="installed_build_badge"
+                  className="rtl-bidi-isolate px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 font-mono text-[10.5px]"
+                >
+                  #{updateSnap.installed.releaseSequence} ({updateSnap.installed.releaseId})
+                </strong>
+              </div>
             </div>
           </div>
-          <span dir="ltr" className="inline-block text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-extrabold">
+          <span
+            dir="ltr"
+            className="rtl-bidi-isolate text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 font-mono font-extrabold"
+          >
             {updateSnap.channel.toUpperCase()} • {updateSnap.state}
           </span>
         </div>
 
         {/* Real Status Metadata Grid (Zero Fake Build/Install Dates) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10.5px] bg-white/90 p-2.5 rounded-2xl border border-slate-200">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10.5px] bg-white/90 dark:bg-slate-900/70 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700/80">
           <div>
-            <span className="text-slate-500 block">وضعیت شبکه</span>
-            <strong className={updateSnap.isOnline ? 'text-emerald-700' : 'text-amber-700'}>
+            <span className="text-slate-500 dark:text-slate-400 block">وضعیت شبکه</span>
+            <strong className={updateSnap.isOnline ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}>
               {updateSnap.isOnline ? 'آنلاین' : 'آفلاین'}
             </strong>
           </div>
           <div>
-            <span className="text-slate-500 block">آخرین بررسی</span>
-            <strong className="text-slate-800 font-mono">
+            <span className="text-slate-500 dark:text-slate-400 block">آخرین بررسی</span>
+            <strong className="text-slate-800 dark:text-slate-200 font-mono">
               {updateSnap.lastCheck?.checkedAt
                 ? new Date(updateSnap.lastCheck.checkedAt).toLocaleTimeString('fa-IR')
                 : 'هنوز بررسی نشده'}
             </strong>
           </div>
           <div>
-            <span className="text-slate-500 block">نتیجه آخرین بررسی</span>
-            <strong className="text-slate-800">
+            <span className="text-slate-500 dark:text-slate-400 block">نتیجه آخرین بررسی</span>
+            <strong className="text-slate-800 dark:text-slate-200">
               {updateSnap.lastCheck?.outcome || '—'}
             </strong>
           </div>
           <div>
-            <span className="text-slate-500 block">نسخه آماده</span>
-            <strong className="text-indigo-700 font-mono">
+            <span className="text-slate-500 dark:text-slate-400 block">نسخه آماده</span>
+            <strong className="text-indigo-700 dark:text-indigo-300 font-mono">
               {updateSnap.candidate
                 ? `v${updateSnap.candidate.manifest.semver} (#${updateSnap.candidate.manifest.releaseSequence})`
                 : 'ندارد'}
@@ -738,18 +749,18 @@ function ClinicSettingsTab({
 
         {/* Platform Honest Limitation Notice */}
         {updateSnap.capabilities.honestLimitationFa && (
-          <p className="text-[10.5px] text-slate-600 leading-relaxed bg-white/70 px-3 py-2 rounded-xl border border-slate-200/80">
+          <p className="text-[10.5px] text-slate-600 dark:text-slate-300 leading-relaxed bg-white/75 dark:bg-slate-900/55 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
             {updateSnap.capabilities.honestLimitationFa}
           </p>
         )}
 
         {/* Auto Update at Safe Point Toggle */}
-        <div className="p-3 pr-7 sm:pr-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-between gap-2.5 shadow-sm">
+        <div className="p-3 rounded-2xl bg-white dark:bg-slate-900/75 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between gap-2.5 shadow-sm">
           <div className="min-w-0 flex-1">
-            <span className="text-xs font-extrabold text-slate-900 block">
+            <span className="text-xs font-extrabold text-slate-900 dark:text-slate-100 block">
               به‌روزرسانی خودکار در نقطه امن (Safe-Point Auto-Update)
             </span>
-            <span className="text-[10.5px] text-slate-600 leading-relaxed block">
+            <span className="text-[10.5px] text-slate-600 dark:text-slate-300 leading-relaxed block">
               بررسی دوره‌ای هنگام باز بودن برنامه و فعال‌سازی فقط در نبود فرم باز یا صف آفلاین
             </span>
           </div>
@@ -761,13 +772,13 @@ function ClinicSettingsTab({
               onChange={(e) => handleToggleAutoUpdate(e.target.checked)}
               className="sr-only peer"
             />
-            <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
           </label>
         </div>
 
         {/* Safe-Point Blockers Notice */}
         {!updateSnap.safePoint.isSafe && (
-          <div className="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold">
+          <div className="p-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-[11px] font-bold">
             فعال‌سازی به‌روزرسانی به دلیل حفاظت از داده‌ها در صف انتظار است: {updateSnap.safePoint.blockers.map((b) => b.reason).join(' • ')}
           </div>
         )}
@@ -843,22 +854,22 @@ function ClinicSettingsTab({
                 ? 'به‌روزرسانی از فروشگاه رسمی'
                 : 'نشانی فروشگاه رسمی تنظیم نشده است'}
             </button>
-          ) : loadActiveUser().role === 'manager' ? (
+          ) : effectiveRole === 'manager' ? (
             <button
               type="button"
               onClick={handlePublishAndInstallNextBuild}
               disabled={checkingUpdates}
               data-testid="manager_publish_new_build_btn"
-              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white hover:bg-violet-50 border border-violet-300 text-violet-900 text-xs font-extrabold shadow-sm active:scale-95 transition-all disabled:opacity-50"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white dark:bg-slate-800 hover:bg-violet-50 dark:hover:bg-slate-700 border border-violet-300 dark:border-violet-700 text-violet-900 dark:text-violet-200 text-xs font-extrabold shadow-sm active:scale-95 transition-all disabled:opacity-50"
             >
-              <Zap size={14} className="text-amber-600" />
+              <Zap size={14} className="text-amber-600 dark:text-amber-400" />
               ارسال اعلان بررسی به دستگاه‌های کلینیک
             </button>
           ) : (
             <button
               type="button"
               onClick={() => clearAllCachesAndHardReload()}
-              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-xs font-extrabold active:scale-95 transition-all"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-xs font-extrabold active:scale-95 transition-all"
             >
               <RotateCcw size={14} />
               پاک‌سازی کش پوسته و بارگذاری مجدد
@@ -920,14 +931,14 @@ function ClinicSettingsTab({
       </div>
 
       {/* Clinic Base Definitions & Companies Card */}
-      <div className="p-3.5 rounded-3xl bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200/80 shadow-sm flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-500/20">
+      <div className="p-3.5 rounded-3xl bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 dark:from-slate-800/90 dark:via-slate-800/80 dark:to-indigo-950/60 border border-purple-200/80 dark:border-indigo-800/60 shadow-sm flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-500/20 shrink-0">
             <Building2 size={18} />
           </div>
-          <div>
-            <h3 className="text-xs font-bold text-purple-950">تعاریف پایه و شرکت‌های کلینیک</h3>
-            <p className="text-[11px] text-purple-700/80">لابراتوارها، تأمین‌کنندگان، برندهای ایمپلنت و یونیت‌ها</p>
+          <div className="min-w-0">
+            <h3 className="text-xs font-bold text-purple-950 dark:text-slate-100">تعاریف پایه و شرکت‌های کلینیک</h3>
+            <p className="text-[11px] text-purple-700/80 dark:text-slate-300">لابراتوارها، تأمین‌کنندگان، برندهای ایمپلنت و یونیت‌ها</p>
           </div>
         </div>
         <button
@@ -959,7 +970,7 @@ function ClinicSettingsTab({
                   data-testid={`branch_switch_${br.id}`}
                   onClick={() => {
                     HapticEngine.selection();
-                    setBranchId(setActiveBranchId(br.id));
+                    switchBranch(br.id);
                   }}
                   className={`px-2.5 py-1.5 rounded-[12px] text-[11px] font-bold border transition-colors ${
                     activeBr
@@ -976,7 +987,7 @@ function ClinicSettingsTab({
         {fields.map(f => (
           <Field key={f.key} label={f.label}>
             <div className="relative">
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">{f.icon}</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400">{f.icon}</span>
               <Input value={values[f.key] ?? ''} onChange={e => setValues({ ...values, [f.key]: e.target.value })} placeholder={f.placeholder} className="pr-9" />
             </div>
           </Field>
@@ -987,12 +998,12 @@ function ClinicSettingsTab({
       {/* Clean Multi-Platform Hub (Moved from Dashboard Top into Settings) */}
       <div className="glass-card p-4 space-y-3" data-testid="settings_version_download_card">
         <div className="flex items-center justify-between gap-2">
-          <div>
-            <h3 className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
-              <Download size={16} className="text-indigo-600" />
+          <div className="min-w-0">
+            <h3 className="text-xs font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <Download size={16} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
               دانلود و نصب نسخه‌های برنامه (آیفون، اندروید، آیپد و ویندوز)
             </h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
               نسخه رسمی v{CURRENT_APP_VERSION} (بیلد #{CURRENT_APP_BUILD}) • پکیج کامل ۴ پلتفرم
             </p>
           </div>
@@ -1063,30 +1074,30 @@ function ClinicSettingsTab({
       {(() => {
         const activeUser = loadActiveUser();
         const isManagerOrUpgrader =
-          activeUser.role === 'manager' ||
-          Boolean(activeUser.canPublishUpdate) ||
-          Boolean(activeUser.permissions?.canPublishOtaUpdate);
+          effectiveRole === 'manager' ||
+          (verifiedSession.status !== 'authenticated' &&
+            (Boolean(activeUser.canPublishUpdate) || Boolean(activeUser.permissions?.canPublishOtaUpdate)));
         if (!isManagerOrUpgrader) return null;
         return (
           <div
             data-testid="settings_manager_audit_section"
-            className="p-4 rounded-3xl bg-white text-slate-900 border border-indigo-200 shadow-sm space-y-3"
+            className="p-4 rounded-3xl bg-white dark:bg-slate-900/85 text-slate-900 dark:text-slate-100 border border-indigo-200 dark:border-indigo-800/80 shadow-sm space-y-3"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-700 dark:text-indigo-300 shrink-0">
                   <ShieldCheck size={20} />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <h3 className="text-xs font-black text-slate-900">
+                    <h3 className="text-xs font-black text-slate-900 dark:text-slate-100">
                       فوق ممیزی، گزارش سلامت و قفل معماری سیستم
                     </h3>
-                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200">
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800">
                       مختص مدیر و ارتقادهنده
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-600 mt-0.5">
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
                     دسترسی انحصاری دکتر مهدی امیری • بررسی زنده ۹ فاز، دفتر کل ممیزی و قفل نسخه
                   </p>
                 </div>
@@ -1108,7 +1119,7 @@ function ClinicSettingsTab({
 
       {/* Cloud & Local Backup */}
       <div className="glass-card p-4 space-y-2.5">
-        <h3 className="text-xs font-bold text-gray-700 flex items-center gap-2">
+        <h3 className="text-xs font-bold text-gray-700 dark:text-slate-100 flex items-center gap-2">
           <Database size={16} className="text-blue-500" />
           پشتیبان‌گیری و بازیابی اطلاعات
         </h3>
@@ -1213,10 +1224,10 @@ function ZeroDeleteVaultCard() {
             <ShieldCheck size={20} />
           </div>
           <div>
-            <h3 className="text-sm font-black text-gray-800">
+            <h3 className="text-sm font-black text-gray-800 dark:text-slate-100">
               گاوصندوق ضدحذف و بازیابی آنی (Zero-Delete Vault)
             </h3>
-            <p className="text-[11px] text-emerald-700 font-semibold">
+            <p className="text-[11px] text-emerald-700 dark:text-emerald-300 font-semibold">
               شناسه رهگیری: <span className="font-mono">TRC-MINA-VAULT-9006-F</span> • هیچ رکوردی هرگز حذف دائم نمی‌شود
             </p>
           </div>
@@ -1224,7 +1235,7 @@ function ZeroDeleteVaultCard() {
         <button
           type="button"
           onClick={loadVault}
-          className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold flex items-center gap-1"
+          className="px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/70 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold flex items-center gap-1"
         >
           <RefreshCw size={12} />
           بروزرسانی
@@ -1232,21 +1243,21 @@ function ZeroDeleteVaultCard() {
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-2xl bg-emerald-50/80 border border-emerald-200/70 p-2.5">
-          <p className="text-[10px] text-emerald-800 font-bold">جداول آینه‌شده IndexedDB</p>
-          <p className="text-base font-black text-emerald-700 mt-0.5">
+        <div className="rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/60 p-2.5">
+          <p className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold">جداول آینه‌شده IndexedDB</p>
+          <p className="text-base font-black text-emerald-700 dark:text-emerald-200 mt-0.5">
             {(stats?.mirroredTables ?? 0).toLocaleString('fa-IR')} / ۲۰
           </p>
         </div>
-        <div className="rounded-2xl bg-sky-50/80 border border-sky-200/70 p-2.5">
-          <p className="text-[10px] text-sky-800 font-bold">کل رکوردهای محافظت‌شده</p>
-          <p className="text-base font-black text-sky-700 mt-0.5">
+        <div className="rounded-2xl bg-sky-50/80 dark:bg-sky-950/40 border border-sky-200/70 dark:border-sky-800/60 p-2.5">
+          <p className="text-[10px] text-sky-800 dark:text-sky-300 font-bold">کل رکوردهای محافظت‌شده</p>
+          <p className="text-base font-black text-sky-700 dark:text-sky-200 mt-0.5">
             {(stats?.totalMirroredRecords ?? 0).toLocaleString('fa-IR')}
           </p>
         </div>
-        <div className="rounded-2xl bg-amber-50/80 border border-amber-200/70 p-2.5">
-          <p className="text-[10px] text-amber-800 font-bold">آرشیو قابل بازیابی</p>
-          <p className="text-base font-black text-amber-700 mt-0.5">
+        <div className="rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/60 p-2.5">
+          <p className="text-[10px] text-amber-800 dark:text-amber-300 font-bold">آرشیو قابل بازیابی</p>
+          <p className="text-base font-black text-amber-700 dark:text-amber-200 mt-0.5">
             {(stats?.unrestoredDeletedCount ?? 0).toLocaleString('fa-IR')}
           </p>
         </div>
@@ -1254,7 +1265,7 @@ function ZeroDeleteVaultCard() {
 
       {vaultMsg && (
         <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 ${
-          vaultMsg.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+          vaultMsg.ok ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800' : 'bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800'
         }`}>
           {vaultMsg.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
           <span>{vaultMsg.text}</span>
@@ -1262,9 +1273,9 @@ function ZeroDeleteVaultCard() {
       )}
 
       {archived.length === 0 ? (
-        <div className="rounded-2xl bg-slate-50 border border-slate-200/80 p-3 text-center">
-          <p className="text-xs font-bold text-slate-700">گاوصندوق آماده و فعال است</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">
+        <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700/80 p-3 text-center">
+          <p className="text-xs font-bold text-slate-700 dark:text-slate-100">گاوصندوق آماده و فعال است</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-300 mt-0.5">
             در صورت حذف هر پرونده، نوبت، چک یا درمان، نسخه کامل آن خودکار اینجا بایگانی شده و با یک کلیک به Cloud SQL بازمی‌گردد.
           </p>
         </div>
