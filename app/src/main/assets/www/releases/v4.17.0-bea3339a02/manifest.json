@@ -1,0 +1,97 @@
+{
+  "name": "مینادنتال - سیستم هوشمند مدیریت دندانپزشکی",
+  "short_name": "مینادنتال",
+  "description": "سیستم مدیریت جامع کلینیک دندانپزشکی با پرونده الکترونیک، چارت پالمر، رادار هوشمند یادآوری و همگام‌سازی ابری",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "edge_side_panel": {
+    "preferred_width": 440
+  },
+  "background_color": "#2E1065",
+  "theme_color": "#2E1065",
+  "dir": "rtl",
+  "lang": "fa",
+  "categories": ["medical", "productivity", "health"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "نوبت‌های امروز",
+      "short_name": "نوبت‌ها",
+      "description": "مشاهده تقویم و نوبت‌های امروز کلینیک",
+      "url": "./#/appointments",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "پرونده بیماران",
+      "short_name": "بیماران",
+      "description": "جستجو و تشکیل پرونده بیمار جدید",
+      "url": "./#/patients",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "چارت و درمان",
+      "short_name": "درمان",
+      "description": "ثبت طرح درمان و چارت پالمر/FDI",
+      "url": "./#/treatments",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "امور مالی و چک‌ها",
+      "short_name": "مالی",
+      "description": "گزارش مالی، اقساط و استعلام صیادی",
+      "url": "./#/finance",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

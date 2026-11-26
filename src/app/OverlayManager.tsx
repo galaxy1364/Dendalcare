@@ -219,7 +219,7 @@ export function OverlayManager() {
         icon={<User size={20} />}
         color="#087C76"
       >
-        <div className="space-y-4">
+        <div className="space-y-4" data-testid="user_account_modal">
           <div
             className="rounded-[20px] p-4 text-white shadow-md"
             style={{ background: 'linear-gradient(135deg, #142E43, #087C76)' }}

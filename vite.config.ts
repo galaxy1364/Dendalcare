@@ -201,14 +201,38 @@ function syncDeterministicReleasePlugin(): Plugin {
         ? new Date(Date.parse(publishedAt) + ttlDays * 24 * 60 * 60 * 1000).toISOString()
         : undefined;
 
-      const distAssetFiles = walkFilesRelative(assetsDir).map((rel) => `assets/${rel}`);
+      // 0b. GE-0007 P0-PWA: Never let Vite hash manifest.json into dist/assets/manifest-*.json,
+      // because relative start_url ("./"), scope ("./"), and icon paths ("./icon-192.png") would
+      // resolve under /assets/ (404 icons + out-of-scope page -> Chrome "This app cannot be installed").
       const distIndexPath = path.join(distDir, 'index.html');
+      let rawBuiltHtml = fs.readFileSync(distIndexPath, 'utf8');
+      rawBuiltHtml = rawBuiltHtml.replace(
+        /<link\b[^>]*rel=["']manifest["'][^>]*>/i,
+        '<link rel="manifest" href="./manifest.json" />'
+      );
+      fs.writeFileSync(distIndexPath, rawBuiltHtml, 'utf8');
+
+      // Remove any duplicate hashed manifest-*.json emitted under dist/assets/
+      for (const entry of fs.readdirSync(assetsDir)) {
+        if (/^manifest-[A-Za-z0-9_-]+\.json$/i.test(entry)) {
+          fs.unlinkSync(path.join(assetsDir, entry));
+        }
+      }
+
+      // Guarantee authoritative public/manifest.json is copied to dist/manifest.json and root manifest.json
+      const publicManifestPath = path.join(publicDir, 'manifest.json');
+      const distManifestJsonPath = path.join(distDir, 'manifest.json');
+      if (fs.existsSync(publicManifestPath)) {
+        fs.copyFileSync(publicManifestPath, distManifestJsonPath);
+        fs.copyFileSync(publicManifestPath, path.resolve(__dirname, 'manifest.json'));
+      }
+
+      const distAssetFiles = walkFilesRelative(assetsDir).map((rel) => `assets/${rel}`);
       const preStampHtml = fs.readFileSync(distIndexPath, 'utf8');
       const swTemplatePath = path.join(publicDir, 'sw.js');
       const preStampSw = fs.existsSync(swTemplatePath)
         ? fs.readFileSync(swTemplatePath, 'utf8')
         : '';
-      const distManifestJsonPath = path.join(distDir, 'manifest.json');
       const distManifestJsonBuf = fs.existsSync(distManifestJsonPath)
         ? fs.readFileSync(distManifestJsonPath)
         : Buffer.alloc(0);

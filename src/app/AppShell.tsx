@@ -11,7 +11,6 @@ import {
   shouldCompleteRtlEdgeBackSwipe,
   type EdgeBackTracker,
 } from '@/platform/gestures';
-import { DraggableNotificationHandle } from '@/components/ui/DraggableNotificationHandle';
 import { IOSReminderPopup } from '@/components/ui/IOSReminderPopup';
 import { AuroraBackground } from '@/design-system/components/AuroraBackground';
 import { ContextualToolbar } from '@/design-system/primitives/AdaptiveLayout';
@@ -31,7 +30,7 @@ import { useShellKeyboardAndScroll } from './shell/useShellKeyboardAndScroll';
  * - NavigationRail (Tablet/Desktop) & FloatingDock (Mobile QBank 4+1 pill)
  * - ShellAccessibilityBar (WCAG 2.2 AA Skip-Link & Persian route live announcer)
  * - ShellStatusBanners (Offline, RBAC, Guardian, Queue, Signed Atomic OTA)
- * - ContextualToolbar, IOSReminderPopup, AppRouter, DraggableNotificationHandle & OverlayManager
+ * - ContextualToolbar, IOSReminderPopup, AppRouter & OverlayManager (single authoritative notification bell in AdaptiveTopBar/NavigationRail)
  */
 export function AppShell() {
   const {
@@ -182,7 +181,7 @@ export function AppShell() {
             onTouchCancel={() => {
               edgeSwipeRef.current = cancelRtlEdgeBackSwipe(edgeSwipeRef.current);
             }}
-            className={`app-shell-main pr-9 pl-2.5 sm:pr-9 sm:pl-3.5 md:pr-9 md:pl-5 xl:pr-10 xl:pl-8 desktop-scroll focus:outline-none ${
+            className={`app-shell-main px-3 sm:px-4 md:px-6 xl:px-8 desktop-scroll focus:outline-none ${
               activeRoute === 'dashboard' ? 'main-no-scroll-home py-1.5' : 'py-2.5 pb-6'
             }`}
           >
@@ -251,12 +250,6 @@ export function AppShell() {
           />
         </div>
       </div>
-
-      <DraggableNotificationHandle
-        notifCount={notifCount}
-        open={notifOpen}
-        onOpen={() => setNotifOpen(true)}
-      />
 
       <OverlayManager />
     </div>

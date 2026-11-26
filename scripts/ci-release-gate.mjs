@@ -191,6 +191,34 @@ export function verifyLocalReleaseDirectory(distDir, options = {}) {
     'dist/404.html must match dist/index.html byte-for-byte'
   );
 
+  // GE-0007 P0-PWA: Verify root ./manifest.json (NEVER Vite-hashed /assets/manifest-*.json) and 192/512 PNG icons
+  const manifestTag = html.match(/<link\b[^>]*rel=["']manifest["'][^>]*>/i)?.[0] || '';
+  const manifestHref = manifestTag.match(/\bhref=["']([^"']+)["']/i)?.[1] || '';
+  assert.equal(
+    manifestHref,
+    './manifest.json',
+    `CRITICAL PWA BUG: dist/index.html manifest href must be "./manifest.json", got ${JSON.stringify(manifestHref)}`
+  );
+  const localPwaManifestPath = path.join(absDist, 'manifest.json');
+  assert.ok(fs.existsSync(localPwaManifestPath), 'dist/manifest.json missing');
+  const pwaManifest = JSON.parse(fs.readFileSync(localPwaManifestPath, 'utf8'));
+  assert.ok(pwaManifest.id && pwaManifest.start_url && pwaManifest.scope, 'dist/manifest.json missing id/start_url/scope');
+  assert.ok(['standalone', 'fullscreen', 'minimal-ui'].includes(pwaManifest.display), `Invalid manifest display: ${pwaManifest.display}`);
+  let hasLocal192 = false;
+  let hasLocal512 = false;
+  for (const icon of pwaManifest.icons || []) {
+    const cleanIcon = String(icon.src || '').replace(/^\.\//, '');
+    const iconFile = path.join(absDist, cleanIcon);
+    assert.ok(fs.existsSync(iconFile), `dist/manifest.json icon missing on disk: ${cleanIcon}`);
+    const iconBuf = fs.readFileSync(iconFile);
+    assert.equal(iconBuf.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', `Manifest icon is not valid PNG: ${cleanIcon}`);
+    const w = iconBuf.readUInt32BE(16);
+    const h = iconBuf.readUInt32BE(20);
+    if (w === 192 && h === 192) hasLocal192 = true;
+    if (w === 512 && h === 512) hasLocal512 = true;
+  }
+  assert.ok(hasLocal192 && hasLocal512, 'dist/manifest.json must reference valid 192x192 and 512x512 PNG icons');
+
   // Verify web, android, and ios pointers exist and are coherent
   const pointerFiles = [
     ['release-pointer.json', 'web'],
@@ -404,6 +432,29 @@ export async function verifyRemoteDeployment(baseUrl, options = {}) {
     assertValidMime(fontRel, fontRes.headers.get('content-type'));
     const fontBuf = Buffer.from(await fontRes.arrayBuffer());
     assertValidFontMagicBytes(fontRel, fontBuf, 'remote-root-font');
+  }
+
+  // 6. GE-0007 P0-PWA: Verify live Chrome PWA installability (root ./manifest.json, scope, 192/512 PNGs)
+  const remoteManifestTag = indexHtml.match(/<link\b[^>]*rel=["']manifest["'][^>]*>/i)?.[0] || '';
+  const remoteManifestHref = remoteManifestTag.match(/\bhref=["']([^"']+)["']/i)?.[1] || '';
+  assert.equal(
+    remoteManifestHref,
+    './manifest.json',
+    `CRITICAL PWA BUG: Remote index.html manifest href must be "./manifest.json", got ${JSON.stringify(remoteManifestHref)}`
+  );
+  const remotePwaManifestUrl = new URL(remoteManifestHref, normalizedBase).toString();
+  const remotePwaRes = await fetch(remotePwaManifestUrl, { cache: 'no-store' });
+  assert.equal(remotePwaRes.status, 200, `Remote manifest.json returned HTTP ${remotePwaRes.status}`);
+  assertValidMime('manifest.json', remotePwaRes.headers.get('content-type'));
+  const remotePwa = await remotePwaRes.json();
+  const remoteScope = new URL(remotePwa.scope || './', remotePwaManifestUrl).toString();
+  assert.equal(remoteScope, normalizedBase, `Remote manifest scope (${remoteScope}) must equal ${normalizedBase}`);
+  for (const requiredIcon of ['icon-192.png', 'icon-512.png']) {
+    const iconUrl = new URL(requiredIcon, remotePwaManifestUrl).toString();
+    const iconRes = await fetch(iconUrl, { cache: 'no-store' });
+    assert.equal(iconRes.status, 200, `Remote PWA icon ${iconUrl} returned HTTP ${iconRes.status}`);
+    const iconBuf = Buffer.from(await iconRes.arrayBuffer());
+    assert.equal(iconBuf.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', `Remote PWA icon ${requiredIcon} is not a valid PNG`);
   }
 
   return {

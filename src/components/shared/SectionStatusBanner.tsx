@@ -67,29 +67,55 @@ export function SectionStatusBanner({
   }
 
   if (status === 'unauthorized') {
+    const rawMsg = errorMessage || '';
+    const isPermissionDenied = /permission denied|42501|not authorized|rls/i.test(rawMsg);
     return (
       <div
         role="alert"
         data-testid="section_status_unauthorized"
-        className="rounded-card px-3.5 py-2.5 bg-[#FFF1F2] dark:bg-[#2A1218] border border-[#FECDD3] dark:border-[#7F1D1D] flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 text-xs font-bold text-[#AD293C] dark:text-[#FDA4AF]"
+        className="rounded-card px-3.5 py-2.5 bg-[#FFF1F2] dark:bg-[#2A1218] border border-[#FECDD3] dark:border-[#7F1D1D] flex flex-wrap items-center justify-between gap-2.5 text-xs font-bold text-[#AD293C] dark:text-[#FDA4AF]"
       >
         <div className="flex items-start gap-2 min-w-0 flex-1">
           <Lock size={16} className="shrink-0 mt-0.5" />
-          <span className="leading-relaxed">
-            {errorMessage || 'دسترسی این نقش به اطلاعات این بخش محدود است. لطفاً با حساب مجاز وارد شوید.'}
-          </span>
+          <div className="min-w-0 space-y-0.5">
+            <p className="leading-relaxed">
+              {isPermissionDenied
+                ? 'دسترسی ناشناس به پرونده بیماران برای امنیت داده‌ها مسدود است. لطفاً با حساب کاربری مجاز کلینیک وارد شوید.'
+                : rawMsg || 'دسترسی این نقش به اطلاعات این بخش محدود است. لطفاً با حساب مجاز وارد شوید.'}
+            </p>
+            {isPermissionDenied && rawMsg && (
+              <p dir="ltr" className="text-[11px] font-mono opacity-80 break-words">
+                {rawMsg}
+              </p>
+            )}
+          </div>
         </div>
-        {onRetry && (
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
-            onClick={onRetry}
-            data-testid="section_status_unauthorized_retry"
-            className="min-h-[40px] px-3 py-1 rounded-btn bg-white dark:bg-[#11202E] border border-[#FECDD3] dark:border-[#7F1D1D] text-[#AD293C] dark:text-[#FDA4AF] font-bold flex items-center gap-1 shrink-0"
+            data-testid="section_status_open_auth_btn"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('minadental-open-auth-modal'));
+              }
+            }}
+            className="min-h-[40px] px-3 py-1 rounded-btn bg-[#AD293C] hover:bg-[#931E30] text-white font-bold flex items-center gap-1 shrink-0 transition-colors"
           >
-            <RefreshCw size={13} />
-            <span>بررسی مجدد</span>
+            <Lock size={13} />
+            <span>ورود با حساب کلینیک</span>
           </button>
-        )}
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              data-testid="section_status_unauthorized_retry"
+              className="min-h-[40px] px-3 py-1 rounded-btn bg-white dark:bg-[#11202E] border border-[#FECDD3] dark:border-[#7F1D1D] text-[#AD293C] dark:text-[#FDA4AF] font-bold flex items-center gap-1 shrink-0"
+            >
+              <RefreshCw size={13} />
+              <span>بررسی مجدد</span>
+            </button>
+          )}
+        </div>
       </div>
     );
   }

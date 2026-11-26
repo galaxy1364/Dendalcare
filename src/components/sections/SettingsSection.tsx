@@ -726,13 +726,13 @@ function ClinicSettingsTab({
             HapticEngine.selection();
             setTechnicalDisclosureOpen((prev) => !prev);
           }}
-          className="w-full flex items-center justify-between gap-2 text-right min-h-[40px]"
+          className="w-full flex flex-wrap items-center justify-between gap-2 text-right min-h-[44px]"
         >
-          <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2 min-w-0">
+          <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2 min-w-0 leading-snug">
             <Cpu size={16} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
-            <span className="truncate">جزئیات فنی و قابلیت‌های سخت‌افزاری دستگاه</span>
+            <span>جزئیات فنی و قابلیت‌های سخت‌افزاری دستگاه</span>
           </span>
-          <span className="flex items-center gap-1.5 shrink-0">
+          <span className="flex items-center gap-1.5 shrink-0 mr-auto">
             <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
               {platformCaps.runtimeKind}
             </span>
@@ -1214,8 +1214,11 @@ function ClinicSettingsTab({
             onClick={async () => {
               setDownloadingApk(true);
               setApkDownloadProgress(10);
-              await downloadApkSafely('DentalCare.apk', (p) => setApkDownloadProgress(p));
+              const res = await downloadApkSafely('MinaDental-android.apk', (p) => setApkDownloadProgress(p));
               setDownloadingApk(false);
+              if (!res.success && onOpenInstallModal) {
+                onOpenInstallModal();
+              }
             }}
             disabled={downloadingApk}
             data-testid="settings_download_apk_btn"

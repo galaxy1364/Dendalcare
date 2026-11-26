@@ -565,12 +565,14 @@ function ClinicShellProviders({
       setQbankMenuOpen(true);
     };
     const onCloseQBank = () => setQbankMenuOpen(false);
+    const onOpenAuthModal = () => setUserModalOpen(true);
     const onResize = () => setPlatformInfo(getCurrentPlatformInfo());
 
     window.addEventListener('minadental-trigger-ios-reminder-popup', onTriggerPopup);
     window.addEventListener('minadental-zero-loss-updated', onZeroLossUpdated);
     window.addEventListener('minadental-open-qbank-menu', onOpenQBank);
     window.addEventListener('minadental-close-qbank-menu', onCloseQBank);
+    window.addEventListener('minadental-open-auth-modal', onOpenAuthModal);
     window.addEventListener('resize', onResize);
 
     return () => {
@@ -579,6 +581,7 @@ function ClinicShellProviders({
       window.removeEventListener('minadental-zero-loss-updated', onZeroLossUpdated);
       window.removeEventListener('minadental-open-qbank-menu', onOpenQBank);
       window.removeEventListener('minadental-close-qbank-menu', onCloseQBank);
+      window.removeEventListener('minadental-open-auth-modal', onOpenAuthModal);
       window.removeEventListener('resize', onResize);
     };
   }, []);

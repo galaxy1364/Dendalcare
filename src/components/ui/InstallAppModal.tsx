@@ -4,7 +4,13 @@ import {
   Share2, PlusSquare, Sparkles, X, ShieldCheck, Zap, Laptop, AlertCircle,
   Lock, FileCode2, Server, Copy, Check, Keyboard,
 } from 'lucide-react';
-import { downloadApkSafely } from '../../lib/downloadHelper';
+import {
+  downloadApkSafely,
+  fetchPublishedApkMetadata,
+  formatApkSizeMb,
+  GITHUB_ANDROID_RELEASE_PAGE,
+  type PublishedApkMetadata,
+} from '../../lib/downloadHelper';
 import { CURRENT_APP_VERSION, CURRENT_APP_BUILD } from '../../lib/cloudSyncEngine';
 import {
   downloadWindowsDesktopLauncher,
@@ -26,6 +32,8 @@ interface EligibilityState {
   protocol: string;
   manifestValid: boolean;
   manifestDetails: string;
+  iconsValid: boolean;
+  scopeContained: boolean;
   serviceWorkerActive: boolean;
   swDetails: string;
   installPromptReady: boolean;
@@ -48,7 +56,9 @@ export function InstallAppModal({
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [downloadingApk, setDownloadingApk] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
-  const [downloadError, setDownloadError] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [apkMeta, setApkMeta] = useState<PublishedApkMetadata | null>(null);
+  const [loadingApkMeta, setLoadingApkMeta] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [windowsLauncherDownloaded, setWindowsLauncherDownloaded] = useState(false);
   const [eligibility, setEligibility] = useState<EligibilityState>({
@@ -57,6 +67,8 @@ export function InstallAppModal({
     protocol: '',
     manifestValid: false,
     manifestDetails: 'در حال بررسی...',
+    iconsValid: false,
+    scopeContained: false,
     serviceWorkerActive: false,
     swDetails: 'در حال بررسی...',
     installPromptReady: false,
@@ -87,30 +99,74 @@ export function InstallAppModal({
       }
     })();
 
+    // GE-0007 P0-PWA: Real Chrome-grade manifest verification (zero false positives!)
     let manifestValid = false;
+    let iconsValid = false;
+    let scopeContained = false;
     let manifestDetails = 'فایل manifest.json یافت نشد';
     try {
       const linkEl = document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null;
-      const manifestHref = linkEl?.getAttribute('href') || './manifest.json';
-      const res = await fetch(manifestHref, { cache: 'no-store', credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        const hasName = Boolean(data.name || data.short_name);
-        const hasIcons = Array.isArray(data.icons) && data.icons.length > 0;
-        const hasDisplay = data.display === 'standalone' || data.display === 'fullscreen' || data.display === 'minimal-ui';
-        const hasStartUrl = Boolean(data.start_url);
-        const hasThemeColor = Boolean(data.theme_color || data.background_color);
+      const manifestHref = linkEl?.getAttribute('href') || '';
+      if (!linkEl || !manifestHref) {
+        manifestDetails = 'تگ <link rel="manifest"> در صفحه وجود ندارد';
+      } else {
+        const manifestUrl = new URL(manifestHref, window.location.href);
+        const res = await fetch(manifestUrl.href, { cache: 'no-store' });
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        if (!res.ok) {
+          manifestDetails = `خطای HTTP ${res.status} در دریافت manifest.json`;
+        } else if (ct.includes('text/html')) {
+          manifestDetails = 'MIME نامعتبر (HTML به جای JSON)';
+        } else {
+          const data = await res.json();
+          const hasId = typeof data.id === 'string' && data.id.length > 0;
+          const hasName = Boolean(data.name || data.short_name);
+          const hasDisplay =
+            data.display === 'standalone' || data.display === 'fullscreen' || data.display === 'minimal-ui';
+          const hasStartUrl = Boolean(data.start_url);
+          const resolvedScope = new URL(data.scope || './', manifestUrl);
+          const resolvedStart = new URL(data.start_url || './', manifestUrl);
+          const currentPageNoHash = window.location.origin + window.location.pathname;
+          scopeContained =
+            currentPageNoHash.startsWith(resolvedScope.origin + resolvedScope.pathname) &&
+            resolvedStart.href.startsWith(resolvedScope.href);
 
-        const validCount = [hasName, hasIcons, hasDisplay, hasStartUrl, hasThemeColor].filter(Boolean).length;
-        manifestValid = hasName && hasIcons && hasDisplay;
-        manifestDetails = manifestValid
-          ? `تایید شده (${validCount}/5 • ${data.short_name || data.name} • ${data.icons.length} آیکون)`
-          : `ناقص (${validCount}/5)`;
+          // Probe actual HTTP availability of 192x192 and 512x512 PNG icons relative to manifestUrl
+          const iconList: Array<{ src?: string; sizes?: string }> = Array.isArray(data.icons) ? data.icons : [];
+          const icon192 = iconList.find((i) => String(i.sizes || '').includes('192x192'));
+          const icon512 = iconList.find((i) => String(i.sizes || '').includes('512x512'));
+          let ok192 = false;
+          let ok512 = false;
+          if (icon192?.src && icon512?.src) {
+            const [r192, r512] = await Promise.all([
+              fetch(new URL(icon192.src, manifestUrl).href, { cache: 'no-store' }).catch(() => null),
+              fetch(new URL(icon512.src, manifestUrl).href, { cache: 'no-store' }).catch(() => null),
+            ]);
+            ok192 = Boolean(r192?.ok && (r192.headers.get('content-type') || '').toLowerCase().startsWith('image/'));
+            ok512 = Boolean(r512?.ok && (r512.headers.get('content-type') || '').toLowerCase().startsWith('image/'));
+          }
+          iconsValid = ok192 && ok512;
+
+          const checks = [hasId, hasName, hasDisplay, hasStartUrl, scopeContained, iconsValid];
+          const passedCount = checks.filter(Boolean).length;
+          manifestValid = hasId && hasName && hasDisplay && hasStartUrl && scopeContained && iconsValid;
+
+          if (!scopeContained) {
+            manifestDetails = `خطای دامنه (Scope): صفحه خارج از محدوده ${resolvedScope.pathname}`;
+          } else if (!iconsValid) {
+            manifestDetails = 'خطای آیکون: فایل‌های PNG (۱۹۲/۵۱۲) در دسترس نیستند';
+          } else if (manifestValid) {
+            manifestDetails = `تایید واقعی (${passedCount}/6 • Scope + آیکون‌های ۱۹۲/۵۱۲)`;
+          } else {
+            manifestDetails = `ناقص (${passedCount}/6)`;
+          }
+        }
       }
     } catch {
-      const linkEl = document.querySelector('link[rel="manifest"]');
-      manifestValid = Boolean(linkEl);
-      manifestDetails = linkEl ? 'فایل مانیفست متصل است' : 'خطا در خواندن manifest.json';
+      manifestValid = false;
+      iconsValid = false;
+      scopeContained = false;
+      manifestDetails = 'خطا در خواندن یا تحلیل واقعی manifest.json';
     }
 
     let serviceWorkerActive = false;
@@ -125,23 +181,25 @@ export function InstallAppModal({
             // ignore in restricted embedded frames
           }
         }
-        if (reg?.active) {
+        if (reg?.active && navigator.serviceWorker.controller) {
           serviceWorkerActive = true;
-          swDetails = navigator.serviceWorker.controller
-            ? 'فعال و آماده نصب (Active)'
-            : 'ثبت‌شده و آماده (SW Ready)';
+          swDetails = 'فعال و کنترل‌کننده صفحه (Active Controller)';
+        } else if (reg?.active) {
+          serviceWorkerActive = true;
+          swDetails = 'ثبت‌شده — یک بار صفحه را رفرش کنید';
         } else if (reg?.installing || reg?.waiting) {
-          serviceWorkerActive = true;
+          serviceWorkerActive = false;
           swDetails = 'در حال فعال‌سازی...';
         } else {
-          swDetails = 'نیاز به باز کردن در تب مستقل مرورگر';
+          serviceWorkerActive = false;
+          swDetails = 'ثبت نشده (نیاز به تب مستقل مرورگر)';
         }
-      } else if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') {
-        serviceWorkerActive = true;
-        swDetails = 'اجرا در محیط بومی برنامه';
+      } else {
+        swDetails = 'این مرورگر از Service Worker پشتیبانی نمی‌کند';
       }
     } catch {
-      swDetails = 'اجرا در محیط ایزوله';
+      serviceWorkerActive = false;
+      swDetails = 'اجرا در محیط محدودشده';
     }
 
     const promptAvailable = Boolean(deferredPrompt || (window as any).__deferredInstallPrompt);
@@ -151,6 +209,8 @@ export function InstallAppModal({
       protocol,
       manifestValid,
       manifestDetails,
+      iconsValid,
+      scopeContained,
       serviceWorkerActive,
       swDetails,
       installPromptReady: promptAvailable,
@@ -176,6 +236,10 @@ export function InstallAppModal({
   useEffect(() => {
     if (open) {
       checkEligibility();
+      setLoadingApkMeta(true);
+      fetchPublishedApkMetadata()
+        .then((meta) => setApkMeta(meta))
+        .finally(() => setLoadingApkMeta(false));
     }
   }, [open, checkEligibility]);
 
@@ -466,25 +530,48 @@ export function InstallAppModal({
               </div>
             )}
 
-            {/* Native APK Card */}
-            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-blue-900/40 to-indigo-950/60 border border-blue-400/20 space-y-2.5">
-              <div className="flex items-center justify-between">
+            {/* Native Signed APK Card */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-blue-900/40 to-indigo-950/60 border border-blue-400/20 space-y-2.5" data-testid="native_apk_download_card">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
                 <span className="text-xs font-bold text-blue-300 flex items-center gap-1.5">
-                  <ShieldCheck size={16} className="text-blue-400" />
-                  فایل نصبی اندروید (APK v{CURRENT_APP_VERSION})
+                  <ShieldCheck size={16} className="text-blue-400 shrink-0" />
+                  بسته بومی اندروید (Signed APK)
                 </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-200 border border-blue-400/30 font-mono">
-                  Build #{CURRENT_APP_BUILD}
+                <span dir="ltr" className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-200 border border-blue-400/30 font-mono">
+                  {apkMeta?.available
+                    ? `v${apkMeta.versionName || CURRENT_APP_VERSION} • ${formatApkSizeMb(apkMeta.sizeBytes)}`
+                    : `v${CURRENT_APP_VERSION} (#${CURRENT_APP_BUILD})`}
                 </span>
               </div>
               <p className="text-[11px] text-white/75 leading-relaxed">
-                بسته نصبی رسمی اندروید با پشتیبانی کامل از حالت آفلاین، فایل‌منیجر و اعلان‌های دستگاه.
+                فایل نصبی بومی اندروید (متفاوت از نصب PWA مرورگر) ساخته‌شده و امضاشده توسط خط تولید خودکار GitHub Actions.
               </p>
+
+              {apkMeta?.available && apkMeta.sha256 && (
+                <div className="p-2 rounded-xl bg-black/30 border border-emerald-400/25 text-[10px] text-emerald-200 space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold">وضعیت امضا:</span>
+                    <span dir="ltr" className="font-mono text-emerald-300">
+                      {apkMeta.signingMode === 'release_upload_keystore' ? 'Release Upload Key' : 'CI Signed APK'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold">SHA-256:</span>
+                    <span dir="ltr" className="font-mono text-white/80">{apkMeta.sha256.slice(0, 16)}…</span>
+                  </div>
+                </div>
+              )}
+
+              {!loadingApkMeta && apkMeta && !apkMeta.available && (
+                <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-400/35 text-[10.5px] text-amber-200 leading-relaxed">
+                  {apkMeta.reason}
+                </div>
+              )}
 
               {downloadingApk ? (
                 <div className="space-y-1.5 p-2 rounded-xl bg-blue-950/60 border border-blue-400/30">
                   <div className="flex justify-between text-[11px] text-blue-200 font-bold">
-                    <span>در حال دریافت فایل نصبی APK...</span>
+                    <span>در حال دریافت و بررسی فایل APK...</span>
                     <span>{downloadProgress}%</span>
                   </div>
                   <div className="w-full h-2 bg-blue-900/60 rounded-full overflow-hidden">
@@ -498,29 +585,31 @@ export function InstallAppModal({
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
+                    data-testid="modal_download_apk_btn"
                     onClick={async () => {
                       setDownloadingApk(true);
                       setDownloadProgress(10);
-                      setDownloadError(false);
-                      const res = await downloadApkSafely('DentalCare.apk', (p) => setDownloadProgress(p));
+                      setDownloadError(null);
+                      const res = await downloadApkSafely('MinaDental-android.apk', (p) => setDownloadProgress(p), apkMeta);
                       setDownloadingApk(false);
                       if (!res.success) {
-                        setDownloadError(true);
+                        setDownloadError(res.error || 'خطا در دانلود فایل APK');
                       }
                     }}
                     className="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all text-center"
                   >
                     <Download size={15} />
-                    دانلود مستقیم APK
+                    {loadingApkMeta ? 'بررسی انتشار APK...' : 'دانلود مستقیم APK امضاشده'}
                   </button>
                   <a
-                    href="https://galaxy1364.github.io/Dendalcare/DentalCare.apk"
+                    href={apkMeta?.releasePageUrl || GITHUB_ANDROID_RELEASE_PAGE}
                     target="_blank"
                     rel="noopener noreferrer"
+                    data-testid="modal_github_apk_release_link"
                     className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-cyan-500/30 active:scale-95 transition-all text-center"
                   >
                     <Download size={15} />
-                    سرور کمکی (GitHub)
+                    صفحه انتشار GitHub
                   </a>
                 </div>
               )}
@@ -531,30 +620,31 @@ export function InstallAppModal({
                   <span>نکات نصب بدون خطا روی اندروید:</span>
                 </div>
                 <ol className="list-decimal list-inside space-y-1 text-white/80 leading-relaxed pr-1 text-[10.5px]">
-                  <li>در صورت نصب بودن نسخه قدیمی‌تر، ابتدا آن را حذف (Uninstall) کنید.</li>
+                  <li>در صورت نصب بودن نسخه قدیمی‌تر با کلید امضای متفاوت، ابتدا آن را حذف (Uninstall) کنید.</li>
                   <li>در اخطار Play Protect گزینه <strong>More details ➔ Install anyway</strong> را لمس کنید.</li>
                   <li>مجوز <strong>Install Unknown Apps</strong> را برای مرورگر یا فایل‌منیجر فعال نمایید.</li>
                 </ol>
               </div>
 
               {downloadError && (
-                <div className="p-3 rounded-xl bg-red-500/20 border border-red-400/40 text-red-200 text-[11px] space-y-2">
-                  <div className="flex items-center gap-1.5 font-bold text-red-300">
-                    <AlertCircle size={15} className="shrink-0 text-red-400" />
-                    <span>از سرور کمکی دانلود استفاده کنید:</span>
+                <div className="p-3 rounded-xl bg-red-500/20 border border-red-400/40 text-red-200 text-[11px] space-y-2" data-testid="modal_apk_download_error">
+                  <div className="flex items-start gap-1.5 font-bold text-red-300">
+                    <AlertCircle size={15} className="shrink-0 text-red-400 mt-0.5" />
+                    <span className="leading-relaxed">{downloadError}</span>
                   </div>
                   <div className="flex gap-2">
                     <a
-                      href="https://galaxy1364.github.io/Dendalcare/DentalCare.apk"
+                      href={apkMeta?.releasePageUrl || GITHUB_ANDROID_RELEASE_PAGE}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-center font-bold text-xs"
                     >
-                      دانلود از سرور کمکی
+                      باز کردن صفحه انتشار GitHub Releases
                     </a>
                     <button
+                      type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText('https://galaxy1364.github.io/Dendalcare/DentalCare.apk');
+                        navigator.clipboard.writeText(apkMeta?.downloadUrl || GITHUB_ANDROID_RELEASE_PAGE);
                         setCopiedLink(true);
                         setTimeout(() => setCopiedLink(false), 2500);
                       }}

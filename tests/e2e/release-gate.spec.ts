@@ -815,20 +815,10 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       expect(moreBox).not.toBeNull();
       expect(Math.abs((pillBox?.height ?? 0) - (moreBox?.height ?? 0))).toBeLessThanOrEqual(2);
 
-      // 4. Right-edge bell ear must NOT overlap the auto-update toggle switch inside main gutter
-      const bellBox = await page.getByTestId('right_edge_draggable_bell_handle').boundingBox();
-      const toggleBox = await page.getByTestId('toggle_auto_update_switch').boundingBox();
-      expect(bellBox).not.toBeNull();
-      expect(toggleBox).not.toBeNull();
-      if (bellBox && toggleBox) {
-        const horizOverlap =
-          Math.min(bellBox.x + bellBox.width, toggleBox.x + toggleBox.width) -
-          Math.max(bellBox.x, toggleBox.x);
-        const vertOverlap =
-          Math.min(bellBox.y + bellBox.height, toggleBox.y + toggleBox.height) -
-          Math.max(bellBox.y, toggleBox.y);
-        expect(horizOverlap > 0 && vertOverlap > 0).toBe(false);
-      }
+      // 4. GE-0007 P1: Duplicate floating right-edge bell ear must NOT exist (single authoritative bell in topbar)
+      await expect(page.getByTestId('right_edge_draggable_bell_handle')).toHaveCount(0);
+      await expect(page.getByTestId('topbar_notifications_button')).toBeVisible();
+      await expect(page.getByTestId('toggle_auto_update_switch')).toBeVisible();
 
       const noOverflow = await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2
@@ -864,7 +854,7 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     await page.getByTestId('branch_switch_north').click();
     await expect(page.locator('header')).toContainText('شعبه تخصصی ایمپلنت');
 
-    await page.getByTestId('right_edge_draggable_bell_handle').click();
+    await page.getByTestId('topbar_notifications_button').click();
     const drawer = page.getByTestId('slide_over_notification_drawer');
     await expect(drawer).toBeVisible();
     const drawerBg = await drawer.evaluate((el) => getComputedStyle(el).backgroundColor);
@@ -895,8 +885,9 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     await page.keyboard.press('Escape');
     await expect(cmdCenter).toBeHidden();
 
-    // 4. Notification Drawer displays emotional tooth mascot and ARIA dialog semantics
-    await page.getByTestId('right_edge_draggable_bell_handle').click();
+    // 4. Notification Drawer displays emotional tooth mascot and ARIA dialog semantics via single authoritative bell
+    await expect(page.getByTestId('right_edge_draggable_bell_handle')).toHaveCount(0);
+    await page.getByTestId('topbar_notifications_button').click();
     const notifDrawer = page.getByTestId('slide_over_notification_drawer');
     await expect(notifDrawer).toBeVisible();
     await expect(notifDrawer.locator('[data-testid="minadental_mascot_tooth"]').first()).toBeVisible();
@@ -1034,6 +1025,110 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     await page.getByTestId('appearance_font_default').click();
     await page.getByTestId('appearance_theme_light').click();
     await page.getByTestId('appearance_motion_system').click();
+  });
+
+  test('GE-0007 Universal Installation, Real Chrome PWA Manifest/Icons, 42501 Auth CTA & Unclipped Mobile UX', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      serviceWorkers: 'block',
+      viewport: { width: 390, height: 844 },
+      locale: 'fa-IR',
+    });
+    const page = await context.newPage();
+
+    try {
+      const cors = {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
+        'access-control-allow-headers': 'apikey,authorization,content-type,x-client-info,prefer,range,accept-profile,content-profile',
+      };
+
+      // Simulate PostgreSQL 42501 permission denied for unauthenticated anon role
+      await page.route('**/rest/v1/patients*', async (route) => {
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+        await route.fulfill({
+          status: 403,
+          headers: cors,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: '42501',
+            message: 'permission denied for table patients',
+          }),
+        });
+      });
+
+      await page.goto('/#/', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+
+      // 1. P0-PWA: Verify real root ./manifest.json (NEVER /assets/manifest-*.json), scope containment & 192/512 PNGs
+      const pwaAudit = await page.evaluate(async () => {
+        const link = document.querySelector('link[rel="manifest"]');
+        const href = link?.getAttribute('href') || '';
+        const manifestUrl = new URL(href, window.location.href);
+        const res = await fetch(manifestUrl.href, { cache: 'no-store' });
+        const ct = res.headers.get('content-type') || '';
+        const json = await res.json();
+        const scopeUrl = new URL(json.scope || './', manifestUrl);
+        const pageOriginPath = window.location.origin + window.location.pathname;
+        const icon192 = (json.icons || []).find((i: { sizes?: string }) => String(i.sizes || '').includes('192x192'));
+        const icon512 = (json.icons || []).find((i: { sizes?: string }) => String(i.sizes || '').includes('512x512'));
+        const r192 = icon192 ? await fetch(new URL(icon192.src, manifestUrl).href) : null;
+        const r512 = icon512 ? await fetch(new URL(icon512.src, manifestUrl).href) : null;
+        return {
+          href,
+          status: res.status,
+          ct,
+          hasId: Boolean(json.id),
+          display: json.display,
+          scopeContained: pageOriginPath.startsWith(scopeUrl.origin + scopeUrl.pathname),
+          icon192Status: r192?.status ?? 0,
+          icon192Ct: r192?.headers.get('content-type') || '',
+          icon512Status: r512?.status ?? 0,
+          icon512Ct: r512?.headers.get('content-type') || '',
+        };
+      });
+
+      expect(pwaAudit.href).toBe('./manifest.json');
+      expect(pwaAudit.status).toBe(200);
+      expect(pwaAudit.ct.toLowerCase()).toContain('json');
+      expect(pwaAudit.hasId).toBe(true);
+      expect(pwaAudit.display).toBe('standalone');
+      expect(pwaAudit.scopeContained).toBe(true);
+      expect(pwaAudit.icon192Status).toBe(200);
+      expect(pwaAudit.icon192Ct.toLowerCase()).toContain('image/png');
+      expect(pwaAudit.icon512Status).toBe(200);
+      expect(pwaAudit.icon512Ct.toLowerCase()).toContain('image/png');
+
+      // 2. P0-DATABASE UX: Verify 42501 permission denied shows clear Persian guidance + 1-click sign-in CTA
+      const unauthBanner = page.getByTestId('section_status_unauthorized');
+      await expect(unauthBanner).toBeVisible();
+      await expect(unauthBanner).toContainText('دسترسی ناشناس به پرونده بیماران');
+      const authBtn = page.getByTestId('section_status_open_auth_btn');
+      await expect(authBtn).toBeVisible();
+      await authBtn.click();
+      await expect(page.getByTestId('user_account_modal')).toBeVisible();
+      await page.keyboard.press('Escape');
+
+      // 3. P1 UX: Zero duplicate floating bell + crisp unclipped SmartBrief KPI labels
+      await expect(page.getByTestId('right_edge_draggable_bell_handle')).toHaveCount(0);
+      await expect(page.getByTestId('topbar_notifications_button')).toBeVisible();
+
+      // 4. Open InstallAppModal from Settings & verify honest 6/6 real manifest check + native APK card
+      await page.goto('/#/settings', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+      await page.getByTestId('settings_open_install_modal_btn').click();
+      const modal = page.getByTestId('install_app_modal');
+      await expect(modal).toBeVisible();
+      await expect(page.getByTestId('eligibility_criteria_panel')).toContainText('تایید واقعی (6/6');
+      await expect(page.getByTestId('native_apk_download_card')).toBeVisible();
+      await expect(page.getByTestId('modal_github_apk_release_link')).toHaveAttribute(
+        'href',
+        'https://github.com/galaxy1364/Dendalcare/releases/tag/android-latest'
+      );
+    } finally {
+      await context.close();
+    }
   });
 });
 

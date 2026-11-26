@@ -59,7 +59,7 @@
     },
     {
       "src": "./logo.png",
-      "sizes": "256x256",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     }
@@ -69,28 +69,28 @@
       "name": "نوبت‌های امروز",
       "short_name": "نوبت‌ها",
       "description": "مشاهده تقویم و نوبت‌های امروز کلینیک",
-      "url": "./#appointments",
+      "url": "./#/appointments",
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "پرونده بیماران",
       "short_name": "بیماران",
       "description": "جستجو و تشکیل پرونده بیمار جدید",
-      "url": "./#patients",
+      "url": "./#/patients",
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "چارت و درمان",
       "short_name": "درمان",
       "description": "ثبت طرح درمان و چارت پالمر/FDI",
-      "url": "./#treatments",
+      "url": "./#/treatments",
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "امور مالی و چک‌ها",
       "short_name": "مالی",
       "description": "گزارش مالی، اقساط و استعلام صیادی",
-      "url": "./#finance",
+      "url": "./#/finance",
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]

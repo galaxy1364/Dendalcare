@@ -87,16 +87,16 @@ export function SmartBrief({
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[14px] font-black text-[#12283B] dark:text-[#F8FAFC] truncate">
+              <span className="text-[14px] font-black text-[#12283B] dark:text-[#F8FAFC] leading-snug">
                 {brief.headline}
               </span>
               <span
-                className={`text-[12px] font-bold px-2 py-0.5 rounded-full border max-w-full truncate ${badgeStyles}`}
+                className={`text-[12px] font-bold px-2 py-0.5 rounded-full border max-w-full ${badgeStyles}`}
               >
                 {brief.source}
               </span>
             </div>
-            <p className="text-[13px] font-semibold text-[#476075] dark:text-[#B4C6D8] truncate mt-0.5">
+            <p className="text-[12.5px] font-semibold text-[#476075] dark:text-[#B4C6D8] leading-snug line-clamp-2 mt-1">
               {brief.reason} • {toJalaliStr(todayIso)}
             </p>
           </div>
@@ -208,9 +208,12 @@ export function SmartBrief({
           }}
           className="min-h-[54px] rounded-[14px] px-2.5 py-1.5 bg-white/90 dark:bg-[#0F2030]/90 border border-white/90 dark:border-[#253E54] text-right active:scale-[0.98] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087C76]"
         >
-          <span className="text-[12px] font-bold text-[#4B6378] dark:text-[#9FB6C8] flex items-center gap-1">
+          <span
+            title={`سود ${monthLabel}`}
+            className="text-[12px] font-bold text-[#4B6378] dark:text-[#9FB6C8] flex items-center gap-1"
+          >
             <TrendingUp size={12} className="text-[#5B3CC4] dark:text-[#C4B5FD] shrink-0" />
-            <span className="truncate">سود {monthLabel}</span>
+            <span className="truncate">سود {(monthLabel || '').trim().split(/\s+/)[0] || 'ماه'}</span>
           </span>
           <p className="text-[14px] font-black text-[#5B3CC4] dark:text-[#C4B5FD] tabular-nums leading-tight mt-0.5 truncate">
             {financialDataComplete ? fmtNullable(monthNetProfit) : 'N/A'}

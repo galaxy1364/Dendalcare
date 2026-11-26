@@ -337,6 +337,83 @@ async function verifyTargetDirectory(label, relDir, mountPrefix = '/') {
       queue.push(new URL(fontRel, baseUrl).toString());
     }
 
+    // 1d. GE-0007 P0-PWA: Strict Chrome Installability Gate (root ./manifest.json, scope, start_url, 192/512 PNG IHDR)
+    const manifestLinkMatch = indexHtml.match(/<link\b[^>]*rel=["']manifest["'][^>]*>/i);
+    assert.ok(manifestLinkMatch, `[${label}] Built index.html missing <link rel="manifest">`);
+    const manifestHrefMatch = manifestLinkMatch[0].match(/\bhref=["']([^"']+)["']/i);
+    assert.ok(manifestHrefMatch && manifestHrefMatch[1], `[${label}] <link rel="manifest"> missing href`);
+    const manifestHref = manifestHrefMatch[1];
+    assert.equal(
+      manifestHref,
+      './manifest.json',
+      `[${label}] CRITICAL PWA BUG: manifest href must be "./manifest.json" (NEVER Vite-hashed /assets/manifest-*.json), got ${manifestHref}`
+    );
+    assert.ok(
+      !allDiskFiles.some((f) => /^assets\/manifest-.*\.json$/i.test(f)),
+      `[${label}] Found stray Vite-hashed assets/manifest-*.json in release output`
+    );
+
+    const pwaManifestUrl = new URL(manifestHref, baseUrl).toString();
+    const pwaManifestRes = await fetch(pwaManifestUrl);
+    assert.equal(pwaManifestRes.status, 200, `[${label}] PWA manifest.json must return HTTP 200`);
+    assertValidMime(pwaManifestUrl, pwaManifestRes.headers.get('content-type'));
+    const pwaManifest = await pwaManifestRes.json();
+    assert.ok(typeof pwaManifest.id === 'string' && pwaManifest.id.length > 0, `[${label}] manifest.json missing stable id`);
+    assert.ok(typeof pwaManifest.name === 'string' && pwaManifest.name.length > 0, `[${label}] manifest.json missing name`);
+    assert.ok(typeof pwaManifest.start_url === 'string' && pwaManifest.start_url.length > 0, `[${label}] manifest.json missing start_url`);
+    assert.ok(typeof pwaManifest.scope === 'string' && pwaManifest.scope.length > 0, `[${label}] manifest.json missing scope`);
+    assert.ok(
+      ['standalone', 'fullscreen', 'minimal-ui'].includes(pwaManifest.display),
+      `[${label}] manifest.json display must be installable (got ${pwaManifest.display})`
+    );
+    const resolvedScopeUrl = new URL(pwaManifest.scope, pwaManifestUrl).toString();
+    assert.equal(
+      resolvedScopeUrl,
+      baseUrl,
+      `[${label}] PWA manifest scope (${resolvedScopeUrl}) must match app root (${baseUrl}) so Chrome installability holds`
+    );
+    const resolvedStartUrl = new URL(pwaManifest.start_url, pwaManifestUrl).toString();
+    assert.ok(
+      resolvedStartUrl.startsWith(resolvedScopeUrl),
+      `[${label}] PWA manifest start_url (${resolvedStartUrl}) must be inside scope (${resolvedScopeUrl})`
+    );
+    const startRes = await fetch(resolvedStartUrl);
+    assert.equal(startRes.status, 200, `[${label}] PWA manifest start_url must return HTTP 200`);
+    assertValidMime(resolvedStartUrl, startRes.headers.get('content-type'));
+
+    assert.ok(Array.isArray(pwaManifest.icons) && pwaManifest.icons.length >= 2, `[${label}] manifest.json must include 192 & 512 PNG icons`);
+    let verifiedIcon192 = false;
+    let verifiedIcon512 = false;
+    for (const icon of pwaManifest.icons) {
+      assert.ok(icon?.src && isLocalRef(icon.src), `[${label}] manifest icon has invalid src: ${icon?.src}`);
+      const iconUrl = new URL(icon.src, pwaManifestUrl).toString();
+      const iconRes = await fetch(iconUrl);
+      assert.equal(iconRes.status, 200, `[${label}] Manifest icon ${icon.src} -> ${iconUrl} returned HTTP ${iconRes.status}`);
+      const iconCt = String(iconRes.headers.get('content-type') || '').toLowerCase();
+      assert.ok(iconCt.includes('image/png'), `[${label}] Manifest icon ${icon.src} must return image/png, got ${iconCt}`);
+      const iconBuf = Buffer.from(await iconRes.arrayBuffer());
+      assert.equal(
+        iconBuf.subarray(0, 8).toString('hex'),
+        '89504e470d0a1a0a',
+        `[${label}] Manifest icon ${icon.src} is NOT a valid PNG binary`
+      );
+      const pngWidth = iconBuf.readUInt32BE(16);
+      const pngHeight = iconBuf.readUInt32BE(20);
+      const declaredSize = String(icon.sizes || '').trim();
+      if (/^\d+x\d+$/.test(declaredSize)) {
+        const [dw, dh] = declaredSize.split('x').map(Number);
+        assert.equal(
+          `${pngWidth}x${pngHeight}`,
+          `${dw}x${dh}`,
+          `[${label}] Manifest icon ${icon.src} declared ${declaredSize} but PNG IHDR is ${pngWidth}x${pngHeight}`
+        );
+      }
+      if (pngWidth >= 192 && pngHeight >= 192 && declaredSize === '192x192') verifiedIcon192 = true;
+      if (pngWidth >= 512 && pngHeight >= 512 && declaredSize === '512x512') verifiedIcon512 = true;
+    }
+    assert.ok(verifiedIcon192, `[${label}] manifest.json must provide a verified 192x192 PNG icon`);
+    assert.ok(verifiedIcon512, `[${label}] manifest.json must provide a verified 512x512 PNG icon`);
+
     // Regression guard for V6 P0 bug: window.<buildId> = buildId MUST NEVER happen
     assert.ok(
       indexHtml.includes('window.__minaBuildId = buildId;'),

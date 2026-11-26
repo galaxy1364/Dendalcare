@@ -275,7 +275,7 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
     const manifest = JSON.parse(read('public/manifest.json'));
     const sw = read('public/sw.js');
 
-    assert.ok(html.includes('href="./manifest.json" crossorigin="use-credentials"'), 'index.html must keep manifest with credentials');
+    assert.ok(html.includes('rel="manifest" href="./manifest.json"'), 'index.html must link root ./manifest.json cleanly for Chrome PWA installability');
     assert.ok(
       html.includes("'Vazirmatn', 'Tahoma'") && read('src/index.css').includes('vazirmatn-arabic.woff2'),
       'Self-hosted Vazirmatn font must be configured via CSS with Persian-safe Tahoma fallback (without fatal preload tags)'
@@ -393,12 +393,13 @@ describe('Phase 8 [TRC-MINA-QBANK-9008-H]: Authentic QBank Curved-Notch UI, Proj
 
     assert.ok(shellSrc.includes('topbar_user_avatar_button'), 'Top bar must keep User Account button');
     assert.ok(shellSrc.includes('topbar_project_folder_button'), 'Top bar must provide Project Folder button');
+    assert.ok(shellSrc.includes('topbar_notifications_button'), 'Top bar must provide single authoritative Notifications button');
+    assert.ok(!shellSrc.includes('<DraggableNotificationHandle'), 'GE-0007: AppShell must NOT mount duplicate floating DraggableNotificationHandle');
     assert.ok(overlaySrc.includes('پوشه پروژه مینادنتال'), 'Project Folder Sheet must house project tools cleanly');
-    assert.ok(shellSrc.includes('<DraggableNotificationHandle'), 'AppShell must mount right-edge DraggableNotificationHandle');
     assert.ok(overlaySrc.includes('<NotificationDrawer') && drawerSrc.includes('drawer-slide-in-right'), 'Notification drawer must slide from right edge');
     assert.ok(shellSrc.includes('!notifOpen &&'), 'Floating version/OTA/toast banners must auto-hide when notification drawer opens');
     assert.ok(providersSrc.includes('requestDeviceNotificationPermission'), 'AppProviders must connect notification drawer to real OS device notifications');
-    assert.ok(handleSrc.includes('minadental_right_bell_y_pct'), 'Right-edge handle must permanently lock its dragged Y position in localStorage');
+    assert.ok(handleSrc.includes('minadental_right_bell_y_pct'), 'Legacy DraggableNotificationHandle module preserves position key');
     assert.ok(osNotifSrc.includes('showNotification'), 'deviceNotifications.ts must dispatch real OS notifications via ServiceWorker');
   });
 
