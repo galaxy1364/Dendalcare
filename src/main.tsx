@@ -9,6 +9,15 @@ import './index.css';
 markModuleEvaluated();
 
 if (typeof window !== 'undefined') {
+  try {
+    const bootUrl = new URL(window.location.href);
+    if (bootUrl.searchParams.has('_sw_reload')) {
+      bootUrl.searchParams.delete('_sw_reload');
+      window.history.replaceState(window.history.state, '', bootUrl.toString());
+    }
+  } catch {
+    // Best-effort URL cleanup
+  }
   window.addEventListener('unhandledrejection', (event) => {
     const safeMsg = sanitizeLogMessage(event.reason);
     console.error('[MinaDental UnhandledRejection]', safeMsg);

@@ -4,15 +4,15 @@
   "semver": "4.17.0",
   "build": 167,
   "releaseSequence": 167,
-  "buildId": "v4.17.0-bb3ed55189",
-  "releaseId": "v4.17.0-bb3ed55189",
-  "contentDigest": "bb3ed551899a2acecef57a0aa36c0168ff22d0d8309a97df877fac7437011feb",
+  "buildId": "v4.17.0-8aa39f1017",
+  "releaseId": "v4.17.0-8aa39f1017",
+  "contentDigest": "8aa39f10170abbd86ad55e30db87c75bfe6c5925ac1dc03e005dbecaba98f5e2",
   "packageVersion": "4.17.0",
   "channel": "stable",
-  "publishedAt": "2026-11-26T18:11:33.282Z",
+  "publishedAt": "2026-11-26T18:41:52.936Z",
   "releaseNotes": "نسخه v4.17.0 (انتشار #167) — هم‌ترازی یکنواخت توالی انتشار پس از #166، تفکیک سه‌گانه نسخه وب/سرور/بومی، بازیابی احراز هویت و RLS مدیر کلینیک، و بازمهندسی بنیادین اسکلت تطبیقی جهانی (GE-0004)",
   "entryScripts": [
-    "./assets/index-DJEnHqXb.js"
+    "./assets/index-B5AwaZ7t.js"
   ],
   "entryStyles": [
     "./assets/index-__ywZyke.css"

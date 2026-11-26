@@ -319,9 +319,30 @@ self.addEventListener('install', (event) => {
   );
 });
 
+let pendingAuthorizedReloadClientId = null;
+
 // Activate: keep current & retained caches intact; pruning is strictly client-aware via PRUNE_OBSOLETE_CACHES.
+// Legacy #166 safety net: if the exact client that authorized SKIP_WAITING still holds its old WindowClient ID
+// 900ms after claim (because legacy location.replace on #/settings was a same-document no-op), navigate it once.
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  const authorizedClientId = pendingAuthorizedReloadClientId;
+  pendingAuthorizedReloadClientId = null;
+  event.waitUntil(
+    self.clients.claim().then(async () => {
+      if (!authorizedClientId || typeof self.clients.get !== 'function') return;
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      const staleClient = await self.clients.get(authorizedClientId).catch(() => undefined);
+      if (!staleClient || typeof staleClient.navigate !== 'function' || !staleClient.url) return;
+      try {
+        const navUrl = new URL(staleClient.url);
+        if (navUrl.origin !== self.location.origin) return;
+        navUrl.searchParams.set('_sw_reload', RESOLVED_BUILD_ID);
+        await staleClient.navigate(navUrl.toString()).catch(() => undefined);
+      } catch {
+        // Best-effort legacy client recovery; never fail SW activation.
+      }
+    })
+  );
 });
 
 async function pruneObsoleteMinadentalCaches(keepBuildIds) {
@@ -383,6 +404,9 @@ self.addEventListener('message', (event) => {
     }
     if (RESOLVED_BUILD_ID !== 'dev-local' && data.targetReleaseId !== RESOLVED_BUILD_ID) {
       return;
+    }
+    if (event.source && typeof event.source.id === 'string' && event.source.id) {
+      pendingAuthorizedReloadClientId = event.source.id;
     }
     self.skipWaiting();
   } else if (data.type === 'CLIENT_RELEASE_LEASE') {

@@ -295,6 +295,13 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
           }),
         });
       });
+      await page.route(/\/rest\/v1\/rpc\/app_get_my_verified_memberships/, async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          await route.fulfill({ status: 204, headers: corsHeaders });
+          return;
+        }
+        await route.fulfill({ status: 200, headers: corsHeaders, contentType: 'application/json', body: '[]' });
+      });
       await page.route(/\/rest\/v1\/clinic_memberships/, async (route) => {
         if (route.request().method() === 'OPTIONS') {
           await route.fulfill({ status: 204, headers: corsHeaders });
@@ -400,9 +407,20 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     try {
       const corsHeaders = {
         'access-control-allow-origin': '*',
-        'access-control-allow-headers': 'apikey,authorization,content-type,x-client-info,prefer',
-        'access-control-allow-methods': 'GET,POST,OPTIONS',
+        'access-control-allow-headers': 'apikey,authorization,content-type,x-client-info,prefer,range,accept-profile,content-profile',
+        'access-control-allow-methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
       };
+      await page.route('**/rest/v1/**', async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          await route.fulfill({ status: 204, headers: corsHeaders });
+          return;
+        }
+        if (route.request().method() === 'GET') {
+          await route.fulfill({ status: 200, headers: corsHeaders, contentType: 'application/json', body: '[]' });
+          return;
+        }
+        await route.continue();
+      });
       await page.route(/\/rest\/v1\/patients/, async (route) => {
         if (route.request().method() === 'OPTIONS') {
           await route.fulfill({ status: 204, headers: corsHeaders });
