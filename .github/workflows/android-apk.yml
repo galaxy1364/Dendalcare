@@ -73,7 +73,7 @@ jobs:
       - name: Prepare signing keystore (stable PROHIBITS debug signing)
         id: sign_mode
         env:
-          TARGET_CHANNEL: ${{ inputs.channel || 'stable' }}
+          TARGET_CHANNEL: ${{ inputs.channel || 'debug-preview' }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}

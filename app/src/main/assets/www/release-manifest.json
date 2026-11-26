@@ -8,8 +8,8 @@
   "platform": "web",
   "minNativeVersion": "4.9.0",
   "minSchemaVersion": 4,
-  "publishedAt": "2026-11-26T21:52:33.257Z",
-  "expiresAt": "2027-11-26T21:52:33.257Z",
+  "publishedAt": "2026-11-26T22:23:48.603Z",
+  "expiresAt": "2027-11-26T22:23:48.603Z",
   "contentDigest": "3160d0338c77d8cc0802a8d40e528925448974a11fc18fcb68c4f21265143dd1",
   "releaseNotes": "نسخه v4.18.0 (انتشار #224) — رفع دائمی خطای کش CDN و Service Worker در آپدیت خودکار، طراحی لبه به لبه (Edge-to-Edge)، لوگوی سه‌بعدی بدون کادر ۷-حالته، و یکپارچه‌سازی کامل انتشار وب و APK امضاشده (GE-0008)",
   "entryScripts": [

@@ -70,6 +70,8 @@
   ],
   "files": [
     "404.html",
+    "DentalCare-signed.apk.idsig",
+    "DentalCare.apk",
     "DentalCare.mobileconfig",
     "MinaDental-iOS.mobileconfig",
     "android-release-pointer.json",
