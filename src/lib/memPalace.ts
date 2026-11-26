@@ -414,6 +414,24 @@ export const PERMANENT_PROJECT_ROADMAP: readonly RoadmapMilestone[] = Object.fre
       'تفکیک Encounter فعال از سابقه طولی در patientJourney، تأیید ۴ حالته حساسیت (not_asked/unknown/no_known/present)، آرشیو حفاظت‌شده پرونده و ماژولارسازی Patients.tsx و PalmerChart.tsx زیر ۵۰۰ خط',
     ],
   },
+  {
+    id: 'milestone-18',
+    traceId: 'TRC-MINA-V16-FINANCE-9018-Q',
+    phaseNumber: 18,
+    title: 'هوشمندی مالی، دفتر کل دوطرفه اتمیک و تطبیق صندوق V16 (IRR_TOMAN)',
+    titleEn: 'V16 Financial Intelligence, Atomic Double-Entry Ledger, Charge Allocations & Daily Close Reconciliation',
+    description: 'پیاده‌سازی موتور دقت پولی IRR_TOMAN با پشتیبانی ارقام فارسی/عربی، حذف کامل Math.max و بدهی کاذب طرح درمان، تفکیک چک ضمانت و سفته از چک وصولی، تخصیص اتمیک پرداخت‌ها در PostgreSQL (post_patient_payment_v16)، تغییرناپذیری اسناد ثبت‌شده همراه با استرداد و بستن صندوق روزانه، یادآور امن بدون افشای PHI روی صفحه قفل، اولویت‌بندی قابل توضیح مطالبات و ماژولارسازی کامل Finance.tsx زیر ۵۰۰ خط.',
+    status: 'verified',
+    locked: true,
+    completionDate: '1405/09/06',
+    checksum: 'r180v16fin9018',
+    deliverables: [
+      'بستن قطعی موانع V14 و V15 (قفل نوشتن مستقیم idempotency نوبت و ماندگاری واقعی آلرژی، رضایت‌نامه، یادداشت و ادنتوگرام در ذخیره‌سازی نام‌گذاری‌شده و PostgreSQL)',
+      'مهاجرت افزایشی V16 (20261201000000): جداول service_charges، payment_allocations، journal_entries/lines متوازن، daily_close_sessions، قفل تغییرناپذیری finance_transactions و RPCهای اتمیک',
+      'موتور واحد قرائت مالی (financialLedgerEngine.ts)، اعتبارسنجی دقیق تومان بدون اعشار (monetaryPrecision.ts) و فرمان‌های اتمیک همزمان با کلید یکتای پایدار (financialCommandService.ts)',
+      'ماژولارسازی کامل Finance.tsx و به‌روزرسانی PatientDetailHub و تب‌های مالی پرونده بیمار همراه با تست‌های واحد FIN-01 تا FIN-25 و تست E2E ریسپانسیو RTL',
+    ],
+  },
 ]);
 
 export interface ModuleBenchmarkPhase {

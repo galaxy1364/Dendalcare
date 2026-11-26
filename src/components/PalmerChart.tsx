@@ -7,7 +7,8 @@ import {
   ODONTOGRAM_FINDING_CATALOG,
   PERMANENT_QUADRANT_TEETH,
   TOOTH_SURFACE_LABELS_FA,
-  appendOdontogramObservationCommand,
+  hydratePatientOdontogramFromServer,
+  persistOdontogramObservationToServer,
   projectOdontogramCurrentState,
   reconcileAmbiguousLegacyToothCommand,
   type CanonicalToothCoordinate,
@@ -42,8 +43,12 @@ export function PalmerChart({ patientId, actorRole, actorName }: Props) {
   const effectiveAuthor = actorName || 'دکتر مهدی امیری';
 
   const fetchLegacyRows = useCallback(async () => {
-    const { data } = await supabase.from('tooth_conditions').select('*').eq('patient_id', patientId);
+    const [{ data }] = await Promise.all([
+      supabase.from('tooth_conditions').select('*').eq('patient_id', patientId),
+      hydratePatientOdontogramFromServer(patientId),
+    ]);
     setLegacyRows((data as ToothCondition[] | null) ?? []);
+    setLedgerTick((t) => t + 1);
     setLoading(false);
   }, [patientId]);
 
@@ -70,7 +75,7 @@ export function PalmerChart({ patientId, actorRole, actorName }: Props) {
     surfaceCode: ToothSurfaceKey | null = null
   ) => {
     setFeedbackError(null);
-    const res = appendOdontogramObservationCommand({
+    const res = await persistOdontogramObservationToServer({
       patientId,
       activeContextPatientId: patientId,
       fdi: tooth.fdi,

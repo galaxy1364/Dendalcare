@@ -121,9 +121,9 @@ export function Select({ options, onChange, ...props }: SelectProps) {
   );
 }
 
-type ButtonProps = {
+type ButtonProps = Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'type' | 'color'> & {
   children: ReactNode;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   type?: 'button' | 'submit';
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   color?: string;
@@ -132,7 +132,7 @@ type ButtonProps = {
   icon?: ReactNode;
 };
 
-export function Button({ children, onClick, type = 'button', variant = 'primary', color, className = '', disabled, icon }: ButtonProps) {
+export function Button({ children, onClick, type = 'button', variant = 'primary', color, className = '', disabled, icon, ...rest }: ButtonProps) {
   const base = 'ios27-button flex items-center justify-center gap-2 py-3 px-4 rounded-2xl font-extrabold text-sm transition-all haptic active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100';
   const styles: Record<string, string> = {
     primary: color ? 'text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700',
@@ -142,19 +142,20 @@ export function Button({ children, onClick, type = 'button', variant = 'primary'
   };
   return (
     <button
+      {...rest}
       type={type}
-      onClick={() => {
+      onClick={(e) => {
         if (!disabled) playTactileFeedback(variant === 'danger' ? 'warning' : 'tap');
-        onClick?.();
+        onClick?.(e);
       }}
       disabled={disabled}
       className={`${base} ${styles[variant]} ${className}`}
       style={
         variant === 'primary' && color
-          ? { background: color, boxShadow: `0 6px 18px ${color}30` }
+          ? { background: color, boxShadow: `0 6px 18px ${color}30`, ...(rest.style ?? {}) }
           : variant === 'danger'
-          ? { boxShadow: '0 6px 18px rgba(225,29,72,0.28)' }
-          : undefined
+          ? { boxShadow: '0 6px 18px rgba(225,29,72,0.28)', ...(rest.style ?? {}) }
+          : rest.style
       }
     >
       {icon}

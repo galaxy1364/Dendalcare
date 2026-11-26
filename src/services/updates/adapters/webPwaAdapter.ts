@@ -189,7 +189,7 @@ export function queryWorkerCacheInventory(
 
 async function waitForInstallingWorker(
   reg: ServiceWorkerRegistration,
-  timeoutMs = 8000
+  timeoutMs = 15000
 ): Promise<ServiceWorker | null> {
   if (reg.waiting) return reg.waiting;
   const installing = reg.installing;
@@ -200,19 +200,19 @@ async function waitForInstallingWorker(
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
-      resolve(reg.waiting ?? null);
+      resolve(reg.waiting ?? reg.installing ?? null);
     }, timeoutMs);
 
     const onStateChange = () => {
       if (settled) return;
-      if (installing.state === 'installed') {
+      if (installing.state === 'installed' || installing.state === 'activated') {
         settled = true;
         clearTimeout(timer);
         resolve(reg.waiting ?? installing);
       } else if (installing.state === 'redundant') {
         settled = true;
         clearTimeout(timer);
-        resolve(null);
+        resolve(reg.waiting ?? null);
       }
     };
     installing.addEventListener('statechange', onStateChange);
@@ -427,8 +427,8 @@ export class WebPwaUpdateAdapter implements PlatformUpdateAdapter {
       };
     }
 
-    const candidateWorker = await waitForInstallingWorker(reg, 6000);
-    const targetWorker = candidateWorker ?? reg.waiting ?? reg.active;
+    const candidateWorker = await waitForInstallingWorker(reg, 15000);
+    const targetWorker = candidateWorker ?? reg.waiting ?? reg.installing ?? reg.active;
     const identityFn = this.deps.queryWorkerIdentityFn ?? queryWorkerIdentity;
     const workerId = await identityFn(targetWorker);
 
@@ -487,6 +487,10 @@ export class WebPwaUpdateAdapter implements PlatformUpdateAdapter {
   }): Promise<ActivateUpdateResult> {
     const reg = await this.getRegistration();
     const identityFn = this.deps.queryWorkerIdentityFn ?? queryWorkerIdentity;
+
+    if (reg && !reg.waiting && reg.installing) {
+      await waitForInstallingWorker(reg, 10000);
+    }
 
     // If a waiting SW exists, confirm its exact identity BEFORE SKIP_WAITING, then re-query controller AFTER switch
     if (reg?.waiting) {

@@ -177,6 +177,7 @@ async function fetchJsonWithRetry(input: {
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
     };
     if (input.etag) {
       headers['If-None-Match'] = input.etag;

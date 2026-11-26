@@ -572,6 +572,134 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       await context.close();
     }
   });
+
+  test('V16 Financial Intelligence: IRR_TOMAN receivables, guarantee isolation, Persian digit validation & responsive RTL', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      locale: 'fa-IR',
+    });
+    const page = await context.newPage();
+
+    try {
+      await page.addInitScript(() => {
+        window.localStorage.setItem(
+          'minadental_auth_user_v1',
+          JSON.stringify({
+            id: '00000000-0000-0000-0000-000000000101',
+            name: 'دکتر مهدی امیری',
+            role: 'owner',
+            title: 'مدیر کلینیک و جراح دندانپزشک',
+            email: 'mahdiamiri785@gmail.com',
+            phone: '09128446158',
+          })
+        );
+      });
+
+      const cors = { 'Access-Control-Allow-Origin': '*' };
+      await page.route('**/rest/v1/patients*', async (route) => {
+        if (route.request().method() !== 'GET') return route.continue();
+        await route.fulfill({
+          status: 200,
+          headers: cors,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: '00000000-0000-0000-0000-000000000701',
+              tenant_id: 'minadental_clinic',
+              branch_id: 'main',
+              first_name: 'کیان',
+              last_name: 'رضایی',
+              phone: '09127778899',
+              status: 'active',
+              created_at: '2026-11-26T08:00:00Z',
+              updated_at: '2026-11-26T08:00:00Z',
+            },
+          ]),
+        });
+      });
+
+      await page.route('**/rest/v1/treatments*', async (route) => {
+        if (route.request().method() !== 'GET') return route.continue();
+        await route.fulfill({
+          status: 200,
+          headers: cors,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: '00000000-0000-0000-0000-000000000711',
+              tenant_id: 'minadental_clinic',
+              branch_id: 'main',
+              patient_id: '00000000-0000-0000-0000-000000000701',
+              diagnosis: 'ایمپلنت دندان ۱۴',
+              status: 'completed',
+              total_cost: 2000000,
+              paid_amount: 0,
+              discount: 0,
+              performed_at: '2026-11-26',
+              created_at: '2026-11-26T08:00:00Z',
+              updated_at: '2026-11-26T08:00:00Z',
+            },
+          ]),
+        });
+      });
+
+      await page.route('**/rest/v1/checks*', async (route) => {
+        if (route.request().method() !== 'GET') return route.continue();
+        await route.fulfill({
+          status: 200,
+          headers: cors,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: '00000000-0000-0000-0000-000000000721',
+              tenant_id: 'minadental_clinic',
+              branch_id: 'main',
+              patient_id: '00000000-0000-0000-0000-000000000701',
+              check_number: '9911',
+              bank_name: 'سامان',
+              amount: 10000000,
+              due_date: '2026-12-20',
+              status: 'pending',
+              type: 'guarantee',
+              is_guarantee: true,
+              created_at: '2026-11-26T08:00:00Z',
+              updated_at: '2026-11-26T08:00:00Z',
+            },
+          ]),
+        });
+      });
+
+      await page.goto('/#/finance', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+
+      await expect(page.getByTestId('finance_total_receivables')).toContainText('۲٬۰۰۰٬۰۰۰');
+      await expect(page.getByText('چک ضمانت نزد مطب (غیرنقدی):')).toBeVisible();
+
+      // Open Quick Pay sheet and validate fractional input rejection
+      await page.getByTestId('quick_pay_btn_00000000-0000-0000-0000-000000000701').click();
+      await expect(page.getByTestId('finance_quick_pay_sheet')).toBeVisible();
+      await page.getByTestId('quick_pay_amount_input').fill('۱۲.۵');
+      await page.getByTestId('quick_pay_submit_button').click();
+      await expect(page.getByTestId('quick_pay_error_banner')).toContainText('اعشار مجاز نیست');
+
+      // Switch to Transactions & verify Daily Close drawer opens cleanly
+      await page.getByTestId('close_fullscreen_modal_btn').click();
+      await expect(page.getByTestId('finance_quick_pay_sheet')).toBeHidden();
+      await page.getByTestId('finance_tab_transactions').click();
+      await page.getByTestId('finance_open_day_close_btn').click();
+      await expect(page.getByTestId('finance_day_close_sheet')).toBeVisible();
+
+      const overflowOk = await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2
+      );
+      expect(overflowOk).toBe(true);
+    } finally {
+      await context.close();
+    }
+  });
 });
+
 
 

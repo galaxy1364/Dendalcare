@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Printer, X, FileSignature, CheckCircle2, ShieldAlert, Lock, Ban } from 'lucide-react';
 import { toJalaliStr, todayGregorian } from '@/lib/jalali';
 import type { Patient } from '@/lib/supabase';
 import {
   getPatientConsentRecords,
-  recordPrintedUnsignedConsentCommand,
-  signPatientConsentCommand,
-  withdrawPatientConsentCommand,
+  hydratePatientClinicalRecordFromServer,
+  persistPrintedUnsignedConsentCommand,
+  persistSignedPatientConsentCommand,
+  persistWithdrawPatientConsentCommand,
   type ConsentSignatureMethod,
 } from '@/features/clinical-record/clinicalRecordService';
 import { getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
@@ -43,6 +44,11 @@ export function ConsentModal({ open, onClose, patient, actorRole, actorName }: P
   const [statusMessage, setStatusMessage] = useState<{ type: 'info' | 'success' | 'error'; text: string } | null>(null);
   const [, setTick] = useState(0);
 
+  useEffect(() => {
+    if (!open || !patient?.id) return;
+    hydratePatientClinicalRecordFromServer(patient.id).then(() => setTick((t) => t + 1));
+  }, [open, patient?.id]);
+
   if (!open || !patient) return null;
 
   const effectiveRole = actorRole || getRuntimeServerVerifiedRole() || 'dentist';
@@ -52,8 +58,8 @@ export function ConsentModal({ open, onClose, patient, actorRole, actorName }: P
   const selectedTitle = CONSENT_TYPES.find((c) => c.id === consentType)?.title || '';
   const consentHistory = getPatientConsentRecords(patient.id);
 
-  const handlePrintUnsigned = () => {
-    const res = recordPrintedUnsignedConsentCommand({
+  const handlePrintUnsigned = async () => {
+    const res = await persistPrintedUnsignedConsentCommand({
       patientId: patient.id,
       activeContextPatientId: patient.id,
       consentType,
@@ -74,8 +80,8 @@ export function ConsentModal({ open, onClose, patient, actorRole, actorName }: P
     window.print();
   };
 
-  const handleSignAttributableConsent = () => {
-    const res = signPatientConsentCommand({
+  const handleSignAttributableConsent = async () => {
+    const res = await persistSignedPatientConsentCommand({
       patientId: patient.id,
       activeContextPatientId: patient.id,
       consentType,
@@ -98,12 +104,12 @@ export function ConsentModal({ open, onClose, patient, actorRole, actorName }: P
     setTick((t) => t + 1);
     setStatusMessage({
       type: 'success',
-      text: `رضایت‌نامه نسخه ${res.record?.templateVersion} با مستند امضای «${res.record?.signerFullName}» ثبت و قفل شد (غیرقابل ویرایش درجا).`,
+      text: `رضایت‌نامه نسخه ${res.record?.templateVersion} با مستند امضای «${res.record?.signerFullName}» در سرور ثبت و قفل شد (غیرقابل ویرایش درجا).`,
     });
   };
 
-  const handleWithdraw = (consentId: string) => {
-    const res = withdrawPatientConsentCommand({
+  const handleWithdraw = async (consentId: string) => {
+    const res = await persistWithdrawPatientConsentCommand({
       patientId: patient.id,
       consentId,
       reason: withdrawReason || 'لغو رضایت‌نامه به درخواست بیمار',

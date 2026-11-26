@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "channel": "staging",
+  "channel": "stable",
   "platform": "ios",
-  "currentReleaseId": "v4.9.6-fcb79e5530",
-  "releaseSequence": 9000,
-  "manifestUrl": "./releases/v4.9.6-fcb79e5530/release-manifest.json",
-  "updatedAt": "2026-11-26T12:52:53.399Z",
+  "currentReleaseId": "v4.16.0-899b85e85f",
+  "releaseSequence": 116,
+  "manifestUrl": "./releases/v4.16.0-899b85e85f/release-manifest.json",
+  "updatedAt": "2026-11-26T13:58:22.131Z",
   "revokedReleaseIds": [],
   "minSupportedSequence": 1,
   "storeUrl": null

@@ -38,7 +38,7 @@ CREATE INDEX IF NOT EXISTS appointment_cmd_idemp_created_idx
 ALTER TABLE public.appointment_command_idempotency ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.appointment_command_idempotency FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON public.appointment_command_idempotency FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT ON public.appointment_command_idempotency TO authenticated;
+GRANT SELECT ON public.appointment_command_idempotency TO authenticated;
 
 DROP POLICY IF EXISTS appointment_cmd_idemp_select ON public.appointment_command_idempotency;
 CREATE POLICY appointment_cmd_idemp_select
@@ -50,14 +50,6 @@ CREATE POLICY appointment_cmd_idemp_select
   );
 
 DROP POLICY IF EXISTS appointment_cmd_idemp_insert ON public.appointment_command_idempotency;
-CREATE POLICY appointment_cmd_idemp_insert
-  ON public.appointment_command_idempotency
-  FOR INSERT TO authenticated
-  WITH CHECK (
-    actor_id = (SELECT auth.uid())
-    AND current_setting('mina.in_appointment_rpc', true) = 'true'
-    AND public.app_resolve_verified_role(tenant_id, branch_id) IN ('manager', 'dentist', 'secretary')
-  );
 
 -- 1b. Trigger preventing direct API forgery or cross-actor tampering on appointment_command_idempotency
 CREATE OR REPLACE FUNCTION private.enforce_idempotency_ledger_integrity()
@@ -104,6 +96,53 @@ CREATE TRIGGER appointment_cmd_idemp_enforce_integrity
   BEFORE INSERT OR UPDATE OR DELETE ON public.appointment_command_idempotency
   FOR EACH ROW
   EXECUTE FUNCTION private.enforce_idempotency_ledger_integrity();
+
+CREATE OR REPLACE FUNCTION private.record_appointment_idempotency_v14(
+  p_tenant_id text,
+  p_branch_id text,
+  p_client_request_id text,
+  p_appointment_id uuid,
+  p_actor_id uuid,
+  p_operation text,
+  p_payload_hash text,
+  p_response_payload jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF current_setting('mina.in_appointment_rpc', true) IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION 'MINA_IDEMPOTENCY_DIRECT_WRITE_FORBIDDEN: Direct ledger write prohibited'
+      USING ERRCODE = '42501';
+  END IF;
+
+  INSERT INTO public.appointment_command_idempotency (
+    tenant_id,
+    branch_id,
+    client_request_id,
+    appointment_id,
+    actor_id,
+    operation,
+    payload_hash,
+    response_payload
+  ) VALUES (
+    p_tenant_id,
+    p_branch_id,
+    p_client_request_id,
+    p_appointment_id,
+    p_actor_id,
+    p_operation,
+    p_payload_hash,
+    p_response_payload
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION private.record_appointment_idempotency_v14(
+  text, text, text, uuid, uuid, text, text, jsonb
+) FROM PUBLIC, anon, authenticated;
 
 -- 2. Tighten Direct RLS Policies on public.appointments
 -- Only manager, dentist, and secretary may INSERT or UPDATE appointments; only manager may DELETE.
@@ -428,16 +467,7 @@ BEGIN
     'appointment', to_jsonb(v_saved)
   );
 
-  INSERT INTO public.appointment_command_idempotency (
-    tenant_id,
-    branch_id,
-    client_request_id,
-    appointment_id,
-    actor_id,
-    operation,
-    payload_hash,
-    response_payload
-  ) VALUES (
+  PERFORM private.record_appointment_idempotency_v14(
     p_tenant_id,
     p_branch_id,
     btrim(p_client_request_id),

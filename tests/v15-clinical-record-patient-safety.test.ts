@@ -8,6 +8,8 @@ import {
   palmerToFdiTooth,
   classifyLegacyToothRecord,
   appendOdontogramObservationCommand,
+  persistOdontogramObservationToServer,
+  hydratePatientOdontogramFromServer,
   reconcileAmbiguousLegacyToothCommand,
   projectOdontogramCurrentState,
   clearOdontogramLedgerForTesting,
@@ -15,14 +17,21 @@ import {
 import {
   assessPatientAllergySafety,
   recordStructuredAllergyReviewCommand,
+  persistStructuredAllergyReviewCommand,
   recordPrintedUnsignedConsentCommand,
   signPatientConsentCommand,
+  persistSignedPatientConsentCommand,
   attemptInPlaceConsentEditCommand,
   withdrawPatientConsentCommand,
   invalidateConsentOnPlanChangeCommand,
   createClinicalNoteDraftCommand,
   signClinicalNoteCommand,
+  persistSignClinicalNoteCommand,
   amendSignedClinicalNoteCommand,
+  hydratePatientClinicalRecordFromServer,
+  resetClinicalRecordMemoryCacheForReloadTest,
+  getPatientConsentRecords,
+  getPatientClinicalNotes,
   archiveOrDeletePatientCommand,
   clearClinicalRecordLedgersForTesting,
 } from '../src/features/clinical-record/clinicalRecordService';
@@ -763,6 +772,177 @@ export async function runAllV15ClinicalRecordPatientSafetyTests(): Promise<V15Te
           (m) => m.id === 'milestone-17' && m.traceId === 'TRC-MINA-V15-CLINICAL-SAFETY-9017-P' && m.locked,
         ),
       );
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // V15-P0-02: Durable Server-Confirmed Persistence & Reload Hydration
+  // -------------------------------------------------------------------------
+  await runCase(
+    results,
+    'V15-P0-02: Allergy reviews, signed consents, clinical notes, and odontogram persist via server confirmation, fail closed on zero-row/offline, and hydrate across memory resets',
+    async () => {
+      clearClinicalRecordLedgersForTesting();
+      clearOdontogramLedgerForTesting('pat-v15-p0');
+
+      const rejectedClient = {
+        from: () => ({
+          insert: () => ({
+            select: async () => ({ data: [], error: null }),
+          }),
+        }),
+      };
+
+      const zeroRowConsent = await persistSignedPatientConsentCommand({
+        patientId: 'pat-v15-p0',
+        activeContextPatientId: 'pat-v15-p0',
+        consentType: 'implant',
+        procedureScope: 'ایمپلنت ۳۶',
+        risksDiscussed: true,
+        alternativesDiscussed: true,
+        signatureMethod: 'in_person_witnessed_electronic',
+        signerFullName: 'مریم کریمی',
+        attendingClinicianName: 'دکتر مهدی امیری',
+        actorName: 'دکتر مهدی امیری',
+        actorRole: 'manager',
+        isOffline: false,
+        supabaseClient: rejectedClient,
+      });
+      assert.equal(zeroRowConsent.ok, false);
+      assert.equal(zeroRowConsent.persistenceStatus, 'rejected');
+      assert.equal(getPatientConsentRecords('pat-v15-p0').length, 0);
+
+      const serverClient = {
+        from: (table: string) => ({
+          insert: (payload: Record<string, unknown>) => ({
+            select: async () => ({
+              data: [{ id: `srv-${table}-1`, ...payload, signed_at: '2026-11-26T10:00:00Z', reviewed_at: '2026-11-26T10:00:00Z', recorded_at: '2026-11-26T10:00:00Z' }],
+              error: null,
+            }),
+          }),
+          select: () => ({
+            eq: async () => {
+              if (table === 'patient_allergy_reviews') {
+                return {
+                  data: [{
+                    id: 'srv-alg-1',
+                    allergy_status: 'present',
+                    substance_agent: 'پنی‌سیلین',
+                    severity: 'life_threatening',
+                    certainty: 'confirmed_by_clinician',
+                    reviewed_by: 'دکتر مهدی امیری',
+                    reviewer_role: 'manager',
+                    reviewed_at: '2026-11-26T10:00:00Z',
+                  }],
+                  error: null,
+                };
+              }
+              if (table === 'patient_consents') {
+                return {
+                  data: [{
+                    id: 'srv-cns-1',
+                    consent_type: 'implant',
+                    template_version: 'v15.1-fa',
+                    procedure_scope: 'ایمپلنت ۳۶',
+                    risks_discussed: true,
+                    alternatives_discussed: true,
+                    consent_status: 'signed',
+                    signature_method: 'in_person_witnessed_electronic',
+                    signer_full_name: 'مریم کریمی',
+                    signed_at: '2026-11-26T10:00:00Z',
+                  }],
+                  error: null,
+                };
+              }
+              if (table === 'clinical_notes') {
+                return {
+                  data: [{
+                    id: 'srv-note-1',
+                    note_status: 'signed',
+                    assessment_diagnosis: 'نیاز به ایمپلنت',
+                    procedure_narrative: 'جراحی مرحله اول انجام شد',
+                    version: 1,
+                    signed_by: 'دکتر مهدی امیری',
+                    signer_role: 'manager',
+                    signed_at: '2026-11-26T10:00:00Z',
+                  }],
+                  error: null,
+                };
+              }
+              return {
+                data: [{
+                  id: 'srv-obs-1',
+                  fdi_tooth_number: 36,
+                  dentition: 'permanent',
+                  palmer_quadrant: 'LL',
+                  palmer_code: 'LL6',
+                  scope_level: 'whole_tooth',
+                  surface_code: null,
+                  finding_code: 'implant',
+                  clinical_status: 'active',
+                  version: 1,
+                  authored_role: 'manager',
+                  recorded_at: '2026-11-26T10:00:00Z',
+                }],
+                error: null,
+              };
+            },
+          }),
+        }),
+      };
+
+      const persistedAllergy = await persistStructuredAllergyReviewCommand({
+        patientId: 'pat-v15-p0',
+        activeContextPatientId: 'pat-v15-p0',
+        status: 'present',
+        substanceAgent: 'پنی‌سیلین',
+        severity: 'life_threatening',
+        certainty: 'confirmed_by_clinician',
+        reviewedBy: 'دکتر مهدی امیری',
+        reviewerRole: 'manager',
+        supabaseClient: serverClient,
+      });
+      assert.equal(persistedAllergy.ok, true);
+      assert.equal(persistedAllergy.persistenceStatus, 'persisted_server');
+
+      const draft = createClinicalNoteDraftCommand({
+        patientId: 'pat-v15-p0',
+        activeContextPatientId: 'pat-v15-p0',
+        assessmentDiagnosis: 'نیاز به ایمپلنت',
+        procedureNarrative: 'جراحی مرحله اول انجام شد',
+        authoredBy: 'دکتر مهدی امیری',
+        authoredRole: 'manager',
+      });
+      assert.equal(draft.ok, true);
+
+      const offlineSign = await persistSignClinicalNoteCommand({
+        patientId: 'pat-v15-p0',
+        noteId: draft.note!.id,
+        signerName: 'دکتر مهدی امیری',
+        signerRole: 'manager',
+        isOffline: true,
+        supabaseClient: serverClient,
+      });
+      assert.equal(offlineSign.ok, false);
+      assert.equal(getPatientClinicalNotes('pat-v15-p0')[0]?.status, 'draft');
+
+      // Reset memory Maps (simulating full page reload / second device) and hydrate from server
+      resetClinicalRecordMemoryCacheForReloadTest();
+      clearOdontogramLedgerForTesting('pat-v15-p0');
+
+      const hydrated = await hydratePatientClinicalRecordFromServer('pat-v15-p0', {
+        supabaseClient: serverClient,
+      });
+      assert.equal(hydrated.hydrated, true);
+      assert.equal(hydrated.allergiesCount, 1);
+      assert.equal(hydrated.consentsCount, 1);
+      assert.equal(hydrated.notesCount, 1);
+      assert.equal(getPatientConsentRecords('pat-v15-p0')[0]?.persistenceStatus, 'persisted_server');
+
+      const hydratedOdontogram = await hydratePatientOdontogramFromServer('pat-v15-p0', serverClient);
+      assert.equal(hydratedOdontogram.length, 1);
+      assert.equal(hydratedOdontogram[0]?.persistenceStatus, 'persisted_server');
+      assert.equal(hydratedOdontogram[0]?.fdi, 36);
     },
   );
 

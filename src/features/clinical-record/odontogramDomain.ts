@@ -11,8 +11,9 @@
  *     from explicitly recorded 'healthy'.
  */
 
+import { supabase, type ToothCondition } from '@/lib/supabase';
 import { getBackendNamespaceKey } from '@/lib/supabaseCore';
-import type { ToothCondition } from '@/lib/supabase';
+import { getMutationOutcome, hasZeroAffectedRows } from '@/lib/supabaseGuardian';
 
 export type DentitionType = 'permanent' | 'deciduous';
 export type PalmerQuadrant = 'UR' | 'UL' | 'LL' | 'LR';
@@ -71,6 +72,8 @@ export interface OdontogramObservationEvent {
   authoredRole: string;
   recordedAt: string;
   notes?: string | null;
+  persistenceStatus?: 'persisted_server' | 'queued_offline_draft' | 'rejected' | 'unknown';
+  serverId?: string | null;
 }
 
 export interface AmbiguousLegacyToothRecord {
@@ -616,6 +619,138 @@ export function appendOdontogramObservationCommand(
     event: newEvent,
     projection: fullProjection.teethByFdi[coordinate.fdi],
   };
+}
+
+export async function persistOdontogramObservationToServer(
+  input: AppendOdontogramObservationInput & { supabaseClient?: any }
+): Promise<
+  AppendOdontogramObservationResult & {
+    persistenceStatus: 'persisted_server' | 'queued_offline_draft' | 'rejected' | 'unknown';
+  }
+> {
+  const localRes = appendOdontogramObservationCommand(input);
+  if (!localRes.ok || !localRes.event) {
+    return { ...localRes, persistenceStatus: 'rejected' };
+  }
+
+  const db = input.supabaseClient || supabase;
+  try {
+    const query = db.from('odontogram_observations').insert({
+      tenant_id: localRes.event.tenantId,
+      branch_id: localRes.event.branchId,
+      patient_id: localRes.event.patientId,
+      encounter_id: localRes.event.encounterId,
+      dentition: localRes.event.dentition,
+      fdi_tooth_number: localRes.event.fdi,
+      palmer_quadrant: localRes.event.palmerQuadrant,
+      palmer_code: localRes.event.palmerCode,
+      scope_level: localRes.event.scopeLevel,
+      surface_code: localRes.event.surfaceCode,
+      finding_code: localRes.event.findingCode,
+      clinical_status: 'active',
+      version: localRes.event.version,
+      amendment_reason: localRes.event.amendmentReason,
+      provenance_source: localRes.event.provenanceSource,
+      notes: localRes.event.notes ?? null,
+      authored_role: localRes.event.authoredRole,
+    });
+    const res = typeof query?.select === 'function' ? await query.select('*') : await query;
+    const outcome = getMutationOutcome(res);
+    if (outcome === 'error' || (!res?.queuedOffline && hasZeroAffectedRows(res))) {
+      // Revert local pending event on server authorization/constraint rejection
+      const reverted = loadPatientOdontogramObservations(input.patientId).filter(
+        (ev) => ev.id !== localRes.event!.id
+      );
+      savePatientOdontogramObservations(input.patientId, reverted);
+      return {
+        ok: false,
+        persistenceStatus: 'rejected',
+        errorCode: 'MINA_ODONTOGRAM_SERVER_REJECTED',
+        errorMessageFa: 'ثبت مشاهده چارت دندانی توسط سرور تایید نشد.',
+      };
+    }
+
+    const row = Array.isArray(res?.data) ? res.data[0] : res?.data;
+    const persistenceStatus =
+      outcome === 'confirmed' ? ('persisted_server' as const) : ('queued_offline_draft' as const);
+    const finalized: OdontogramObservationEvent = {
+      ...localRes.event,
+      id: row?.id ? String(row.id) : localRes.event.id,
+      persistenceStatus,
+      serverId: row?.id ? String(row.id) : null,
+      recordedAt: row?.recorded_at ? String(row.recorded_at) : localRes.event.recordedAt,
+    };
+    const updatedList = loadPatientOdontogramObservations(input.patientId).map((ev) =>
+      ev.id === localRes.event!.id ? finalized : ev
+    );
+    savePatientOdontogramObservations(input.patientId, updatedList);
+    return {
+      ok: true,
+      persistenceStatus,
+      event: finalized,
+      projection: projectOdontogramCurrentState({
+        patientId: input.patientId,
+        observations: updatedList,
+        legacyRows: [],
+      }).teethByFdi[finalized.fdi],
+    };
+  } catch {
+    return {
+      ok: true,
+      persistenceStatus: 'unknown',
+      event: { ...localRes.event, persistenceStatus: 'unknown' },
+      projection: localRes.projection,
+    };
+  }
+}
+
+export async function hydratePatientOdontogramFromServer(
+  patientId: string,
+  supabaseClient?: any
+): Promise<OdontogramObservationEvent[]> {
+  const db = supabaseClient || supabase;
+  try {
+    const res = await db
+      .from('odontogram_observations')
+      .select('*')
+      .eq('patient_id', patientId);
+    if (!Array.isArray(res?.data)) {
+      return loadPatientOdontogramObservations(patientId);
+    }
+    const serverEvents: OdontogramObservationEvent[] = res.data.map((r: any) => ({
+      id: String(r.id),
+      tenantId: String(r.tenant_id || 'minadental_clinic'),
+      branchId: String(r.branch_id || 'main'),
+      patientId,
+      encounterId: r.encounter_id ?? null,
+      fdi: Number(r.fdi_tooth_number),
+      dentition: r.dentition === 'deciduous' ? 'deciduous' : 'permanent',
+      palmerQuadrant: r.palmer_quadrant,
+      palmerCode: String(r.palmer_code || ''),
+      scopeLevel: r.scope_level === 'surface' ? 'surface' : 'whole_tooth',
+      surfaceCode: r.surface_code ?? null,
+      findingCode: r.finding_code,
+      clinicalStatus: r.clinical_status ?? 'active',
+      version: Number(r.version || 1),
+      supersedesObservationId: r.supersedes_observation_id ?? null,
+      amendmentReason: r.amendment_reason ?? null,
+      provenanceSource: r.provenance_source ?? 'clinician_direct',
+      authoredBy: String(r.authored_by || 'کادر درمان'),
+      authoredRole: String(r.authored_role || 'dentist'),
+      recordedAt: String(r.recorded_at || new Date().toISOString()),
+      notes: r.notes ?? null,
+      persistenceStatus: 'persisted_server',
+      serverId: String(r.id),
+    }));
+    const localDrafts = loadPatientOdontogramObservations(patientId).filter(
+      (l) => !l.serverId && !serverEvents.some((s) => s.id === l.id)
+    );
+    const merged = [...serverEvents, ...localDrafts];
+    savePatientOdontogramObservations(patientId, merged);
+    return merged;
+  } catch {
+    return loadPatientOdontogramObservations(patientId);
+  }
 }
 
 /**

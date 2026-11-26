@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Form';
 import { PalmerChart } from '@/components/PalmerChart';
 import { computePatientClinicalJourney } from '@/features/clinical-journey/patientJourney';
 import { assessPatientAllergySafety } from '@/features/clinical-record/clinicalRecordService';
+import { computePatientFinancialLedger } from '@/features/finance/financialLedgerEngine';
 import { InfoTab, TreatmentsTab } from './PatientClinicalTabs';
 import {
   PaymentsTab, InstallmentsTab, ChecksTab, SaftehTab,
@@ -51,9 +52,17 @@ export function PatientDetail({
   onOpenConsent: () => void;
 }) {
   const [tab, setTab] = useState<PatientTab>('info');
-  const totalCost = treatments.reduce((s, t) => s + Number(t.total_cost), 0);
-  const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
-  const balance = totalCost - totalPaid;
+  const ledger = computePatientFinancialLedger({
+    patient,
+    treatments,
+    payments,
+    installments,
+    checks,
+    safteh,
+  });
+  const totalCost = ledger.postedChargesTotal;
+  const totalPaid = ledger.netPaidTotal;
+  const balance = ledger.totalRemainingDebt;
   const clinicalJourney = computePatientClinicalJourney({
     patient, appointments, treatments, payments, installments, checks, reminders,
   });

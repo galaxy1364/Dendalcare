@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.auditpro.kxmfzq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 65
-    versionName = "4.9.6"
+    versionCode = 116
+    versionName = "4.16.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

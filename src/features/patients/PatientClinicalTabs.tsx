@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Phone, Calendar, Heart, AlertCircle, Pill, FileText, Shield,
-  Stethoscope, Plus, Trash2, CheckCircle2, Lock, FileEdit,
+  Stethoscope, Plus, Trash2,
 } from 'lucide-react';
 import { supabase, type Patient, type Treatment } from '@/lib/supabase';
 import { Sheet } from '@/components/ui/Sheet';
@@ -12,15 +12,13 @@ import { getMutationOutcome } from '@/lib/supabaseGuardian';
 import { getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
 import {
   assessPatientAllergySafety,
-  recordStructuredAllergyReviewCommand,
-  createClinicalNoteDraftCommand,
-  signClinicalNoteCommand,
-  amendSignedClinicalNoteCommand,
-  getPatientClinicalNotes,
+  getPatientAllergyReviews,
+  hydratePatientClinicalRecordFromServer,
+  persistStructuredAllergyReviewCommand,
   type AllergyVerificationStatus,
   type StructuredAllergyReview,
-  type ClinicalNoteRecord,
 } from '@/features/clinical-record/clinicalRecordService';
+import { ClinicalNotesPanel } from './ClinicalNotesPanel';
 
 export const GENDER_OPTIONS = [
   { value: 'male', label: 'مرد' },
@@ -175,28 +173,42 @@ export function PatientForm({
 // ==================== INFO TAB (WITH V15 4-STATE ALLERGY VERIFICATION) ====================
 export function InfoTab({ patient }: { patient: Patient }) {
   const effectiveRole = getRuntimeServerVerifiedRole() || 'manager';
-  const [structuredReviews, setStructuredReviews] = useState<StructuredAllergyReview[] | undefined>(undefined);
+  const [structuredReviews, setStructuredReviews] = useState<StructuredAllergyReview[] | undefined>(() =>
+    getPatientAllergyReviews(patient.id)
+  );
   const [verificationStatus, setVerificationStatus] = useState<AllergyVerificationStatus>('not_asked');
   const [substanceInput, setSubstanceInput] = useState(patient.allergies ?? '');
   const [severityInput, setSeverityInput] = useState<'mild' | 'moderate' | 'life_threatening'>('moderate');
   const [reviewNotice, setReviewNotice] = useState<string | null>(null);
 
+  useEffect(() => {
+    hydratePatientClinicalRecordFromServer(patient.id).then(() => {
+      setStructuredReviews(getPatientAllergyReviews(patient.id));
+    });
+  }, [patient.id]);
+
   const safetyAssessment = assessPatientAllergySafety(patient, structuredReviews);
 
-  const handleSaveAllergyReview = () => {
-    const res = recordStructuredAllergyReviewCommand({
+  const handleSaveAllergyReview = async () => {
+    const res = await persistStructuredAllergyReviewCommand({
       patientId: patient.id,
       activeContextPatientId: patient.id,
       status: verificationStatus,
       substanceAgent: verificationStatus === 'present' ? substanceInput.trim() : null,
       severity: verificationStatus === 'present' ? severityInput : null,
-      certainty: 'confirmed_by_clinician',
+      certainty: ['manager', 'dentist'].includes(effectiveRole)
+        ? 'confirmed_by_clinician'
+        : 'unconfirmed',
       reviewedBy: 'دکتر مهدی امیری',
       reviewerRole: effectiveRole,
     });
     if (res.ok && res.review) {
-      setStructuredReviews((prev) => [...(prev ?? []), res.review!]);
-      setReviewNotice('وضعیت حساسیت دارویی بیمار به‌صورت ساختاریافته ثبت و تأیید شد.');
+      setStructuredReviews(getPatientAllergyReviews(patient.id));
+      setReviewNotice(
+        res.persistenceStatus === 'persisted_server'
+          ? 'وضعیت حساسیت دارویی بیمار به‌صورت ساختاریافته در سرور ثبت و تأیید شد.'
+          : 'بررسی حساسیت به‌صورت پیش‌نویس محلی ذخیره شد (در انتظار همگام‌سازی سرور).'
+      );
     } else {
       setReviewNotice(res.errorMessageFa || 'ثبت بررسی حساسیت انجام نشد.');
     }
@@ -311,12 +323,6 @@ export function TreatmentsTab({ patientId, treatments }: { patientId: string; tr
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [form, setForm] = useState({ diagnosis: '', treatment_plan: '', tooth_numbers: '', total_cost: '', status: 'planned' });
 
-  const [notesList, setNotesList] = useState<ClinicalNoteRecord[]>(() => getPatientClinicalNotes(patientId));
-  const [noteDiagnosis, setNoteDiagnosis] = useState('');
-  const [noteNarrative, setNoteNarrative] = useState('');
-  const [noteTooth, setNoteTooth] = useState('');
-  const [noteFeedback, setNoteFeedback] = useState<string | null>(null);
-
   const save = async () => {
     if (!form.diagnosis.trim()) return;
     setSaving(true);
@@ -342,60 +348,6 @@ export function TreatmentsTab({ patientId, treatments }: { patientId: string; tr
   const del = async (id: string) => {
     const res = await supabase.from('treatments').delete().eq('id', id);
     if (getMutationOutcome(res) === 'error') setErrorMsg('حذف درمان انجام نشد.');
-  };
-
-  const handleCreateDraftNote = () => {
-    const res = createClinicalNoteDraftCommand({
-      patientId,
-      activeContextPatientId: patientId,
-      assessmentDiagnosis: noteDiagnosis.trim() || 'ارزیابی بالینی دندانپزشکی',
-      procedureNarrative: noteNarrative.trim(),
-      fdiTeethScope: noteTooth.trim() || null,
-      authoredBy: 'دکتر مهدی امیری',
-      authoredRole: effectiveRole,
-    });
-    if (res.ok && res.note) {
-      setNotesList(getPatientClinicalNotes(patientId));
-      setNoteDiagnosis('');
-      setNoteNarrative('');
-      setNoteTooth('');
-      setNoteFeedback('پیش‌نویس یادداشت بالینی ذخیره شد.');
-    } else {
-      setNoteFeedback(res.errorMessageFa || 'خطا در ذخیره پیش‌نویس یادداشت.');
-    }
-  };
-
-  const handleSignNote = (note: ClinicalNoteRecord) => {
-    const res = signClinicalNoteCommand({
-      patientId,
-      noteId: note.id,
-      signerName: 'دکتر مهدی امیری',
-      signerRole: effectiveRole,
-    });
-    if (res.ok) {
-      setNotesList(getPatientClinicalNotes(patientId));
-      setNoteFeedback('یادداشت بالینی امضا و قفل قانونی شد.');
-    } else {
-      setNoteFeedback(res.errorMessageFa || 'خطا در امضای یادداشت.');
-    }
-  };
-
-  const handleAmendNote = (note: ClinicalNoteRecord) => {
-    const res = amendSignedClinicalNoteCommand({
-      patientId,
-      parentNoteId: note.id,
-      amendedDiagnosis: note.assessmentDiagnosis,
-      amendedNarrative: `${note.procedureNarrative}\n[اصلاحیه الحاقی ثبت شد]`,
-      amendmentReason: 'تکمیل شرح بالینی پس از امضا بدون بازنویسی نسخه اصلی',
-      signerName: 'دکتر مهدی امیری',
-      signerRole: effectiveRole,
-    });
-    if (res.ok) {
-      setNotesList(getPatientClinicalNotes(patientId));
-      setNoteFeedback('اصلاحیه الحاقی با حفظ نسخه امضاشده اصلی ثبت شد.');
-    } else {
-      setNoteFeedback(res.errorMessageFa || 'خطا در ثبت اصلاحیه.');
-    }
   };
 
   return (
@@ -434,52 +386,7 @@ export function TreatmentsTab({ patientId, treatments }: { patientId: string; tr
         </div>
       ))}
 
-      <div className="rounded-2xl border border-violet-200 bg-violet-50/40 p-3 space-y-2.5 mt-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-black text-violet-900">یادداشت‌های بالینی امضاشده (Draft → Signed → Amended)</span>
-          <span className="text-[10px] font-bold text-violet-700">غیرقابل بازنویسی پس از امضا</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-          <Input value={noteTooth} onChange={(e) => setNoteTooth(e.target.value)} placeholder="کد FDI (مثلاً 16)" className="text-xs" />
-          <Input value={noteDiagnosis} onChange={(e) => setNoteDiagnosis(e.target.value)} placeholder="تشخیص بالینی..." className="text-xs" />
-          <div className="sm:col-span-2">
-            <Input value={noteNarrative} onChange={(e) => setNoteNarrative(e.target.value)} placeholder="شرح اقدام درمانی جلسه..." className="text-xs" />
-          </div>
-        </div>
-        <button type="button" onClick={handleCreateDraftNote} className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-extrabold">
-          ذخیره پیش‌نویس یادداشت بالینی
-        </button>
-        {noteFeedback && <p className="text-[10.5px] font-bold text-violet-800">{noteFeedback}</p>}
-
-        {notesList.map((n) => (
-          <div key={n.id} className="bg-white rounded-xl p-2.5 border border-violet-200 text-xs space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-slate-800">{n.authoredBy} • {n.assessmentDiagnosis} {n.fdiTeethScope ? `• دندان ${n.fdiTeethScope}` : ''}</span>
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-violet-100 text-violet-800">
-                {n.status === 'draft' ? 'پیش‌نویس (Draft)' : n.status === 'signed' ? 'امضاشده و قفل (Signed)' : `اصلاحیه v${n.version} (Amended)`}
-              </span>
-            </div>
-            <p className="text-slate-600 whitespace-pre-wrap">{n.procedureNarrative}</p>
-            <div className="flex items-center gap-2 pt-1">
-              {n.status === 'draft' && (
-                <button type="button" onClick={() => handleSignNote(n)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10.5px] font-bold">
-                  <CheckCircle2 size={12} /> امضا و قفل قانونی
-                </button>
-              )}
-              {n.status === 'signed' && (
-                <>
-                  <button type="button" onClick={() => handleAmendNote(n)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-600 text-white text-[10.5px] font-bold">
-                    <FileEdit size={12} /> ثبت اصلاحیه الحاقی
-                  </button>
-                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
-                    <Lock size={11} /> قفل در برابر ویرایش درجا
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+      <ClinicalNotesPanel patientId={patientId} effectiveRole={effectiveRole} />
     </div>
   );
 }

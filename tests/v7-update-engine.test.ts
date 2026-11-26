@@ -21,6 +21,7 @@ import {
   type UpdateProgress,
 } from '../src/services/updates';
 import { broadcastNewAppBuild } from '../src/lib/updateManager';
+import { CURRENT_APP_BUILD } from '../src/lib/cloudSyncEngine';
 
 export interface V7TestResult {
   name: string;
@@ -870,7 +871,7 @@ export async function runAllV7UpdateEngineTests(): Promise<V7TestResult[]> {
   await runCase('V7-10: Android WebView & iOS App Store adapters report NATIVE_STORE_REQUIRED with zero fake install', async () => {
     const releaseB = await buildRealReleaseBundle({
       semver: '5.0.0',
-      releaseSequence: 70,
+      releaseSequence: Math.max(70, CURRENT_APP_BUILD + 5),
       contentSeed: 'native-B',
       minNativeVersion: '5.0.0',
     });
