@@ -12,6 +12,7 @@ import {
   type EdgeBackTracker,
 } from '@/platform/gestures';
 import { IOSReminderPopup } from '@/components/ui/IOSReminderPopup';
+import { ReleaseWatcher } from '@/components/ui/ReleaseWatcher';
 import { AuroraBackground } from '@/design-system/components/AuroraBackground';
 import { ContextualToolbar } from '@/design-system/primitives/AdaptiveLayout';
 import { useClinicShell } from './AppProviders';
@@ -251,6 +252,8 @@ export function AppShell() {
         </div>
       </div>
 
+      <ReleaseWatcher />
+      <ReleaseWatcher />
       <OverlayManager />
     </div>
   );

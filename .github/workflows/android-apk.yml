@@ -56,7 +56,7 @@ jobs:
       - name: Compute strict monotonic Web & Android release sequence (aligned with deploy.yml)
         id: seq
         env:
-          MINA_BASE_SEQUENCE: '224'
+          MINA_BASE_SEQUENCE: '230'
         run: |
           node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --allow-legacy-root-migration
 
