@@ -416,8 +416,9 @@ export class WebPwaUpdateAdapter implements PlatformUpdateAdapter {
       };
     }
 
+    let activeReg = reg;
     try {
-      await reg.update();
+      await activeReg.update();
     } catch (swErr) {
       return {
         ok: false,
@@ -429,10 +430,38 @@ export class WebPwaUpdateAdapter implements PlatformUpdateAdapter {
       };
     }
 
-    const candidateWorker = await waitForInstallingWorker(reg, 15000);
-    const targetWorker = candidateWorker ?? reg.waiting ?? reg.installing ?? reg.active;
+    let candidateWorker = await waitForInstallingWorker(activeReg, 15000);
+    let targetWorker = candidateWorker ?? activeReg.waiting ?? activeReg.installing ?? activeReg.active;
     const identityFn = this.deps.queryWorkerIdentityFn ?? queryWorkerIdentity;
-    const workerId = await identityFn(targetWorker);
+    let workerId = await identityFn(targetWorker);
+
+    // GE-0008 Permanent Fix for GitHub Pages / Fastly 10-minute CDN caching on `./sw.js`:
+    // If `reg.update()` returned the previous SW buildId (stale browser/CDN cache), register
+    // the exact same root scope with a release-keyed query string `./sw.js?v=<releaseId>` and
+    // `updateViaCache: 'none'`. This forces an immediate CDN origin miss while keeping full `./`
+    // scope and strict fail-closed `GET_BUILD_ID` + `VERIFY_CACHE_INVENTORY` attestation!
+    if (
+      workerId.buildId !== input.manifest.releaseId &&
+      !this.deps.getRegistrationFn &&
+      typeof navigator !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      typeof navigator.serviceWorker.register === 'function'
+    ) {
+      try {
+        const versionedSwUrl = `./sw.js?v=${encodeURIComponent(input.manifest.releaseId)}`;
+        const freshReg = await navigator.serviceWorker.register(versionedSwUrl, {
+          scope: './',
+          updateViaCache: 'none',
+        });
+        await freshReg.update().catch(() => {});
+        activeReg = freshReg;
+        candidateWorker = await waitForInstallingWorker(activeReg, 15000);
+        targetWorker = candidateWorker ?? activeReg.waiting ?? activeReg.installing ?? activeReg.active;
+        workerId = await identityFn(targetWorker);
+      } catch {
+        // Fall through to strict fail-closed BOOT_MISMATCH check below
+      }
+    }
 
     if (!workerId.buildId || workerId.buildId === 'dev-local') {
       return {

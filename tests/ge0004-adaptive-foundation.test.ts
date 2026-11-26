@@ -160,28 +160,23 @@ export async function runAllGe0004AdaptiveFoundationTests(): Promise<Ge0004TestR
     })
   );
 
-  // 3. P0-2: Monotonic sequence reconciliation (> 166 -> 167, v4.17.0) across all config files
+  // 3. P0-2: Monotonic sequence reconciliation (> 166 / > 223 -> >= 224) across all config files
   results.push(
-    await runCase('GE-0004 P0-2: Sequence reconciled monotonically past live #166 to #167 (v4.17.0) across repo & workflows', () => {
-      assert.ok(CURRENT_APP_BUILD > 166, `CURRENT_APP_BUILD (${CURRENT_APP_BUILD}) must be strictly > 166`);
-      assert.equal(CURRENT_APP_BUILD, 167);
-      assert.equal(CURRENT_APP_VERSION, '4.17.0');
-
+    await runCase('GE-0004 P0-2: Sequence reconciled monotonically past live #166/#223 across repo & workflows', () => {
       const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-      assert.equal(pkg.version, '4.17.0');
-
       const pubVer = JSON.parse(fs.readFileSync(path.join(root, 'public', 'version.json'), 'utf8'));
-      assert.equal(pubVer.semver, '4.17.0');
-      assert.equal(pubVer.releaseSequence, 167);
-
       const gradle = fs.readFileSync(path.join(root, 'app', 'build.gradle.kts'), 'utf8');
-      assert.ok(gradle.includes('versionCode = 167'), 'Android versionCode must be 167');
-      assert.ok(gradle.includes('versionName = "4.17.0"'), 'Android versionName must be 4.17.0');
-
       const deployYml = fs.readFileSync(path.join(root, '.github', 'workflows', 'deploy.yml'), 'utf8');
       const releaseYml = fs.readFileSync(path.join(root, '.github', 'workflows', 'release.yml'), 'utf8');
-      assert.ok(deployYml.includes("MINA_BASE_SEQUENCE: '167'"), 'deploy.yml must reconcile base sequence to 167');
-      assert.ok(releaseYml.includes("MINA_BASE_SEQUENCE: '167'"), 'release.yml must reconcile base sequence to 167');
+
+      assert.ok(CURRENT_APP_BUILD >= 224, `CURRENT_APP_BUILD (${CURRENT_APP_BUILD}) must be >= 224`);
+      assert.equal(CURRENT_APP_VERSION, pkg.version);
+      assert.equal(pubVer.semver, pkg.version);
+      assert.equal(pubVer.releaseSequence, CURRENT_APP_BUILD);
+      assert.ok(gradle.includes(`versionCode = ${CURRENT_APP_BUILD}`), `Android versionCode must be ${CURRENT_APP_BUILD}`);
+      assert.ok(gradle.includes(`versionName = "${pkg.version}"`), `Android versionName must be ${pkg.version}`);
+      assert.ok(deployYml.includes(`MINA_BASE_SEQUENCE: '${CURRENT_APP_BUILD}'`), 'deploy.yml must reconcile base sequence');
+      assert.ok(releaseYml.includes(`MINA_BASE_SEQUENCE: '${CURRENT_APP_BUILD}'`), 'release.yml must reconcile base sequence');
     })
   );
 

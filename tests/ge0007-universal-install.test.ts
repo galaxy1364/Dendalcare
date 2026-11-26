@@ -79,22 +79,27 @@ export async function runAllGe0007UniversalInstallTests(): Promise<Ge0007TestRes
       },
     },
     {
-      name: 'GE-0007 P0-APK & CI Parity: android-apk.yml uses monotonic MINA_RELEASE_SEQUENCE (>= 167), enforces verify-apk-artifact.mjs & aligns Gradle + Vite',
+      name: 'GE-0007 P0-APK & CI Parity: android-apk.yml uses monotonic MINA_RELEASE_SEQUENCE (>= 224), enforces verify-apk-artifact.mjs & aligns Gradle + Vite',
       fn: () => {
+        const pkg = JSON.parse(readWorkspaceFile('package.json'));
+        const pubVer = JSON.parse(readWorkspaceFile('public/version.json'));
         const wf = readWorkspaceFile('.github/workflows/android-apk.yml');
         assert.ok(!wf.includes('github.run_number'), 'android-apk.yml must NEVER use github.run_number as MINA_RELEASE_SEQUENCE');
-        assert.ok(wf.includes("MINA_BASE_SEQUENCE: '167'"), 'android-apk.yml must align MINA_BASE_SEQUENCE with deploy.yml');
+        assert.ok(wf.includes(`MINA_BASE_SEQUENCE: '${pubVer.releaseSequence}'`), 'android-apk.yml must align MINA_BASE_SEQUENCE with deploy.yml');
         assert.ok(wf.includes('scripts/ci-release-gate.mjs --compute-sequence'), 'android-apk.yml must compute monotonic release sequence');
         assert.ok(wf.includes('gradle ${{ steps.sign_mode.outputs.gradle_task }}'), 'Workflow must assemble APK via Gradle');
         assert.ok(wf.includes('scripts/verify-apk-artifact.mjs'), 'Workflow must invoke automated verify-apk-artifact.mjs gate');
         assert.ok(wf.includes('--require-apksigner'), 'CI APK verification gate must strictly require apksigner');
-        assert.ok(wf.includes('gh release upload android-latest') || wf.includes('gh release create android-latest'), 'Workflow must publish to android-latest GitHub Release');
+        assert.ok(
+          wf.includes('release_tag=android-latest') && (wf.includes('gh release upload "$RELEASE_TAG"') || wf.includes('gh release create "$RELEASE_TAG"')),
+          'Workflow must publish to android-latest GitHub Release'
+        );
         assert.ok(wf.includes('apk-release.json'), 'Workflow must emit machine-readable apk-release.json');
 
         const gradleSrc = readWorkspaceFile('app/build.gradle.kts');
         assert.ok(gradleSrc.includes('System.getenv("MINA_RELEASE_SEQUENCE")'), 'app/build.gradle.kts must honor CI MINA_RELEASE_SEQUENCE');
-        assert.ok(gradleSrc.includes('versionCode = 167'), 'app/build.gradle.kts must preserve baseline versionCode = 167');
-        assert.ok(gradleSrc.includes('versionName = "4.17.0"'), 'app/build.gradle.kts must match package.json versionName 4.17.0');
+        assert.ok(gradleSrc.includes(`versionCode = ${pubVer.releaseSequence}`), `app/build.gradle.kts must preserve baseline versionCode = ${pubVer.releaseSequence}`);
+        assert.ok(gradleSrc.includes(`versionName = "${pkg.version}"`), `app/build.gradle.kts must match package.json versionName ${pkg.version}`);
 
         const viteSrc = readWorkspaceFile('vite.config.ts');
         assert.ok(viteSrc.includes('readAndroidGradleBaseline'), 'vite.config.ts must verify Web/Android version parity against app/build.gradle.kts');

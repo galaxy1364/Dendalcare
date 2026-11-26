@@ -56,7 +56,7 @@ jobs:
       - name: Compute strict monotonic Web & Android release sequence (aligned with deploy.yml)
         id: seq
         env:
-          MINA_BASE_SEQUENCE: '167'
+          MINA_BASE_SEQUENCE: '224'
         run: |
           node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --allow-legacy-root-migration
 
@@ -156,7 +156,7 @@ jobs:
             const fs = require("node:fs");
             const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
             const webMeta = JSON.parse(fs.readFileSync("dist/version.json", "utf8"));
-            const versionCode = Number(process.env.MINA_RELEASE_SEQUENCE || webMeta.releaseSequence || 167);
+            const versionCode = Number(process.env.MINA_RELEASE_SEQUENCE || webMeta.releaseSequence || 224);
             const versionName = String(pkg.version);
             const tag = process.env.RELEASE_TAG || "android-latest";
             const meta = {

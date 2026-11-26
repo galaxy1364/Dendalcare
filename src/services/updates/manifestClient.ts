@@ -337,8 +337,24 @@ export async function fetchAuthoritativeRelease(
     };
   }
 
+  // GE-0008 CDN-Bust: On live browser requests without an ETag (manual check, startup, online, sw_event),
+  // append a query cache-buster so Fastly/GitHub Pages 10-min edge caches never serve stale release-pointer.json.
+  // Keep endpointUrl clean and never mutate URLs when a custom test fetchFn is injected.
+  let outboundPointerUrl = pointerUrl;
+  if (!options?.fetchFn && !options?.etag && typeof window !== 'undefined') {
+    try {
+      const u = new URL(pointerUrl, window.location.href);
+      if (u.pathname.endsWith('release-pointer.json')) {
+        u.searchParams.set('_cb', String(Date.now()));
+        outboundPointerUrl = u.toString();
+      }
+    } catch {
+      outboundPointerUrl = pointerUrl;
+    }
+  }
+
   const pointerRes = await fetchJsonWithRetry({
-    url: pointerUrl,
+    url: outboundPointerUrl,
     etag: options?.etag,
     timeoutMs,
     maxRetries,

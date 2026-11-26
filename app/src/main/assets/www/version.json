@@ -1,20 +1,20 @@
 {
   "schemaVersion": 2,
-  "version": "4.17.0",
-  "semver": "4.17.0",
-  "build": 167,
-  "releaseSequence": 167,
-  "androidVersionCode": 167,
-  "androidVersionName": "4.17.0",
-  "buildId": "v4.17.0-3a33e14530",
-  "releaseId": "v4.17.0-3a33e14530",
-  "contentDigest": "3a33e14530343c6bc1e8dbdda9d9562c9aca388dfbca00e912cfc62f3f88070c",
-  "packageVersion": "4.17.0",
+  "version": "4.18.0",
+  "semver": "4.18.0",
+  "build": 224,
+  "releaseSequence": 224,
+  "androidVersionCode": 224,
+  "androidVersionName": "4.18.0",
+  "buildId": "v4.18.0-1ec20b815f",
+  "releaseId": "v4.18.0-1ec20b815f",
+  "contentDigest": "1ec20b815f950c1cde18096dea60ee6b7c8f946668e1f0c8f861b9c327b107d1",
+  "packageVersion": "4.18.0",
   "channel": "stable",
-  "publishedAt": "2026-11-26T20:19:24.341Z",
-  "releaseNotes": "نسخه v4.17.0 (انتشار #167) — هم‌ترازی یکنواخت توالی انتشار پس از #166، تفکیک سه‌گانه نسخه وب/سرور/بومی، بازیابی احراز هویت و RLS مدیر کلینیک، و بازمهندسی بنیادین اسکلت تطبیقی جهانی (GE-0004)",
+  "publishedAt": "2026-11-26T20:43:43.637Z",
+  "releaseNotes": "نسخه v4.18.0 (انتشار #224) — رفع دائمی خطای کش CDN و Service Worker در آپدیت خودکار، طراحی لبه به لبه (Edge-to-Edge)، لوگوی سه‌بعدی بدون کادر ۷-حالته، و یکپارچه‌سازی کامل انتشار وب و APK امضاشده (GE-0008)",
   "entryScripts": [
-    "./assets/index-DOx1311S.js"
+    "./assets/index-BOGLpFtt.js"
   ],
   "entryStyles": [
     "./assets/index-DR6etgu_.css"

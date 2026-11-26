@@ -19,7 +19,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_ROOT = path.resolve(__dirname, '..');
 
-export const MIN_MONOTONIC_SEQUENCE = 167;
+export const MIN_MONOTONIC_SEQUENCE = 224;
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 export function readPlatformVersions(repoRoot = DEFAULT_ROOT) {
@@ -145,16 +145,23 @@ export function syncVersionAcrossPlatforms(options = {}) {
       pub.semver = targetVersion;
       dirty = true;
     }
-    const pubSeq = Number(pub.releaseSequence || pub.build || 0);
+    if (pub.androidVersionName !== undefined && pub.androidVersionName !== targetVersion) {
+      drifts.push(`public/version.json androidVersionName (${pub.androidVersionName}) != package.json (${targetVersion})`);
+      pub.androidVersionName = targetVersion;
+      dirty = true;
+    }
+    const pubSeq = Number(pub.releaseSequence || pub.build || pub.androidVersionCode || 0);
     if (pubSeq < MIN_MONOTONIC_SEQUENCE) {
       drifts.push(`public/version.json releaseSequence (${pubSeq}) < minimum (${MIN_MONOTONIC_SEQUENCE})`);
       pub.releaseSequence = targetSequence;
       pub.build = targetSequence;
+      if (pub.androidVersionCode !== undefined) pub.androidVersionCode = targetSequence;
       dirty = true;
     } else if (parsedRequestedSeq !== null && pubSeq !== targetSequence) {
       drifts.push(`public/version.json releaseSequence (${pubSeq}) != target sequence (${targetSequence})`);
       pub.releaseSequence = targetSequence;
       pub.build = targetSequence;
+      if (pub.androidVersionCode !== undefined) pub.androidVersionCode = targetSequence;
       dirty = true;
     }
 
@@ -179,13 +186,15 @@ export function syncVersionAcrossPlatforms(options = {}) {
 }
 
 function parseCliArgs(argv) {
-  const args = { checkOnly: false, sequenceOverride: null, json: false };
+  const args = { checkOnly: false, sequenceOverride: null, json: false, repoRoot: DEFAULT_ROOT };
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     if (token === '--check') {
       args.checkOnly = true;
     } else if (token === '--sequence' && argv[i + 1]) {
       args.sequenceOverride = Number(argv[++i]);
+    } else if (token === '--root' && argv[i + 1]) {
+      args.repoRoot = path.resolve(argv[++i]);
     } else if (token === '--json') {
       args.json = true;
     }

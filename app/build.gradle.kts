@@ -17,13 +17,13 @@ android {
     applicationId = "com.aistudio.auditpro.kxmfzq"
     minSdk = 24
     targetSdk = 36
-    val baseVersionCode = 175
+    val baseVersionCode = 230
     val ciReleaseSequence = System.getenv("MINA_RELEASE_SEQUENCE")?.trim()?.toIntOrNull()?.takeIf { it >= baseVersionCode }
-    versionCode = 175
+    versionCode = 230
     if (ciReleaseSequence != null) {
       versionCode = ciReleaseSequence
     }
-    versionName = "4.17.0"
+    versionName = "4.18.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

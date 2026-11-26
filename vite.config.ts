@@ -112,7 +112,7 @@ function resolveBuildIdentityInputs(): {
   baseVersionMeta: Record<string, unknown>;
 } {
   const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'));
-  const semver = String(pkg.version || '4.17.0');
+  const semver = String(pkg.version || '4.18.0');
   const androidBaseline = readAndroidGradleBaseline();
   if (androidBaseline.versionName && androidBaseline.versionName !== semver) {
     throw new Error(
@@ -123,8 +123,8 @@ function resolveBuildIdentityInputs(): {
   const publicDir = path.resolve(__dirname, 'public');
   const baseVersionPath = path.join(publicDir, 'version.json');
   let baseVersionMeta: Record<string, unknown> = {
-    releaseSequence: androidBaseline.versionCode ?? 167,
-    build: androidBaseline.versionCode ?? 167,
+    releaseSequence: androidBaseline.versionCode ?? 224,
+    build: androidBaseline.versionCode ?? 224,
     channel: 'stable',
   };
   if (fs.existsSync(baseVersionPath)) {
@@ -139,7 +139,7 @@ function resolveBuildIdentityInputs(): {
   const isCiRelease = Boolean(envSeqRaw && /^\d+$/.test(envSeqRaw) && Number(envSeqRaw) > 0);
   const releaseSequence = isCiRelease
     ? Number(envSeqRaw)
-    : Number(baseVersionMeta.releaseSequence || baseVersionMeta.build || androidBaseline.versionCode || 167);
+    : Number(baseVersionMeta.releaseSequence || baseVersionMeta.build || androidBaseline.versionCode || 224);
   if (androidBaseline.versionCode && releaseSequence < androidBaseline.versionCode) {
     throw new Error(
       `[vite-sync] Monotonic sequence drift: Web releaseSequence (#${releaseSequence}) < Android baseline versionCode (#${androidBaseline.versionCode})`
@@ -347,6 +347,10 @@ function syncDeterministicReleasePlugin(): Plugin {
           throw new Error("[vite-sync] Expected value-only placeholder '__MINA_BUILD_ID_VALUE__' in public/sw.js");
         }
         swSource = swSource.replace(swBuildPlaceholder, JSON.stringify(buildId));
+        const swSeqPlaceholder = "'__MINA_RELEASE_SEQ_VALUE__'";
+        if (swSource.includes(swSeqPlaceholder)) {
+          swSource = swSource.replace(swSeqPlaceholder, JSON.stringify(String(releaseSequence)));
+        }
         swSource = swSource.replace(
           /const CRITICAL_PRECACHE_ASSETS = \/\*__MINA_CRITICAL_ASSETS__\*\/ \[[\s\S]*?\];/,
           `const CRITICAL_PRECACHE_ASSETS = ${JSON.stringify(criticalPrecacheAssets, null, 2)};`
@@ -357,6 +361,7 @@ function syncDeterministicReleasePlugin(): Plugin {
         );
         if (
           swSource.includes('__MINA_BUILD_ID') ||
+          swSource.includes('__MINA_RELEASE_SEQ') ||
           swSource.includes('__MINA_PRECACHE_ASSETS__') ||
           swSource.includes('__MINA_CRITICAL_ASSETS__')
         ) {

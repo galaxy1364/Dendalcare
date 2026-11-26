@@ -76,13 +76,13 @@ export async function runAllGe0008EdgeMascotReleaseTests(): Promise<Ge0008TestRe
           'utf8'
         );
 
-        execFileSync(process.execPath, [scriptPath, '--root', tmpDir, '--sequence', '175'], {
+        execFileSync(process.execPath, [scriptPath, '--root', tmpDir, '--sequence', '230'], {
           encoding: 'utf8',
         });
 
         const updatedGradle = fs.readFileSync(path.join(tmpDir, 'app/build.gradle.kts'), 'utf8');
         assert(updatedGradle.includes('versionName = "4.19.2"'), 'Gradle versionName must sync to 4.19.2');
-        assert(updatedGradle.includes('versionCode = 175'), 'Gradle versionCode must sync to monotonic 175');
+        assert(updatedGradle.includes('versionCode = 230'), 'Gradle versionCode must sync to monotonic 230');
         assert(
           updatedGradle.includes('storeFile = file("debug.keystore")'),
           'sync-version.mjs must NEVER alter signingConfigs'
@@ -92,7 +92,7 @@ export async function runAllGe0008EdgeMascotReleaseTests(): Promise<Ge0008TestRe
           fs.readFileSync(path.join(tmpDir, 'public/version.json'), 'utf8')
         );
         assert(updatedVersionJson.version === '4.19.2', 'public/version.json version must sync');
-        assert(updatedVersionJson.androidVersionCode === 175, 'public/version.json androidVersionCode must sync');
+        assert(updatedVersionJson.androidVersionCode === 230, 'public/version.json androidVersionCode must sync');
 
         // Verify check mode now passes on repaired fixture
         execFileSync(process.execPath, [scriptPath, '--root', tmpDir, '--check'], {
@@ -120,7 +120,7 @@ Certificate fingerprints:
 `;
       const parsedDebug = parseKeytoolPrintCertOutput(sampleDebugCert);
       assert(parsedDebug.owner === 'C=US, O=Android, CN=Android Debug', 'keytool parser must extract Owner DN');
-      assert(parsedDebug.sha256?.startsWith('11:22:33:44'), 'keytool parser must extract SHA256 fingerprint');
+      assert(parsedDebug.certSha256?.startsWith('11223344'), 'keytool parser must extract normalized SHA256 fingerprint');
       assert(isDebugCertificateDn(parsedDebug.owner), 'Debug certificate DN must be detected');
       assert(
         !isDebugCertificateDn('CN=MinaDental Release, O=MinaDental Clinic, C=IR'),
@@ -160,19 +160,19 @@ Certificate fingerprints:
       assert(computeMascotMood([], 0, { isOnline: true, isAuthorized: false }) === 'neutral', 'Unauthorized signal -> neutral');
       assert(
         computeMascotMood(
-          [{ id: 'a1', title: 'چک سررسید گذشته', subtitle: '', urgency: 'overdue', section: 'finance', kind: 'finance' }],
+          [{ id: 'a1', domain: 'finance', targetSection: 'finance', patientName: 'بیمار', title: 'چک سررسید گذشته', subtitle: '', dueDate: '2026-11-20', urgency: 'critical' }],
           1,
           { isOnline: true, isAuthorized: true }
         ) === 'sad',
-        'Overdue alert -> sad'
+        'Overdue/critical alert -> sad'
       );
       assert(
         computeMascotMood(
-          [{ id: 'a2', title: 'یادآوری امروز', subtitle: '', urgency: 'today', section: 'appointments', kind: 'appointment' }],
+          [{ id: 'a2', domain: 'appointment', targetSection: 'appointments', patientName: 'بیمار', title: 'یادآوری پیش‌رو', subtitle: '', dueDate: '2026-11-28', urgency: 'upcoming' }],
           1,
           { isOnline: true, isAuthorized: true }
         ) === 'concerned',
-        'Today alert -> concerned'
+        'Pending upcoming alert -> concerned'
       );
       assert(
         computeMascotMood([], 0, { isOnline: true, isAuthorized: true, justCompleted: true }) === 'celebrating',
@@ -210,6 +210,18 @@ Certificate fingerprints:
       assert(css.includes('padding-inline-start: var(--safe-left);'), 'app-shell-viewport must use logical RTL horizontal safe areas');
       assert(css.includes('@supports not ((backdrop-filter: blur(1px))'), 'index.css must include legacy WebView backdrop-filter fallback');
       assert(css.includes('@keyframes mascotTouchPop'), 'index.css must define mascot touch reaction animation');
+    }),
+
+    await runCase('GE-0008 #6: Permanent OTA anti-stale-CDN defenses (SW sequence guard, ./sw.js?v= CDN bypass & release-pointer cache-buster)', () => {
+      const swSrc = fs.readFileSync(path.join(ROOT, 'public/sw.js'), 'utf8');
+      assert(swSrc.includes('RESOLVED_RELEASE_SEQ'), 'sw.js must track RESOLVED_RELEASE_SEQ to reject stale older CDN HTML');
+      assert(swSrc.includes('validation.responseReleaseSeq > RESOLVED_RELEASE_SEQ'), 'sw.js must only pass through mismatched HTML when strictly newer');
+
+      const adapterSrc = fs.readFileSync(path.join(ROOT, 'src/services/updates/adapters/webPwaAdapter.ts'), 'utf8');
+      assert(adapterSrc.includes('./sw.js?v=${encodeURIComponent(input.manifest.releaseId)}'), 'WebPwaUpdateAdapter must fall back to same-scope CDN-bypassing ./sw.js?v=<releaseId>');
+
+      const clientSrc = fs.readFileSync(path.join(ROOT, 'src/services/updates/manifestClient.ts'), 'utf8');
+      assert(clientSrc.includes("u.searchParams.set('_cb'"), 'manifestClient must bypass edge CDN cache on fresh browser release-pointer fetches');
     }),
   ];
 }

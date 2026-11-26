@@ -2,8 +2,10 @@
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
 // NOTE: Structural HTML checks below prevent cache poisoning & raw-TSX contamination;
 // they are NOT a substitute for cryptographic ECDSA manifest signature verification.
-const BUILD_ID = "v4.17.0-3a33e14530";
+const BUILD_ID = "v4.18.0-1ec20b815f";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
+const RELEASE_SEQ_RAW = "224";
+const RESOLVED_RELEASE_SEQ = /^\d+$/.test(RELEASE_SEQ_RAW) ? Number(RELEASE_SEQ_RAW) : 0;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
 const NAVIGATION_TIMEOUT_MS = 4500;
@@ -14,14 +16,14 @@ const VALID_BUILD_ID_RE = /^v\d+\.\d+\.\d+-[0-9a-f]{10}$/;
 const CRITICAL_PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-DOx1311S.js",
+  "./assets/index-BOGLpFtt.js",
   "./assets/index-DR6etgu_.css"
 ];
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-DOx1311S.js",
+  "./assets/index-BOGLpFtt.js",
   "./assets/index-DR6etgu_.css",
   "./manifest.json",
   "./favicon.svg",
@@ -117,27 +119,29 @@ function validateNavigationHtml(htmlText, expectedBuildId = RESOLVED_BUILD_ID) {
 
   const metaMatch = htmlText.match(/<meta\s+name=["']minadental-build-id["']\s+content=["']([^"']+)["']/i);
   const responseBuildId = metaMatch ? metaMatch[1].trim() : null;
+  const seqMatch = htmlText.match(/<meta\s+name=["']minadental-release-seq["']\s+content=["'](\d+)["']/i);
+  const responseReleaseSeq = seqMatch ? Number(seqMatch[1]) : 0;
   if (!responseBuildId) {
-    return { valid: false, reason: 'MISSING_BUILD_ID_META', responseBuildId: null };
+    return { valid: false, reason: 'MISSING_BUILD_ID_META', responseBuildId: null, responseReleaseSeq };
   }
 
   const isProdWorker = expectedBuildId !== 'dev-local';
   if (isProdWorker) {
     if (responseBuildId === 'dev-local' || !VALID_BUILD_ID_RE.test(responseBuildId)) {
-      return { valid: false, reason: 'INVALID_OR_DEV_BUILD_ID', responseBuildId };
+      return { valid: false, reason: 'INVALID_OR_DEV_BUILD_ID', responseBuildId, responseReleaseSeq };
     }
     if (responseBuildId !== expectedBuildId) {
-      return { valid: false, reason: 'BUILD_ID_MISMATCH', responseBuildId };
+      return { valid: false, reason: 'BUILD_ID_MISMATCH', responseBuildId, responseReleaseSeq };
     }
     // Require a compiled JS module bundle reference under assets/
     const hasCompiledModuleEntry = /<script\b[^>]*type=["']module["'][^>]*src=["'][^"']*assets\/[^"']+\.(?:m?js)(?:[?#][^"']*)?["']/i.test(htmlText) ||
       /<script\b[^>]*src=["'][^"']*assets\/[^"']+\.(?:m?js)(?:[?#][^"']*)?["'][^>]*type=["']module["']/i.test(htmlText);
     if (!hasCompiledModuleEntry) {
-      return { valid: false, reason: 'MISSING_COMPILED_ENTRY_SCRIPT', responseBuildId };
+      return { valid: false, reason: 'MISSING_COMPILED_ENTRY_SCRIPT', responseBuildId, responseReleaseSeq };
     }
   }
 
-  return { valid: true, reason: 'OK', responseBuildId };
+  return { valid: true, reason: 'OK', responseBuildId, responseReleaseSeq };
 }
 
 function isCacheableResponse(request, response, pathname) {
@@ -541,16 +545,27 @@ async function handleNavigationRequest(request, url) {
         return networkResponse;
       }
 
-      // V10 P0: Never cache structurally invalid HTML (raw TSX, dev-local, captive portal, mismatched build).
-      // If a newer valid release HTML arrived (BUILD_ID_MISMATCH with valid compiled bundle), serve it without poisoning THIS worker's cache.
-      if (validation.reason === 'BUILD_ID_MISMATCH' && validation.responseBuildId && VALID_BUILD_ID_RE.test(validation.responseBuildId)) {
-        const newerCheck = validateNavigationHtml(htmlProbe, validation.responseBuildId);
-        if (newerCheck.valid) {
-          return networkResponse;
+      // V10/GE-0008 P0: Never cache structurally invalid HTML (raw TSX, dev-local, captive portal, mismatched build).
+      // Only pass through mismatched HTML if it is STRICTLY NEWER than this worker's releaseSequence.
+      // If a stale CDN (e.g. GitHub Pages 10-min Fastly cache) returns an OLDER index.html after we just
+      // activated a newer release, reject the stale network HTML and serve THIS worker's verified cached shell!
+      if (
+        validation.reason === 'BUILD_ID_MISMATCH' &&
+        validation.responseBuildId &&
+        VALID_BUILD_ID_RE.test(validation.responseBuildId)
+      ) {
+        const isStrictlyNewerRelease =
+          RESOLVED_RELEASE_SEQ === 0 ||
+          (validation.responseReleaseSeq > 0 && validation.responseReleaseSeq > RESOLVED_RELEASE_SEQ);
+        if (isStrictlyNewerRelease) {
+          const newerCheck = validateNavigationHtml(htmlProbe, validation.responseBuildId);
+          if (newerCheck.valid) {
+            return networkResponse;
+          }
         }
       }
 
-      // Broken/poisoned HTML (raw TSX, dev-local, missing entry script, captive portal): fall back to verified cached shell!
+      // Broken/poisoned OR stale-CDN older HTML: fall back to THIS worker's verified cached shell!
       const verifiedFallback = await getVerifiedCachedShell(cache, request);
       if (verifiedFallback) return verifiedFallback;
       return createOfflineHtmlResponse();
