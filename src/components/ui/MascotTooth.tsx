@@ -44,39 +44,39 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
           : 'دندان مینا - هوش مصنوعی و تحلیل داده'
       }
     >
-      {/* Background Soft Glow Aura */}
+      {/* Background Soft Purple Aura */}
       <div
-        className="absolute inset-0 rounded-full blur-md opacity-40 transition-colors duration-500 pointer-events-none"
+        className="absolute inset-0 rounded-full blur-md opacity-55 transition-colors duration-500 pointer-events-none"
         style={{
           background:
             mood === 'sad'
-              ? 'radial-gradient(circle, #F87171 0%, transparent 70%)'
+              ? 'radial-gradient(circle, #F87171 0%, transparent 72%)'
               : mood === 'pro'
-              ? 'radial-gradient(circle, #60A5FA 0%, transparent 70%)'
+              ? 'radial-gradient(circle, #818CF8 0%, transparent 72%)'
               : mood === 'ai'
-              ? 'radial-gradient(circle, #C084FC 0%, transparent 70%)'
-              : 'radial-gradient(circle, #34D399 0%, transparent 70%)',
+              ? 'radial-gradient(circle, #A855F7 0%, transparent 72%)'
+              : 'radial-gradient(circle, #8B5CF6 0%, transparent 72%)',
         }}
       />
 
-      {/* Main Organic Mascot Tooth SVG - 100% No Square Border */}
+      {/* Main Organic Mascot Tooth SVG - Crisp Purple-Contoured 3D Icon */}
       <svg
         viewBox="0 0 100 110"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className="w-full h-full drop-shadow-xl overflow-visible"
+        className="w-full h-full overflow-visible"
       >
         <defs>
-          {/* Tooth Surface Gradient */}
+          {/* Tooth Surface Gradient (Porcelain -> Soft Lavender) */}
           <linearGradient id="toothBodyGrad" x1="15" y1="5" x2="85" y2="105" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="#FFFFFF" />
-            <stop offset="55%" stopColor="#F0F7FF" />
-            <stop offset="100%" stopColor="#D6E8FC" />
+            <stop offset="52%" stopColor="#F5F3FF" />
+            <stop offset="100%" stopColor="#DDD6FE" />
           </linearGradient>
 
           {/* Tooth Gloss Highlight */}
           <linearGradient id="toothGlossGrad" x1="20" y1="10" x2="45" y2="50" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.9" />
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.95" />
             <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.0" />
           </linearGradient>
 
@@ -93,9 +93,9 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
             <stop offset="100%" stopColor="#EC4899" />
           </linearGradient>
 
-          {/* Soft Shadow filter */}
+          {/* Soft Violet Drop Shadow */}
           <filter id="softToothDrop" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="6" stdDeviation="4" floodColor="#1E3A8A" floodOpacity="0.2" />
+            <feDropShadow dx="0" dy="5" stdDeviation="3.5" floodColor="#5B21B6" floodOpacity="0.28" />
           </filter>
         </defs>
 
@@ -114,7 +114,7 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
           />
         )}
 
-        {/* Outer Organic Tooth Body - Curved Soft Edges */}
+        {/* Outer Organic Tooth Body - Crisp Violet Outline */}
         <path
           d="M 28,14
              C 12,14 8,36 12,54
@@ -127,8 +127,9 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
              C 62,14 56,22 50,22
              C 44,22 38,14 28,14 Z"
           fill="url(#toothBodyGrad)"
-          stroke="#93C5FD"
-          strokeWidth="2.5"
+          stroke="#6D28D9"
+          strokeWidth="3.4"
+          strokeLinejoin="round"
           filter="url(#softToothDrop)"
         />
 

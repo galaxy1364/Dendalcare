@@ -188,7 +188,7 @@ export function AppShell() {
         {/* Adaptive Tablet Rail / Desktop Sidebar */}
         <NavigationRail
           active={activeRoute}
-          onChange={(id) => navigate(id)}
+          onChange={(id) => navigate(id, undefined, { rootTab: true })}
           onBack={goBack}
           canGoBack={canGoBack}
           notifCount={notifCount}
@@ -214,8 +214,8 @@ export function AppShell() {
           <header className="shrink-0 z-20 bg-[#F4F7F9] dark:bg-[#0A141E] border-b border-[#D8E2EA] dark:border-[#25394D] px-2 md:px-4 py-1.5">
             <div className="max-w-xl md:max-w-5xl xl:max-w-6xl mx-auto">
               <div className="rounded-[20px] px-3 py-1.5 flex items-center justify-between bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] text-[#14283B] dark:text-[#F1F5F9] shadow-sm">
-                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-                  {activeRoute !== 'dashboard' && (
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  {canGoBack && (
                     <button
                       type="button"
                       data-testid="topbar_back_button"
@@ -230,31 +230,32 @@ export function AppShell() {
 
                   <button
                     type="button"
-                    className={`${activeRoute === 'dashboard' ? 'inline-flex' : 'hidden sm:inline-flex'} cursor-pointer shrink-0 active:scale-95 md:hidden`}
-                    onClick={() => navigate('dashboard')}
+                    data-testid="topbar_brand_logo_button"
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-[14px] bg-gradient-to-br from-[#F5F3FF] to-[#EDE9FE] dark:from-[#2E1065]/75 dark:to-[#4C1D95]/65 border border-[#C4B5FD] dark:border-[#7C3AED]/75 shadow-sm cursor-pointer shrink-0 active:scale-95 md:hidden"
+                    onClick={() => navigate('dashboard', undefined, { rootTab: true })}
                     aria-label="مینادنتال - صفحه اصلی"
                   >
-                    <MascotTooth mood={mascotMood} size={34} />
+                    <MascotTooth mood={mascotMood} size={32} />
                   </button>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <h1 className="text-[13.5px] sm:text-sm font-black leading-tight whitespace-nowrap shrink-0">
+                      <h1 className="text-[14px] sm:text-[15px] font-black leading-tight text-[#14283B] dark:text-[#F1F5F9] whitespace-nowrap truncate">
                         <span className="md:hidden">
                           {activeRoute === 'dashboard' ? 'مینادنتال' : section.label}
                         </span>
                         <span className="hidden md:inline">{section.label}</span>
                       </h1>
                       <span
-                        className="text-[9.5px] sm:text-[10px] font-bold px-2 py-0.5 rounded-md text-white truncate max-w-[106px] sm:max-w-[140px]"
+                        className="hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-md text-white truncate max-w-[140px]"
                         style={{ background: section.color }}
                       >
                         {currentUser.fullName || currentUser.name}
                       </span>
                     </div>
-                    <p className="text-[10px] font-medium text-[#526779] dark:text-[#9FB1C1] leading-tight truncate mt-0.5">
+                    <p className="text-[10.5px] font-medium text-[#526779] dark:text-[#9FB1C1] leading-tight truncate mt-0.5">
                       <span>{activeBranch.name}</span>
-                      <span className="hidden sm:inline"> • {onlinePeersCount.toLocaleString('fa-IR')} کاربر آنلاین</span>
+                      <span className="hidden md:inline"> • {onlinePeersCount.toLocaleString('fa-IR')} کاربر آنلاین</span>
                     </p>
                   </div>
                 </div>
@@ -318,7 +319,7 @@ export function AppShell() {
             ref={mainRef}
             onScroll={(e) => saveCurrentScroll(e.currentTarget.scrollTop)}
             onTouchStart={(e) => {
-              edgeSwipeRef.current = beginRtlEdgeBackSwipe(e, activeRoute !== 'dashboard');
+              edgeSwipeRef.current = beginRtlEdgeBackSwipe(e, canGoBack);
             }}
             onTouchEnd={(e) => {
               if (shouldCompleteRtlEdgeBackSwipe(edgeSwipeRef.current, e)) {
@@ -329,7 +330,7 @@ export function AppShell() {
             onTouchCancel={() => {
               edgeSwipeRef.current = cancelRtlEdgeBackSwipe(edgeSwipeRef.current);
             }}
-            className={`app-shell-main pr-8 pl-2.5 sm:pr-9 sm:pl-3.5 md:px-5 desktop-scroll ${
+            className={`app-shell-main pr-9 pl-2.5 sm:pr-10 sm:pl-3.5 md:px-5 desktop-scroll ${
               activeRoute === 'dashboard' ? 'main-no-scroll-home py-1.5' : 'py-2.5 pb-6'
             }`}
           >
@@ -563,7 +564,7 @@ export function AppShell() {
           {/* Non-Overlapping Mobile Bottom Pill Dock (FIX 04: 4 tabs + direct All Services trigger) */}
           <FloatingDock
             active={activeRoute}
-            onChange={(id) => navigate(id)}
+            onChange={(id) => navigate(id, undefined, { rootTab: true })}
             onOpenServices={() => navigate('services')}
             userRole={effectiveRole}
           />

@@ -62,6 +62,18 @@ export function clearAllRouteDrafts(): void {
   routeFilterCache.clear();
 }
 
+export const SUB_FLOW_ROUTES: ReadonlySet<AppRouteId> = new Set<AppRouteId>([
+  'patient_form',
+  'appointment_form',
+  'treatment_form',
+  'customize_services',
+  'reports',
+]);
+
+export interface NavigateOptions {
+  rootTab?: boolean;
+}
+
 export interface NavigationContextValue {
   activeRoute: AppRouteId;
   activeParams: Omit<DeepLinkPayload, 'section'>;
@@ -69,7 +81,11 @@ export interface NavigationContextValue {
   canGoBack: boolean;
   deniedRouteNotice: AppRouteId | null;
   clearDeniedNotice: () => void;
-  navigate: (route: AppRouteId, deepLink?: Omit<DeepLinkPayload, 'section'>) => boolean;
+  navigate: (
+    route: AppRouteId,
+    deepLink?: Omit<DeepLinkPayload, 'section'>,
+    options?: NavigateOptions
+  ) => boolean;
   goBack: () => void;
   resetToHome: () => void;
   saveCurrentScroll: (scrollTop: number) => void;
@@ -171,7 +187,11 @@ export function NavigationProvider({
   }, [userRole, activeRoute]);
 
   const navigate = useCallback(
-    (route: AppRouteId, deepLink?: Omit<DeepLinkPayload, 'section'>): boolean => {
+    (
+      route: AppRouteId,
+      deepLink?: Omit<DeepLinkPayload, 'section'>,
+      options?: NavigateOptions
+    ): boolean => {
       if (!canAccessRoute(userRole, route)) {
         HapticEngine.warning();
         setDeniedRouteNotice(route);
@@ -191,7 +211,27 @@ export function NavigationProvider({
         route !== activeRef.current ||
         (typeof window !== 'undefined' && window.location.hash !== nextHashUrl);
 
-      if (isRouteOrParamChanged) {
+      const isRootSwitch =
+        options?.rootTab === true || (route === 'services' && options?.rootTab !== false);
+
+      if (isRootSwitch) {
+        // Primary tab switches on bottom dock / sidebar replace root state without creating fake back history
+        setHistory([]);
+        historyDepthRef.current = 0;
+        if (typeof window !== 'undefined' && window.history?.replaceState) {
+          try {
+            const state: HistoryRouteState = {
+              minadental: true,
+              route,
+              params: cleanParams,
+              depth: 0,
+            };
+            window.history.replaceState(state, '', nextHashUrl);
+          } catch {
+            // ignore
+          }
+        }
+      } else if (isRouteOrParamChanged) {
         if (route !== activeRef.current) {
           setHistory((prev) => pushNavRoute(prev, activeRef.current, route));
         }
@@ -357,7 +397,7 @@ export function NavigationProvider({
       activeRoute,
       activeParams,
       history,
-      canGoBack: history.length > 0 || activeRoute !== 'dashboard',
+      canGoBack: history.length > 0 || SUB_FLOW_ROUTES.has(activeRoute),
       deniedRouteNotice,
       clearDeniedNotice: () => setDeniedRouteNotice(null),
       navigate,

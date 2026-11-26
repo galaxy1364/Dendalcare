@@ -711,6 +711,16 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       await page.goto('/#/settings', { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
 
+      // 0. Brand tooth logo must remain visible & non-zero across mobile routes (including Settings)
+      const logoBtn = page.getByTestId('topbar_brand_logo_button');
+      await expect(logoBtn).toBeVisible();
+      const logoBox = await logoBtn.boundingBox();
+      expect(logoBox).not.toBeNull();
+      expect((logoBox?.width ?? 0) >= 34 && (logoBox?.height ?? 0) >= 34).toBe(true);
+
+      // 0b. Topbar Back button must NOT appear on direct root route
+      await expect(page.getByTestId('topbar_back_button')).toHaveCount(0);
+
       // 1. Header title must not clip/truncate horizontally
       const heading = page.locator('header h1').first();
       await expect(heading).toBeVisible();
@@ -756,8 +766,28 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       expect(noOverflow).toBe(true);
     }
 
-    // 5. Dark mode parity across Settings + Notification Drawer + branch selection sync
+    // 5. Switching primary dock tabs keeps topbar_back_button hidden, while sub-flow shows it
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByTestId('dock_tab_patients').click();
+    await expect(page.getByTestId('topbar_brand_logo_button')).toBeVisible();
+    await expect(page.getByTestId('topbar_back_button')).toHaveCount(0);
+
+    await page.getByTestId('dock_tab_appointments').click();
+    await expect(page.getByTestId('topbar_back_button')).toHaveCount(0);
+
+    await page.getByTestId('dock_more_button').click();
+    await expect(page.getByTestId('all_services_screen')).toBeVisible();
+    await expect(page.getByTestId('topbar_back_button')).toHaveCount(0);
+
+    await page.getByTestId('services_open_customizer_btn').click();
+    await expect(page.getByTestId('topbar_back_button')).toBeVisible();
+    await page.getByTestId('topbar_back_button').click();
+    await expect(page.getByTestId('all_services_screen')).toBeVisible();
+    await expect(page.getByTestId('topbar_back_button')).toHaveCount(0);
+
+    // 6. Dark mode parity across Settings + Notification Drawer + branch selection sync
+    await page.goto('/#/settings', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
     await page.getByTestId('appearance_theme_dark').click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 

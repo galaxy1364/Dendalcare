@@ -482,10 +482,10 @@ function ClinicSettingsTab({
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <Sun size={17} className="text-amber-500" />
-            ظاهر سیستم، Dynamic Type و Reduce Motion
+            نمایش و دسترس‌پذیری
           </h3>
           <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800">
-            {appearance.resolvedTheme === 'dark' ? 'تیره فعال' : 'روشن فعال'}
+            {appearance.resolvedTheme === 'dark' ? 'تیره' : 'روشن'}
           </span>
         </div>
 
@@ -640,9 +640,9 @@ function ClinicSettingsTab({
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <Cpu size={16} className="text-indigo-600" />
-            قابلیت‌های واقعی پلتفرم فعلی
+            قابلیت‌های دستگاه
           </h3>
-          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
             {platformCaps.runtimeKind}
           </span>
         </div>
@@ -672,9 +672,6 @@ function ClinicSettingsTab({
             </strong>
           </div>
         </div>
-        <p className="text-[10.5px] font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
-          {platformCaps.honestPlatformNoteFa}
-        </p>
       </div>
 
       {/* Single Verified Release & Update Center (V7 UpdateCoordinator) */}
@@ -689,14 +686,13 @@ function ClinicSettingsTab({
             </div>
             <div className="min-w-0">
               <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                به‌روزرسانی تأییدشده برنامه مینادنتال
+                به‌روزرسانی برنامه
               </h3>
               <div className="text-[11px] text-slate-600 dark:text-slate-300 font-semibold flex items-center flex-wrap gap-1.5 mt-1">
-                <span>نسخه در حال اجرا:</span>
+                <span>نسخه:</span>
                 <strong dir="ltr" className="rtl-bidi-isolate text-slate-900 dark:text-slate-100 font-mono">
                   v{updateSnap.installed.semver}
                 </strong>
-                <span>• انتشار:</span>
                 <strong
                   dir="ltr"
                   data-testid="installed_build_badge"
@@ -728,11 +724,11 @@ function ClinicSettingsTab({
             <strong className="text-slate-800 dark:text-slate-200 font-mono">
               {updateSnap.lastCheck?.checkedAt
                 ? new Date(updateSnap.lastCheck.checkedAt).toLocaleTimeString('fa-IR')
-                : 'هنوز بررسی نشده'}
+                : 'بررسی نشده'}
             </strong>
           </div>
           <div>
-            <span className="text-slate-500 dark:text-slate-400 block">نتیجه آخرین بررسی</span>
+            <span className="text-slate-500 dark:text-slate-400 block">وضعیت بررسی</span>
             <strong className="text-slate-800 dark:text-slate-200">
               {updateSnap.lastCheck?.outcome || '—'}
             </strong>
@@ -747,21 +743,14 @@ function ClinicSettingsTab({
           </div>
         </div>
 
-        {/* Platform Honest Limitation Notice */}
-        {updateSnap.capabilities.honestLimitationFa && (
-          <p className="text-[10.5px] text-slate-600 dark:text-slate-300 leading-relaxed bg-white/75 dark:bg-slate-900/55 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
-            {updateSnap.capabilities.honestLimitationFa}
-          </p>
-        )}
-
         {/* Auto Update at Safe Point Toggle */}
         <div className="p-3 rounded-2xl bg-white dark:bg-slate-900/75 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between gap-2.5 shadow-sm">
           <div className="min-w-0 flex-1">
             <span className="text-xs font-extrabold text-slate-900 dark:text-slate-100 block">
-              به‌روزرسانی خودکار در نقطه امن (Safe-Point Auto-Update)
+              به‌روزرسانی خودکار امن
             </span>
-            <span className="text-[10.5px] text-slate-600 dark:text-slate-300 leading-relaxed block">
-              بررسی دوره‌ای هنگام باز بودن برنامه و فعال‌سازی فقط در نبود فرم باز یا صف آفلاین
+            <span className="text-[10.5px] text-slate-600 dark:text-slate-300 leading-snug block mt-0.5">
+              اعمال خودکار پس از پایان فرم و صف آفلاین
             </span>
           </div>
           <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -937,8 +926,8 @@ function ClinicSettingsTab({
             <Building2 size={18} />
           </div>
           <div className="min-w-0">
-            <h3 className="text-xs font-bold text-purple-950 dark:text-slate-100">تعاریف پایه و شرکت‌های کلینیک</h3>
-            <p className="text-[11px] text-purple-700/80 dark:text-slate-300">لابراتوارها، تأمین‌کنندگان، برندهای ایمپلنت و یونیت‌ها</p>
+            <h3 className="text-xs font-bold text-purple-950 dark:text-slate-100">تعاریف پایه کلینیک</h3>
+            <p className="text-[11px] text-purple-700/80 dark:text-slate-300">لابراتوار، برند ایمپلنت و یونیت</p>
           </div>
         </div>
         <button
@@ -958,7 +947,7 @@ function ClinicSettingsTab({
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-xs font-bold text-[#14283B] dark:text-slate-100 flex items-center gap-1.5">
             <Building2 size={16} className="text-[#087C76]" />
-            شعبه فعال، اهداف درآمد و ساعات کاری کلینیک
+            شعبه و مشخصات کلینیک
           </h3>
           <div className="flex items-center gap-1.5">
             {CLINIC_BRANCHES.map((br) => {
@@ -1001,10 +990,10 @@ function ClinicSettingsTab({
           <div className="min-w-0">
             <h3 className="text-xs font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2">
               <Download size={16} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
-              دانلود و نصب نسخه‌های برنامه (آیفون، اندروید، آیپد و ویندوز)
+              نصب روی دستگاه‌ها
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              نسخه رسمی v{CURRENT_APP_VERSION} (بیلد #{CURRENT_APP_BUILD}) • پکیج کامل ۴ پلتفرم
+              نسخه v{CURRENT_APP_VERSION} (#{CURRENT_APP_BUILD})
             </p>
           </div>
           <button
@@ -1091,14 +1080,14 @@ function ClinicSettingsTab({
                 <div>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <h3 className="text-xs font-black text-slate-900 dark:text-slate-100">
-                      فوق ممیزی، گزارش سلامت و قفل معماری سیستم
+                      ممیزی و سلامت سیستم
                     </h3>
                     <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800">
                       مختص مدیر و ارتقادهنده
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                    دسترسی انحصاری دکتر مهدی امیری • بررسی زنده ۹ فاز، دفتر کل ممیزی و قفل نسخه
+                    بررسی زنده وضعیت امنیتی و معماری
                   </p>
                 </div>
               </div>

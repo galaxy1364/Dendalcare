@@ -107,10 +107,10 @@ export function AllServicesScreen({ onNavigate }: AllServicesScreenProps) {
         <div className="flex items-center justify-between px-1">
           <div>
             <h2 className="text-sm font-black text-[#14283B] dark:text-[#F1F5F9]">
-              خدمات کلینیک مینادنتال
+              همه خدمات
             </h2>
             <p className="text-[11px] font-semibold text-[#526779] dark:text-[#9FB1C1] mt-0.5">
-              {authorizedServices.length.toLocaleString('fa-IR')} خدمت مجاز برای نقش فعلی
+              {authorizedServices.length.toLocaleString('fa-IR')} بخش فعال
             </p>
           </div>
 

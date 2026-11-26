@@ -646,7 +646,17 @@ export async function runAllGe0002P0RecoveryTests(): Promise<Ge0002TestResult[]>
   // GE-0002 Shell, Visual Remediation & Dark-Mode Parity Source Checks
   await runTest('GE-0002 Adaptive Shell & Screenshot Remediation contracts present across Shell, Dock, Bell, Settings, Drawer & Forms', () => {
     const appShell = readWorkspaceFile('src/app/AppShell.tsx');
-    assert.ok(appShell.includes('pr-8 pl-2.5'), 'AppShell main must reserve right-edge gutter for bell ear');
+    assert.ok(appShell.includes('pr-9 pl-2.5'), 'AppShell main must reserve >=36px right-edge gutter for 30px bell ear');
+    assert.ok(appShell.includes('{canGoBack && ('), 'AppShell topbar_back_button must gate strictly on canGoBack');
+    assert.ok(appShell.includes('onChange={(id) => navigate(id, undefined, { rootTab: true })}'), 'AppShell dock & rail must switch root tabs without creating fake back history');
+    assert.ok(appShell.includes('data-testid="topbar_brand_logo_button"'), 'AppShell must keep MascotTooth prominent across all mobile routes');
+
+    const navStack = readWorkspaceFile('src/navigation/NavigationStack.tsx');
+    assert.ok(navStack.includes('SUB_FLOW_ROUTES'), 'NavigationStack must distinguish genuine sub-flow routes from primary dock tabs');
+    assert.ok(
+      navStack.includes('canGoBack: history.length > 0 || SUB_FLOW_ROUTES.has(activeRoute)'),
+      'canGoBack must only activate on genuine sub-flows or pushed drill-down history'
+    );
 
     const bell = readWorkspaceFile('src/components/ui/DraggableNotificationHandle.tsx');
     assert.ok(bell.includes("width: '30px'"), 'Bell ear SVG width must be slimmed to 30px to avoid covering controls');
