@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "releaseId": "v4.18.0-ed718602c1",
+  "releaseId": "v4.18.0-f11b1b9973",
   "releaseSequence": 230,
   "semver": "4.18.0",
   "gitCommit": "local-uncommitted",
@@ -8,9 +8,9 @@
   "platform": "web",
   "minNativeVersion": "4.9.0",
   "minSchemaVersion": 4,
-  "publishedAt": "2026-11-26T21:27:21.179Z",
-  "expiresAt": "2027-11-26T21:27:21.179Z",
-  "contentDigest": "ed718602c1d918a092c1389b6309729f3b790c7a18017cb45fde54ab5c767dcb",
+  "publishedAt": "2026-11-26T21:35:23.718Z",
+  "expiresAt": "2027-11-26T21:35:23.718Z",
+  "contentDigest": "f11b1b9973eb693c5c9e398590fe8b4bb730e9e7964a977dcc33ab1cec56d107",
   "releaseNotes": "نسخه v4.18.0 (انتشار #224) — رفع دائمی خطای کش CDN و Service Worker در آپدیت خودکار، طراحی لبه به لبه (Edge-to-Edge)، لوگوی سه‌بعدی بدون کادر ۷-حالته، و یکپارچه‌سازی کامل انتشار وب و APK امضاشده (GE-0008)",
   "entryScripts": [
     "./assets/index-DQYXXV8p.js"
@@ -21,7 +21,7 @@
   "assets": [
     {
       "path": "./index.html",
-      "sha256": "6ab7d804dd77d6093a685dea73d36f792489137f9cc9534fdb87e91a3799ef01",
+      "sha256": "1ec803e9a46218507791fb5a0a45d32b80d5d1bda57188f7f0d7975a33bcf447",
       "size": 24819,
       "critical": true,
       "contentType": "text/html; charset=utf-8"
@@ -455,8 +455,8 @@
     },
     {
       "path": "./sw.js",
-      "sha256": "138766ecf39beaf5f01e77aa32e597f0c7a6c51f0cc9115931f5d33c9d68c3a8",
-      "size": 25816,
+      "sha256": "716763360be6f93d5de05798d6a8b156dd5c504dc4a461cb35d53aa611538d04",
+      "size": 26291,
       "critical": false,
       "contentType": "application/javascript; charset=utf-8"
     }

@@ -163,10 +163,19 @@ function fetchWithTimeout(request, options, timeoutMs) {
 
 async function safeCachePut(cache, key, response) {
   try {
-    await cache.put(key, response);
+    await cache.put(key, response.clone());
+    if (typeof key === 'string') {
+      const absUrl = new URL(key, self.location.href).toString();
+      await cache.put(absUrl, response.clone());
+    } else if (key instanceof Request) {
+      try {
+        const parsed = new URL(key.url);
+        const relKey = './' + parsed.pathname.split('/').pop();
+        await cache.put(relKey, response.clone());
+      } catch {}
+    }
     return true;
   } catch {
-    // Isolate QuotaExceededError or transient cache write errors without corrupting active shell
     return false;
   }
 }
@@ -580,7 +589,14 @@ async function handleNavigationRequest(request, url) {
 
 async function handleStaticAssetRequest(request, url) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
+  let cached = await cache.match(request);
+  if (!cached) {
+    const relKey = './' + url.pathname.split('/').pop();
+    cached = await cache.match(relKey);
+  }
+  if (!cached) {
+    cached = await cache.match(url.pathname);
+  }
   if (cached) {
     const ct = cached.headers.get('content-type') || '';
     if (isValidMimeForPath(url.pathname, ct, request.mode)) {

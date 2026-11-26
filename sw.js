@@ -2,7 +2,7 @@
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
 // NOTE: Structural HTML checks below prevent cache poisoning & raw-TSX contamination;
 // they are NOT a substitute for cryptographic ECDSA manifest signature verification.
-const BUILD_ID = "v4.18.0-ed718602c1";
+const BUILD_ID = "v4.18.0-f11b1b9973";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const RELEASE_SEQ_RAW = "230";
 const RESOLVED_RELEASE_SEQ = /^\d+$/.test(RELEASE_SEQ_RAW) ? Number(RELEASE_SEQ_RAW) : 0;
@@ -167,10 +167,19 @@ function fetchWithTimeout(request, options, timeoutMs) {
 
 async function safeCachePut(cache, key, response) {
   try {
-    await cache.put(key, response);
+    await cache.put(key, response.clone());
+    if (typeof key === 'string') {
+      const absUrl = new URL(key, self.location.href).toString();
+      await cache.put(absUrl, response.clone());
+    } else if (key instanceof Request) {
+      try {
+        const parsed = new URL(key.url);
+        const relKey = './' + parsed.pathname.split('/').pop();
+        await cache.put(relKey, response.clone());
+      } catch {}
+    }
     return true;
   } catch {
-    // Isolate QuotaExceededError or transient cache write errors without corrupting active shell
     return false;
   }
 }
@@ -584,7 +593,14 @@ async function handleNavigationRequest(request, url) {
 
 async function handleStaticAssetRequest(request, url) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
+  let cached = await cache.match(request);
+  if (!cached) {
+    const relKey = './' + url.pathname.split('/').pop();
+    cached = await cache.match(relKey);
+  }
+  if (!cached) {
+    cached = await cache.match(url.pathname);
+  }
   if (cached) {
     const ct = cached.headers.get('content-type') || '';
     if (isValidMimeForPath(url.pathname, ct, request.mode)) {
