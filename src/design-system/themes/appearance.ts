@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { CORE_PALETTE, DARK_PALETTE } from '@/design-system/tokens/colors';
+import { detectPlatformFromUA } from '@/platform/capabilities';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type FontScaleMode = 'compact' | 'default' | 'large' | 'xlarge';
 export type MotionMode = 'system' | 'reduce' | 'full';
 export type AuroraBackdropMode = 'live' | 'low_power' | 'static';
+export type DensityMode = 'compact' | 'comfortable' | 'spacious';
+export type PlatformDesignLanguage = 'auto' | 'apple' | 'material' | 'fluent';
+export type ResolvedPlatformDesign = 'apple' | 'material' | 'fluent';
 
 export interface AppearanceSettings {
   themeMode: ThemeMode;
@@ -14,6 +18,9 @@ export interface AppearanceSettings {
   resolvedReduceMotion: boolean;
   auroraMode: AuroraBackdropMode;
   resolvedAuroraMode: AuroraBackdropMode;
+  density: DensityMode;
+  platformDesign: PlatformDesignLanguage;
+  resolvedPlatformDesign: ResolvedPlatformDesign;
   isLargeText: boolean;
 }
 
@@ -21,6 +28,8 @@ const THEME_KEY = 'minadental_appearance_theme_v2';
 const FONT_SCALE_KEY = 'minadental_appearance_font_scale_v2';
 const MOTION_KEY = 'minadental_appearance_motion_v2';
 const AURORA_KEY = 'minadental_appearance_aurora_v2';
+const DENSITY_KEY = 'minadental_appearance_density_v1';
+const PLATFORM_DESIGN_KEY = 'minadental_appearance_platform_design_v1';
 const APPEARANCE_EVENT = 'minadental-appearance-changed';
 
 const FONT_SCALE_PX: Record<FontScaleMode, string> = {
@@ -28,6 +37,15 @@ const FONT_SCALE_PX: Record<FontScaleMode, string> = {
   default: '16px',
   large: '18px',
   xlarge: '20px',
+};
+
+const DENSITY_TOKENS: Record<
+  DensityMode,
+  { cardPad: string; sectionGap: string; rowGap: string; touchMin: string }
+> = {
+  compact: { cardPad: '10px', sectionGap: '8px', rowGap: '6px', touchMin: '44px' },
+  comfortable: { cardPad: '14px', sectionGap: '12px', rowGap: '10px', touchMin: '44px' },
+  spacious: { cardPad: '18px', sectionGap: '16px', rowGap: '14px', touchMin: '48px' },
 };
 
 export function getThemeMode(): ThemeMode {
@@ -74,6 +92,43 @@ export function getAuroraBackdropMode(): AuroraBackdropMode {
   return 'live';
 }
 
+export function getDensityMode(): DensityMode {
+  if (typeof window === 'undefined') return 'comfortable';
+  try {
+    const val = localStorage.getItem(DENSITY_KEY);
+    if (val === 'compact' || val === 'comfortable' || val === 'spacious') return val;
+  } catch {
+    // ignore
+  }
+  return 'comfortable';
+}
+
+export function getPlatformDesignLanguage(): PlatformDesignLanguage {
+  if (typeof window === 'undefined') return 'auto';
+  try {
+    const val = localStorage.getItem(PLATFORM_DESIGN_KEY);
+    if (val === 'auto' || val === 'apple' || val === 'material' || val === 'fluent') return val;
+  } catch {
+    // ignore
+  }
+  return 'auto';
+}
+
+export function resolvePlatformDesign(
+  mode: PlatformDesignLanguage,
+  userAgent?: string
+): ResolvedPlatformDesign {
+  if (mode !== 'auto') return mode;
+  const ua = userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '');
+  const info = detectPlatformFromUA(ua, {
+    viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 390,
+  });
+  if (info.platform === 'ios' || info.platform === 'ipad' || info.platform === 'macos') return 'apple';
+  if (info.platform === 'android') return 'material';
+  if (info.platform === 'windows') return 'fluent';
+  return 'apple';
+}
+
 export function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
   if (mode === 'dark') return 'dark';
   if (mode === 'light') return 'light';
@@ -111,6 +166,9 @@ export function getAppearanceSettings(): AppearanceSettings {
   const motionMode = getMotionMode();
   const resolvedReduceMotion = resolveReduceMotion(motionMode);
   const auroraMode = getAuroraBackdropMode();
+  const density = getDensityMode();
+  const platformDesign = getPlatformDesignLanguage();
+
   return {
     themeMode,
     resolvedTheme: resolveTheme(themeMode),
@@ -119,6 +177,9 @@ export function getAppearanceSettings(): AppearanceSettings {
     resolvedReduceMotion,
     auroraMode,
     resolvedAuroraMode: resolveEffectiveAuroraMode(auroraMode, resolvedReduceMotion),
+    density,
+    platformDesign,
+    resolvedPlatformDesign: resolvePlatformDesign(platformDesign),
     isLargeText: fontScale === 'large' || fontScale === 'xlarge',
   };
 }
@@ -134,7 +195,15 @@ export function applyAppearanceToDocument(
   root.setAttribute('data-large-text', settings.isLargeText ? 'true' : 'false');
   root.setAttribute('data-reduce-motion', settings.resolvedReduceMotion ? 'true' : 'false');
   root.setAttribute('data-aurora-mode', settings.resolvedAuroraMode);
+  root.setAttribute('data-density', settings.density);
+  root.setAttribute('data-platform-design', settings.resolvedPlatformDesign);
   root.style.fontSize = FONT_SCALE_PX[settings.fontScale] || '16px';
+
+  const densityTok = DENSITY_TOKENS[settings.density] ?? DENSITY_TOKENS.comfortable;
+  root.style.setProperty('--md-density-card-pad', densityTok.cardPad);
+  root.style.setProperty('--md-density-section-gap', densityTok.sectionGap);
+  root.style.setProperty('--md-density-row-gap', densityTok.rowGap);
+  root.style.setProperty('--md-touch-min', densityTok.touchMin);
 
   const palette = settings.resolvedTheme === 'dark' ? DARK_PALETTE : CORE_PALETTE;
   root.style.setProperty('--md-primary', palette.primary);
@@ -195,6 +264,24 @@ export function setMotionMode(mode: MotionMode): void {
 export function setAuroraBackdropMode(mode: AuroraBackdropMode): void {
   try {
     if (typeof window !== 'undefined') localStorage.setItem(AURORA_KEY, mode);
+  } catch {
+    // ignore
+  }
+  notifyAppearanceChanged();
+}
+
+export function setDensityMode(mode: DensityMode): void {
+  try {
+    if (typeof window !== 'undefined') localStorage.setItem(DENSITY_KEY, mode);
+  } catch {
+    // ignore
+  }
+  notifyAppearanceChanged();
+}
+
+export function setPlatformDesignLanguage(mode: PlatformDesignLanguage): void {
+  try {
+    if (typeof window !== 'undefined') localStorage.setItem(PLATFORM_DESIGN_KEY, mode);
   } catch {
     // ignore
   }

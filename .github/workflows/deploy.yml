@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   build_verify_and_deploy:
-    name: Build, Verify V8 Release Gates & Deploy GitHub Pages
+    name: Build, Verify Release Assurance Gates & Deploy GitHub Pages
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -48,6 +48,9 @@ jobs:
             exit 1
           fi
 
+      - name: Production Dependency Security Audit
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Compute strict monotonic CI release sequence (fail-closed with legacy raw-root migration guard)
         id: seq
         env:
@@ -59,7 +62,7 @@ jobs:
       - name: Mandatory Pre-Deploy TypeScript Typecheck
         run: npm run typecheck
 
-      - name: Mandatory Deterministic Production Build (CI Identity)
+      - name: Mandatory Deterministic Double-Build & Signed Release Gate (CI Identity)
         id: build
         env:
           MINA_RELEASE_SEQUENCE: ${{ steps.seq.outputs.value }}
@@ -72,6 +75,11 @@ jobs:
           VITE_IOS_APP_STORE_URL: ${{ vars.VITE_IOS_APP_STORE_URL }}
         run: |
           npm run build
+          rm -rf dist-check-a
+          cp -r dist dist-check-a
+          npm run build
+          node scripts/ci-release-gate.mjs --compare dist-check-a dist
+          rm -rf dist-check-a
           node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin
           node -e '
             const fs = require("node:fs");
@@ -79,11 +87,20 @@ jobs:
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_id=${m.releaseId}\n`);
           '
 
+      - name: Generate CycloneDX SBOM Artifact
+        run: npx --yes @cyclonedx/cyclonedx-npm --omit dev --output-file dist/sbom.cdx.json
+
       - name: Mandatory Pre-Deploy Inline Syntax, Hygiene & Subpath Asset Graph Gate
         run: npm run verify:assets
 
-      - name: Mandatory Pre-Deploy Unit, Audit & V8 Release Assurance Tests
+      - name: Mandatory Pre-Deploy Unit, Audit & Release Assurance Tests
         run: npm test
+
+      - name: Install Playwright Browsers (Chromium & WebKit)
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Mandatory Pre-Deploy Real Browser E2E Verification
+        run: npm run test:e2e
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

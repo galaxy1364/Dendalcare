@@ -4,17 +4,17 @@
   "semver": "4.16.0",
   "build": 116,
   "releaseSequence": 116,
-  "buildId": "v4.16.0-d2a06199ad",
-  "releaseId": "v4.16.0-d2a06199ad",
-  "contentDigest": "d2a06199adae272aa0cdd14034a1f794ac391ac432eb2401a06b1579e08bc089",
+  "buildId": "v4.16.0-2fa26e712c",
+  "releaseId": "v4.16.0-2fa26e712c",
+  "contentDigest": "2fa26e712c50d9322bc6921048302898137040efd10f48e8affae420365688c0",
   "packageVersion": "4.16.0",
   "channel": "stable",
-  "publishedAt": "2026-11-26T15:01:02.953Z",
+  "publishedAt": "2026-11-26T16:08:34.052Z",
   "releaseNotes": "نسخه v4.16.0 (انتشار #116) — ارتقای جامع هوش مالی، دفتر کل دوطرفه و تطبیق تراکنش‌ها (V16)، پایداری سرور پرونده بالینی و ادنتوگرام (V15) و موتور به‌روزرسانی امن در نقطه امن",
   "entryScripts": [
-    "./assets/index-D74ecgnF.js"
+    "./assets/index-bKHsksjf.js"
   ],
   "entryStyles": [
-    "./assets/index-BQel2boK.css"
+    "./assets/index-DAeNgq4i.css"
   ]
 }

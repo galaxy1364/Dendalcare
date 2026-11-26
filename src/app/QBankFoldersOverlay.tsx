@@ -25,6 +25,7 @@ import { toJalaliStr } from '@/lib/jalali';
 import { QBankTile } from '@/components/ui/QBankTile';
 import { MascotTooth } from '@/components/ui/MascotTooth';
 import { PlatformHapticAdapter } from '@/platform/haptics';
+import { useFocusTrap } from '@/platform/focusEngine';
 import { useNavigation } from '@/navigation/NavigationStack';
 import { canAccessRoute } from '@/services/permissions/accessControl';
 import type { AppRouteId } from '@/lib/navigationStack';
@@ -84,6 +85,12 @@ export function QBankFoldersOverlay() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(dialogRef, qbankMenuOpen, {
+    onEscape: closeQBankMenu,
+    initialFocusRef: qbankFocusSearch ? searchInputRef : undefined,
+  });
 
   useEffect(() => {
     if (qbankMenuOpen && qbankFocusSearch) {
@@ -344,19 +351,23 @@ export function QBankFoldersOverlay() {
     >
       <div className="absolute inset-0 bg-[#142E43]/55 animate-fade-in" />
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="مرکز جستجو و فرمان کلینیک مینادنتال"
         className="relative w-full max-w-xl md:max-w-3xl h-[92vh] md:h-auto md:max-h-[88vh] flex flex-col bg-[#F4F7F9] dark:bg-[#0A141E] rounded-t-[28px] md:rounded-[28px] border border-[#D8E2EA] dark:border-[#25394D] shadow-2xl sheet-enter overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         dir="rtl"
       >
         <div className="px-4 pt-3 pb-2.5 bg-white dark:bg-[#11202E] border-b border-[#D8E2EA] dark:border-[#25394D] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <MascotTooth mood="happy" size={34} />
+            <MascotTooth mood={normalizedQuery ? 'ai' : 'happy'} size={38} framed interactive={false} />
             <div>
               <h3 className="text-sm font-bold text-[#14283B] dark:text-[#F1F5F9]">
-                خدمات کلینیک مینادنتال
+                مرکز فرمان و خدمات مینادنتال
               </h3>
               <p className="text-[11px] font-medium text-[#526779] dark:text-[#9FB1C1]">
-                بخش‌ها، بیماران و جستجوی سریع
+                جستجوی سراسری، فرمان‌های سریع و همه بخش‌ها (Ctrl+K)
               </p>
             </div>
           </div>
@@ -639,6 +650,23 @@ export function QBankFoldersOverlay() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && normalizedQuery) {
+                  e.preventDefault();
+                  if (matchedPatients.length > 0) {
+                    const pt = matchedPatients[0];
+                    const fullName = `${pt.first_name || ''} ${pt.last_name || ''}`.trim();
+                    handleSelect('patients', { query: fullName || pt.phone || '', recordId: pt.id });
+                  } else if (matchedRecords.length > 0) {
+                    handleSelect(matchedRecords[0].section, matchedRecords[0].focus);
+                  } else if (filteredSections.length > 0) {
+                    handleSelect(filteredSections[0].id);
+                  } else if (filteredTools.length > 0) {
+                    closeQBankMenu();
+                    triggerQuickAction(filteredTools[0].id);
+                  }
+                }
+              }}
               data-testid="qbank_global_search_input"
               placeholder="جستجو در پوشه‌ها، خدمات، بیماران، چک..."
               className="w-full bg-transparent text-xs font-bold text-[#14283B] dark:text-[#F1F5F9] placeholder:text-[#526779] focus:outline-none"

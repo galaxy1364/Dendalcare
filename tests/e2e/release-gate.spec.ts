@@ -800,7 +800,63 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     const drawerBg = await drawer.evaluate((el) => getComputedStyle(el).backgroundColor);
     expect(drawerBg).not.toBe('rgb(244, 247, 249)');
   });
+
+  test('GE-0003 Global Intelligent App Shell: emotional mascot, contextual toolbar, density/platform switching & Command Center focus trap', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/#/patients', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+
+    // 1. Duolingo-style emotional iridescent tooth mascot is visible in mobile header
+    const headerMascot = page.locator('[data-testid="topbar_brand_logo_button"] [data-testid="minadental_mascot_tooth"]');
+    await expect(headerMascot).toBeVisible();
+
+    // 2. Smart Contextual Toolbar + Unified Sync Status Pill render on operational screen without overflow
+    await expect(page.getByTestId('smart_contextual_toolbar')).toBeVisible();
+    await expect(page.getByTestId('unified_sync_status_pill')).toBeVisible();
+
+    // 3. Global Command Center opens with Ctrl+K, exposes ARIA dialog modal, and closes cleanly with Escape
+    await page.keyboard.press('Control+k');
+    const cmdCenter = page.getByTestId('qbank_all_folders_menu');
+    await expect(cmdCenter).toBeVisible();
+    await expect(cmdCenter.locator('[role="dialog"][aria-modal="true"]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(cmdCenter).toBeHidden();
+
+    // 4. Notification Drawer displays emotional tooth mascot and ARIA dialog semantics
+    await page.getByTestId('right_edge_draggable_bell_handle').click();
+    const notifDrawer = page.getByTestId('slide_over_notification_drawer');
+    await expect(notifDrawer).toBeVisible();
+    await expect(notifDrawer.locator('[data-testid="minadental_mascot_tooth"]').first()).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(notifDrawer).toBeHidden();
+
+    // 5. Intelligent Density & Platform Design Language controls update <html> tokens deterministically
+    await page.goto('/#/settings', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+    await page.getByTestId('appearance_density_spacious').click();
+    await expect(page.locator('html')).toHaveAttribute('data-density', 'spacious');
+    await page.getByTestId('appearance_platform_fluent').click();
+    await expect(page.locator('html')).toHaveAttribute('data-platform-design', 'fluent');
+    await page.getByTestId('appearance_density_comfortable').click();
+    await page.getByTestId('appearance_platform_auto').click();
+
+    // 6. Zero horizontal clipping across 360px, 768px, and 1366px
+    for (const vp of [
+      { width: 360, height: 740 },
+      { width: 768, height: 1024 },
+      { width: 1366, height: 768 },
+    ]) {
+      await page.setViewportSize(vp);
+      const noOverflow = await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2
+      );
+      expect(noOverflow).toBe(true);
+    }
+  });
 });
+
 
 
 

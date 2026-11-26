@@ -741,3 +741,67 @@ html[data-theme="dark"] .ios27-input::placeholder {
   color: #94A3B8;
 }
 
+/* ===== GE-0003 Duolingo Emotional Iridescent Mascot Motion ===== */
+@keyframes mascotBreathe {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-1.6px) scale(1.022); }
+}
+
+@keyframes mascotBlink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.14); }
+}
+
+@keyframes mascotSparklePulse {
+  0%, 100% { opacity: 0.96; transform: scale(1); }
+  50% { opacity: 0.62; transform: scale(0.88); }
+}
+
+.mascot-breathe {
+  animation: mascotBreathe 3.4s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+.mascot-eyes {
+  animation: mascotBlink 4.8s ease-in-out infinite;
+  transform-origin: 50% 48%;
+}
+
+.mascot-sparkle {
+  animation: mascotSparklePulse 2.6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* ===== GE-0003 Platform Design Language Tokens (Apple HIG / Material 3 / Fluent) ===== */
+html[data-platform-design="apple"] {
+  --radius-card: 22px;
+  --radius-btn: 14px;
+}
+
+html[data-platform-design="material"] {
+  --radius-card: 20px;
+  --radius-btn: 16px;
+}
+
+html[data-platform-design="fluent"] {
+  --radius-card: 12px;
+  --radius-btn: 10px;
+}
+
+html[data-platform-design="apple"] .glass-card {
+  backdrop-filter: saturate(165%) blur(18px);
+}
+
+html[data-platform-design="fluent"] .glass-card {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+html[data-density="compact"] .glass-card {
+  padding: 0.65rem;
+}
+
+html[data-density="spacious"] .glass-card {
+  padding: 1.15rem;
+}
+
+

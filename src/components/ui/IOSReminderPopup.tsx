@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { playTactileFeedback } from '@/lib/hapticsAudio';
 import { NOTIFICATION_SURFACE_TOKENS } from '@/lib/designTokens';
+import { MascotTooth, type MascotMood } from '@/components/ui/MascotTooth';
+import { useFocusTrap } from '@/platform/focusEngine';
 import type { SectionId } from '@/lib/sections';
 
 export interface GlobalReminderPopupItem {
@@ -105,6 +107,11 @@ export function IOSReminderPopup({
     }
   }, [items]);
 
+  const popupDialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(popupDialogRef, expanded && !hidden && items.length > 0, {
+    onEscape: () => setExpanded(false),
+  });
+
   if (hidden || items.length === 0) return null;
 
   const safeIndex = Math.min(currentIndex, items.length - 1);
@@ -121,6 +128,12 @@ export function IOSReminderPopup({
 
   const urgencyTok = NOTIFICATION_SURFACE_TOKENS.urgency[current.urgency] || NOTIFICATION_SURFACE_TOKENS.urgency.normal;
   const isCritical = current.urgency === 'critical';
+  const reminderMascotMood: MascotMood =
+    current.urgency === 'critical' || current.urgency === 'today'
+      ? 'sad'
+      : current.urgency === 'upcoming'
+      ? 'pro'
+      : 'happy';
 
   const goSlide = (dir: 'next' | 'prev') => {
     if (items.length <= 1) return;
@@ -197,7 +210,7 @@ export function IOSReminderPopup({
             playTactileFeedback('tap');
             setExpanded(true);
           }}
-          className="flex flex-col gap-1.5 px-3.5 py-2 rounded-2xl bg-white text-slate-900 cursor-pointer transition-all hover:scale-[1.005] active:scale-[0.985]"
+          className="flex flex-col gap-1.5 px-3.5 py-2 rounded-2xl bg-white dark:bg-[#11202E] text-slate-900 dark:text-slate-100 cursor-pointer transition-all hover:scale-[1.005] active:scale-[0.985]"
           style={{
             border: `2px solid ${urgencyTok.border}`,
             boxShadow: '0 6px 18px rgba(15, 23, 42, 0.08)',
@@ -207,12 +220,15 @@ export function IOSReminderPopup({
         >
           <div className="flex items-center justify-between gap-2.5">
             <div className="flex items-center gap-2 min-w-0">
-              <span
-                className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm"
-                style={{ background: urgencyTok.accent }}
-              >
-                <BellRing size={14} className="text-white bell-swing" />
-              </span>
+              <div className="relative shrink-0">
+                <MascotTooth mood={reminderMascotMood} size={34} framed interactive={false} />
+                <span
+                  className="absolute -bottom-0.5 -left-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white"
+                  style={{ background: urgencyTok.accent }}
+                >
+                  <BellRing size={8} className="text-white" />
+                </span>
+              </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-black whitespace-nowrap" style={{ color: urgencyTok.text }}>
@@ -229,7 +245,7 @@ export function IOSReminderPopup({
                     {deviceNotifOn ? 'متصل به گوشی' : 'فعال'}
                   </span>
                 </div>
-                <p className="text-[11px] font-extrabold text-slate-900 truncate">{current.title}</p>
+                <p className="text-[11px] font-extrabold text-slate-900 dark:text-slate-100 truncate">{current.title}</p>
               </div>
             </div>
 
@@ -281,6 +297,10 @@ export function IOSReminderPopup({
       }}
     >
       <div
+        ref={popupDialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="یادآوری هوشمند مینادنتال"
         className="w-full max-w-md animate-scale-in touch-pan-y select-none"
         data-testid="ios27_expanded_reminder_popup"
         onClick={(e) => e.stopPropagation()}
@@ -290,7 +310,7 @@ export function IOSReminderPopup({
         onPointerCancel={handleCardPointerUp}
       >
         <div
-          className="rounded-[28px] bg-white text-slate-900 overflow-hidden relative"
+          className="rounded-[28px] bg-white dark:bg-[#11202E] text-slate-900 dark:text-slate-100 overflow-hidden relative"
           style={{
             border: `2px solid ${urgencyTok.border}`,
             boxShadow: '0 24px 60px rgba(15, 23, 42, 0.24), 0 4px 12px rgba(15, 23, 42, 0.08)',
@@ -302,21 +322,24 @@ export function IOSReminderPopup({
           <div className="h-1.5 w-full" style={{ background: urgencyTok.accent }} />
 
           {/* Header Bar */}
-          <div className="px-4 pt-3 pb-2.5 bg-[#F8FAFC] border-b border-slate-200 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <div
-                className="w-8 h-8 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
-                style={{ background: urgencyTok.accent }}
-              >
-                {isCritical ? (
-                  <ShieldAlert size={16} className="text-white" />
-                ) : (
-                  <BellRing size={16} className="text-white bell-swing" />
-                )}
+          <div className="px-4 pt-3 pb-2.5 bg-[#F8FAFC] dark:bg-[#0D1B2A] border-b border-slate-200 dark:border-[#25394D] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="relative shrink-0">
+                <MascotTooth mood={reminderMascotMood} size={40} framed interactive={false} />
+                <span
+                  className="absolute -bottom-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center border border-white shadow-xs"
+                  style={{ background: urgencyTok.accent }}
+                >
+                  {isCritical ? (
+                    <ShieldAlert size={10} className="text-white" />
+                  ) : (
+                    <BellRing size={10} className="text-white" />
+                  )}
+                </span>
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-black text-slate-900 truncate">
+                  <span className="text-xs font-black text-slate-900 dark:text-slate-100 truncate">
                     یادآوری مطب
                   </span>
                   <span

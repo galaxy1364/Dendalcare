@@ -1,14 +1,19 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   Archive,
+  BarChart3,
+  CalendarDays,
+  CalendarPlus,
   CheckCircle2,
   ChevronRight,
   FolderKanban,
   Search,
   ShieldAlert,
   Sparkles,
+  Stethoscope,
   UploadCloud,
   User,
+  UserPlus,
   WifiOff,
   X,
 } from 'lucide-react';
@@ -19,6 +24,8 @@ import { useNavigation } from '@/navigation/NavigationStack';
 import { FloatingDock } from '@/navigation/FloatingDock';
 import { NavigationRail } from '@/navigation/NavigationRail';
 import { PlatformHapticAdapter } from '@/platform/haptics';
+import { useViewportMetrics } from '@/platform/safeArea';
+import { canAccessRoute } from '@/services/permissions/accessControl';
 import {
   beginRtlEdgeBackSwipe,
   cancelRtlEdgeBackSwipe,
@@ -29,6 +36,10 @@ import { MascotTooth } from '@/components/ui/MascotTooth';
 import { DraggableNotificationHandle } from '@/components/ui/DraggableNotificationHandle';
 import { IOSReminderPopup } from '@/components/ui/IOSReminderPopup';
 import { AuroraBackground } from '@/design-system/components/AuroraBackground';
+import {
+  ContextualToolbar,
+  type ContextualActionItem,
+} from '@/design-system/primitives/AdaptiveLayout';
 import { useClinicShell } from './AppProviders';
 import { AppRouter } from './AppRouter';
 import { OverlayManager } from './OverlayManager';
@@ -90,6 +101,76 @@ export function AppShell() {
 
   const mainRef = useRef<HTMLDivElement>(null);
   const edgeSwipeRef = useRef<EdgeBackTracker | null>(null);
+  // Keep documentElement synchronized with live viewport breakpoint & virtual keyboard insets
+  useViewportMetrics();
+
+  const effectiveMascotMood = !isOnline ? 'offline' : mascotMood;
+
+  const contextualActions = useMemo<ContextualActionItem[]>(() => {
+    if (activeRoute === 'dashboard') return [];
+    const items: ContextualActionItem[] = [];
+    if (canAccessRoute(effectiveRole, 'patient_form')) {
+      items.push({
+        id: 'new_patient',
+        label: 'بیمار جدید',
+        icon: <UserPlus size={13} />,
+        accent: '#087C76',
+        onClick: () => {
+          PlatformHapticAdapter.selection();
+          navigate('patient_form');
+        },
+      });
+    }
+    if (canAccessRoute(effectiveRole, 'appointment_form')) {
+      items.push({
+        id: 'new_appointment',
+        label: 'نوبت جدید',
+        icon: <CalendarPlus size={13} />,
+        accent: '#0369A1',
+        onClick: () => {
+          PlatformHapticAdapter.selection();
+          navigate('appointment_form');
+        },
+      });
+    }
+    if (activeRoute !== 'treatments' && canAccessRoute(effectiveRole, 'treatment_form')) {
+      items.push({
+        id: 'new_treatment',
+        label: 'طرح درمان',
+        icon: <Stethoscope size={13} />,
+        accent: '#5B3CC4',
+        onClick: () => {
+          PlatformHapticAdapter.selection();
+          navigate('treatment_form');
+        },
+      });
+    }
+    if (activeRoute !== 'calendar' && canAccessRoute(effectiveRole, 'calendar')) {
+      items.push({
+        id: 'open_calendar',
+        label: 'تقویم شمسی',
+        icon: <CalendarDays size={13} />,
+        accent: '#92510C',
+        onClick: () => {
+          PlatformHapticAdapter.selection();
+          navigate('calendar');
+        },
+      });
+    }
+    if (activeRoute !== 'reports' && canAccessRoute(effectiveRole, 'reports')) {
+      items.push({
+        id: 'open_reports',
+        label: 'گزارش جامع',
+        icon: <BarChart3 size={13} />,
+        accent: '#176B52',
+        onClick: () => {
+          PlatformHapticAdapter.selection();
+          navigate('reports');
+        },
+      });
+    }
+    return items.slice(0, 4);
+  }, [activeRoute, effectiveRole, navigate]);
 
   const section =
     activeRoute === 'services'
@@ -192,7 +273,7 @@ export function AppShell() {
           onBack={goBack}
           canGoBack={canGoBack}
           notifCount={notifCount}
-          mascotMood={mascotMood}
+          mascotMood={effectiveMascotMood}
           currentUser={currentUser}
           effectiveRole={effectiveRole}
           platformInfo={platformInfo}
@@ -213,7 +294,7 @@ export function AppShell() {
           {/* Compact Non-Overlapping Header */}
           <header className="shrink-0 z-20 bg-[#F4F7F9] dark:bg-[#0A141E] border-b border-[#D8E2EA] dark:border-[#25394D] px-2 md:px-4 py-1.5">
             <div className="max-w-xl md:max-w-5xl xl:max-w-6xl mx-auto">
-              <div className="rounded-[20px] px-3 py-1.5 flex items-center justify-between bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] text-[#14283B] dark:text-[#F1F5F9] shadow-sm">
+              <div className="rounded-[20px] px-2.5 sm:px-3 py-1.5 flex items-center justify-between gap-2 bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] text-[#14283B] dark:text-[#F1F5F9] shadow-sm">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   {canGoBack && (
                     <button
@@ -231,11 +312,11 @@ export function AppShell() {
                   <button
                     type="button"
                     data-testid="topbar_brand_logo_button"
-                    className="inline-flex items-center justify-center w-10 h-10 rounded-[14px] bg-gradient-to-br from-[#F5F3FF] to-[#EDE9FE] dark:from-[#2E1065]/75 dark:to-[#4C1D95]/65 border border-[#C4B5FD] dark:border-[#7C3AED]/75 shadow-sm cursor-pointer shrink-0 active:scale-95 md:hidden"
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-[14px] shrink-0 cursor-pointer active:scale-95 md:hidden"
                     onClick={() => navigate('dashboard', undefined, { rootTab: true })}
                     aria-label="مینادنتال - صفحه اصلی"
                   >
-                    <MascotTooth mood={mascotMood} size={32} />
+                    <MascotTooth mood={effectiveMascotMood} size={38} framed interactive={false} />
                   </button>
 
                   <div className="min-w-0 flex-1">
@@ -247,7 +328,7 @@ export function AppShell() {
                         <span className="hidden md:inline">{section.label}</span>
                       </h1>
                       <span
-                        className="hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-md text-white truncate max-w-[140px]"
+                        className="hidden lg:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-md text-white truncate max-w-[150px]"
                         style={{ background: section.color }}
                       >
                         {currentUser.fullName || currentUser.name}
@@ -535,6 +616,17 @@ export function AppShell() {
                         </div>
                       </div>
                     )}
+
+                  {activeRoute !== 'dashboard' && contextualActions.length > 0 && (
+                    <ContextualToolbar
+                      sectionLabel={section.label}
+                      isOnline={isOnline}
+                      syncPulse={syncPulse}
+                      offlineQueueCount={offlineQueueCount}
+                      actions={contextualActions}
+                      onOpenSyncStatus={() => setProjectFolderOpen(true)}
+                    />
+                  )}
 
                   {activeRoute !== 'dashboard' && (
                     <IOSReminderPopup

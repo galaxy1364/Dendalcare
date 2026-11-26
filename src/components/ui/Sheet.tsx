@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ArrowRight, ShieldCheck, Lock } from 'lucide-react';
 import { HapticEngine, playTactileFeedback } from '@/lib/hapticsAudio';
+import { useFocusTrap } from '@/platform/focusEngine';
 import { useUpdateSafePointGuard } from '@/services/updates';
 
 type SheetProps = {
@@ -24,11 +25,15 @@ export function Sheet({
   children,
 }: SheetProps) {
   const sheetGuardId = useId();
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
   useUpdateSafePointGuard(
     `sheet_${sheetGuardId}`,
     open,
     `فرم باز: ${title || 'ثبت اطلاعات کلینیک'}`
   );
+  useFocusTrap(dialogRef, open, { onEscape: onClose });
+
   const [swipeBackX, setSwipeBackX] = useState(0);
   const swipeRef = useRef<{ active: boolean; startX: number; startY: number }>({
     active: false,
@@ -43,16 +48,10 @@ export function Sheet({
     }
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = prevOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || typeof document === 'undefined') return null;
 
@@ -68,6 +67,10 @@ export function Sheet({
     >
       {/* Full-Screen Push Route on Mobile (100dvh), Centered Sheet on iPad/Desktop */}
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         data-testid="ios27_registration_sheet"
         className="ios27-sheet-surface relative w-full h-[100dvh] sm:h-[92dvh] max-w-2xl mx-auto flex flex-col bg-[#F4F5F9] rounded-none sm:rounded-[32px] shadow-2xl overflow-hidden animate-scale-in border-0 sm:border sm:border-white/80 safe-top safe-bottom"
         style={{
@@ -152,7 +155,7 @@ export function Sheet({
             )}
 
             <div className="min-w-0">
-              <h2 className="text-[15px] font-black text-slate-900 dark:text-slate-100 truncate leading-tight">{title}</h2>
+              <h2 id={titleId} className="text-[15px] font-black text-slate-900 dark:text-slate-100 truncate leading-tight">{title}</h2>
               <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate mt-0.5">
                 {subtitle || 'فرم ثبت تمام‌صفحه • مینادنتال'}
               </p>
@@ -216,6 +219,9 @@ export function ConfirmDialog({
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
 
+  const confirmDialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(confirmDialogRef, open, { onEscape: onClose });
+
   useEffect(() => {
     if (open) {
       setStep(1);
@@ -251,6 +257,10 @@ export function ConfirmDialog({
     >
       <div className="absolute inset-0 sheet-overlay animate-fade-in" />
       <div
+        ref={confirmDialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={title}
         className="relative glass-card p-6 w-full max-w-sm animate-bounce-in bg-white/98 dark:bg-[#11202E] shadow-2xl border border-slate-200 dark:border-[#25394D]"
         style={{ borderRadius: 28 }}
         onClick={(e) => e.stopPropagation()}

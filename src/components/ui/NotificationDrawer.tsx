@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { playTactileFeedback } from '@/lib/hapticsAudio';
 import { toJalaliStr } from '@/lib/jalali';
+import { MascotTooth, type MascotMood } from '@/components/ui/MascotTooth';
+import { useFocusTrap } from '@/platform/focusEngine';
 import type { SectionId } from '@/lib/sections';
 import type { GlobalReminderPopupItem } from '@/components/ui/IOSReminderPopup';
 import type { Message } from '@/lib/supabase';
@@ -263,6 +265,9 @@ export function NotificationDrawer({
 
   const drawerSwipeRef = useRef<{ id: number | null; x: number; y: number }>({ id: null, x: 0, y: 0 });
   const deckSwipeRef = useRef<{ id: number | null; x: number; moved: boolean }>({ id: null, x: 0, moved: false });
+  const drawerPanelRef = useRef<HTMLElement>(null);
+
+  useFocusTrap(drawerPanelRef, open, { onEscape: onClose });
 
   const filteredAlerts = useMemo(() => {
     if (drawerTab === 'finance') {
@@ -291,6 +296,8 @@ export function NotificationDrawer({
   const safeSlide = spotlightQueue.length > 0 ? slideIdx % spotlightQueue.length : 0;
   const activeSlide = spotlightQueue[safeSlide];
   const dotsCount = Math.min(spotlightQueue.length, 5);
+  const drawerMascotMood: MascotMood =
+    urgentGroup.length > 0 ? 'sad' : notifCount > 0 ? 'pro' : 'celebrate';
 
   return (
     <div
@@ -305,6 +312,10 @@ export function NotificationDrawer({
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-fade-in" />
 
       <aside
+        ref={drawerPanelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="مرکز اعلان‌ها و یادآوری‌ها"
         className="relative w-full max-w-sm h-full bg-[#F4F7F9] dark:bg-[#0A141E] text-[#14283B] dark:text-[#F1F5F9] border-l border-[#D8E2EA] dark:border-[#25394D] rounded-l-[30px] flex flex-col drawer-slide-in-right safe-top safe-bottom overflow-hidden"
         onClick={e => e.stopPropagation()}
         onPointerDown={(e) => {
@@ -348,8 +359,15 @@ export function NotificationDrawer({
         <div className="px-4 pt-3.5 pb-3 bg-white dark:bg-[#11202E] border-b border-slate-200/90 dark:border-[#25394D] shrink-0 space-y-2.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-2xl bg-rose-600 flex items-center justify-center text-white shadow-sm shrink-0">
-                <BellRing size={17} className="bell-swing" />
+              <div className="relative shrink-0">
+                <MascotTooth mood={drawerMascotMood} size={42} framed interactive={false} />
+                <span
+                  className={`absolute -bottom-0.5 -left-0.5 w-4 h-4 rounded-full flex items-center justify-center text-white border border-white ${
+                    urgentGroup.length > 0 ? 'bg-rose-600' : 'bg-indigo-600'
+                  }`}
+                >
+                  <BellRing size={9} className="bell-swing" />
+                </span>
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
@@ -648,9 +666,10 @@ export function NotificationDrawer({
 
           {/* Smart Grouped Swipeable Notification Cards */}
           {filteredAlerts.length === 0 && unreadMessages.length === 0 ? (
-            <div className="text-center py-10 bg-white dark:bg-[#11202E] rounded-2xl border border-slate-200 dark:border-[#25394D]">
+            <div className="flex flex-col items-center text-center py-9 px-4 bg-white dark:bg-[#11202E] rounded-2xl border border-slate-200 dark:border-[#25394D]">
+              <MascotTooth mood="celebrate" size={56} framed interactive={false} className="mb-3" />
               <p className="text-sm text-slate-900 dark:text-slate-100 font-black">همه یادآوری‌ها بررسی شده‌اند</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">مورد فوری فعالی وجود ندارد</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">مورد فوری فعالی وجود ندارد — عالی پیش رفتید!</p>
             </div>
           ) : (
             <div className="space-y-3">

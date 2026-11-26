@@ -91,8 +91,8 @@ export function NavigationRail({
             onClick={() => handleSelect('dashboard')}
             className="flex items-center gap-2.5 min-w-0 text-right group min-h-[44px]"
           >
-            <div className="shrink-0 w-10 h-10 rounded-[13px] bg-violet-500/25 border border-violet-300/45 flex items-center justify-center shadow-sm">
-              <MascotTooth mood={mascotMood} size={34} />
+            <div className="shrink-0 flex items-center justify-center">
+              <MascotTooth mood={mascotMood} size={40} framed interactive={false} />
             </div>
             <div className="hidden lg:block min-w-0">
               <p className="text-sm font-bold text-white leading-tight truncate">مینادنتال</p>

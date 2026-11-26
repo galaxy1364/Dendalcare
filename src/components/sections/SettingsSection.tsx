@@ -59,10 +59,14 @@ import {
   setFontScaleMode,
   setMotionMode,
   setAuroraBackdropMode,
+  setDensityMode,
+  setPlatformDesignLanguage,
   type ThemeMode,
   type FontScaleMode,
   type MotionMode,
   type AuroraBackdropMode,
+  type DensityMode,
+  type PlatformDesignLanguage,
 } from '@/lib/appearanceEngine';
 import { detectPlatformCapabilities } from '@/lib/platformEngine';
 import { HapticEngine } from '@/lib/hapticsAudio';
@@ -621,6 +625,77 @@ function ClinicSettingsTab({
                   className={`py-2 px-2 rounded-xl border text-[11px] font-extrabold min-h-[42px] transition-all ${
                     active
                       ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2" data-testid="appearance_density_controls">
+          <span className="text-[11px] font-extrabold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+            <Gauge size={13} /> تراکم چیدمان (Intelligent Density)
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                { id: 'compact' as DensityMode, label: 'فشرده' },
+                { id: 'comfortable' as DensityMode, label: 'استاندارد' },
+                { id: 'spacious' as DensityMode, label: 'راحت' },
+              ] as const
+            ).map(({ id, label }) => {
+              const active = appearance.density === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  data-testid={`appearance_density_${id}`}
+                  onClick={() => {
+                    HapticEngine.selection();
+                    setDensityMode(id);
+                  }}
+                  className={`py-2 px-2 rounded-xl border text-[11px] font-extrabold min-h-[42px] transition-all ${
+                    active
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2" data-testid="appearance_platform_design_controls">
+          <span className="text-[11px] font-extrabold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+            <Monitor size={13} /> زبان طراحی تطبیقی ({appearance.resolvedPlatformDesign.toUpperCase()})
+          </span>
+          <div className="grid grid-cols-4 gap-1.5">
+            {(
+              [
+                { id: 'auto' as PlatformDesignLanguage, label: 'خودکار' },
+                { id: 'apple' as PlatformDesignLanguage, label: 'Apple HIG' },
+                { id: 'material' as PlatformDesignLanguage, label: 'Material 3' },
+                { id: 'fluent' as PlatformDesignLanguage, label: 'Fluent' },
+              ] as const
+            ).map(({ id, label }) => {
+              const active = appearance.platformDesign === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  data-testid={`appearance_platform_${id}`}
+                  onClick={() => {
+                    HapticEngine.selection();
+                    setPlatformDesignLanguage(id);
+                  }}
+                  className={`py-2 px-1.5 rounded-xl border text-[10.5px] font-extrabold min-h-[42px] transition-all ${
+                    active
+                      ? 'bg-slate-900 dark:bg-indigo-600 text-white border-slate-900 dark:border-indigo-500 shadow-sm'
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
                   }`}
                 >
