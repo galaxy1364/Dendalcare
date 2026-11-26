@@ -88,7 +88,7 @@ export class UpdateLedger {
   public isAutoUpdateEnabled(): boolean {
     if (!this.storage) return true;
     const raw = this.storage.getItem(KEY_AUTO_UPDATE);
-    return raw === null ? true : raw === 'true';
+    return raw !== 'false';
   }
 
   public setAutoUpdateEnabled(enabled: boolean): void {

@@ -87,6 +87,23 @@ function getContentTypeForExt(relPath: string): string {
   return map[ext] || 'application/octet-stream';
 }
 
+function readAndroidGradleBaseline(): {
+  versionName: string | null;
+  versionCode: number | null;
+} {
+  const gradlePath = path.resolve(__dirname, 'app/build.gradle.kts');
+  if (!fs.existsSync(gradlePath)) {
+    return { versionName: null, versionCode: null };
+  }
+  const raw = fs.readFileSync(gradlePath, 'utf8');
+  const versionName = raw.match(/versionName\s*=\s*"([^"]+)"/)?.[1] || null;
+  const parsedCode = Number(raw.match(/versionCode\s*=\s*(\d+)/)?.[1] || 0);
+  return {
+    versionName,
+    versionCode: Number.isInteger(parsedCode) && parsedCode > 0 ? parsedCode : null,
+  };
+}
+
 function resolveBuildIdentityInputs(): {
   semver: string;
   releaseSequence: number;
@@ -95,10 +112,21 @@ function resolveBuildIdentityInputs(): {
   baseVersionMeta: Record<string, unknown>;
 } {
   const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'));
-  const semver = String(pkg.version || '4.9.6');
+  const semver = String(pkg.version || '4.17.0');
+  const androidBaseline = readAndroidGradleBaseline();
+  if (androidBaseline.versionName && androidBaseline.versionName !== semver) {
+    throw new Error(
+      `[vite-sync] Web/Android versionName mismatch: package.json (${semver}) != app/build.gradle.kts (${androidBaseline.versionName})`
+    );
+  }
+
   const publicDir = path.resolve(__dirname, 'public');
   const baseVersionPath = path.join(publicDir, 'version.json');
-  let baseVersionMeta: Record<string, unknown> = { releaseSequence: 65, build: 65, channel: 'stable' };
+  let baseVersionMeta: Record<string, unknown> = {
+    releaseSequence: androidBaseline.versionCode ?? 167,
+    build: androidBaseline.versionCode ?? 167,
+    channel: 'stable',
+  };
   if (fs.existsSync(baseVersionPath)) {
     try {
       baseVersionMeta = JSON.parse(fs.readFileSync(baseVersionPath, 'utf8'));
@@ -111,7 +139,12 @@ function resolveBuildIdentityInputs(): {
   const isCiRelease = Boolean(envSeqRaw && /^\d+$/.test(envSeqRaw) && Number(envSeqRaw) > 0);
   const releaseSequence = isCiRelease
     ? Number(envSeqRaw)
-    : Number(baseVersionMeta.releaseSequence || baseVersionMeta.build || 65);
+    : Number(baseVersionMeta.releaseSequence || baseVersionMeta.build || androidBaseline.versionCode || 167);
+  if (androidBaseline.versionCode && releaseSequence < androidBaseline.versionCode) {
+    throw new Error(
+      `[vite-sync] Monotonic sequence drift: Web releaseSequence (#${releaseSequence}) < Android baseline versionCode (#${androidBaseline.versionCode})`
+    );
+  }
   const releaseChannel: 'stable' | 'staging' | 'canary' =
     process.env.MINA_RELEASE_CHANNEL === 'staging' || process.env.MINA_RELEASE_CHANNEL === 'canary'
       ? process.env.MINA_RELEASE_CHANNEL
@@ -455,6 +488,8 @@ function syncDeterministicReleasePlugin(): Plugin {
         platform: 'android',
         currentReleaseId: buildId,
         releaseSequence,
+        androidVersionCode: releaseSequence,
+        androidVersionName: semver,
         manifestUrl: versionedManifestRelUrl,
         updatedAt: publishedAt,
         revokedReleaseIds: [],
@@ -492,6 +527,8 @@ function syncDeterministicReleasePlugin(): Plugin {
         semver,
         build: releaseSequence,
         releaseSequence,
+        androidVersionCode: releaseSequence,
+        androidVersionName: semver,
         buildId,
         releaseId: buildId,
         contentDigest,

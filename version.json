@@ -4,17 +4,19 @@
   "semver": "4.17.0",
   "build": 167,
   "releaseSequence": 167,
-  "buildId": "v4.17.0-bea3339a02",
-  "releaseId": "v4.17.0-bea3339a02",
-  "contentDigest": "bea3339a027bcb20e83f166169b2793435fd1ca1da0c24287975687a77e9584d",
+  "androidVersionCode": 167,
+  "androidVersionName": "4.17.0",
+  "buildId": "v4.17.0-ef716574cb",
+  "releaseId": "v4.17.0-ef716574cb",
+  "contentDigest": "ef716574cb6ae1ca765c1a105378c7bc00eff8035a95fd4adad78bb735c40e05",
   "packageVersion": "4.17.0",
   "channel": "stable",
-  "publishedAt": "2026-11-26T19:07:14.569Z",
+  "publishedAt": "2026-11-26T19:37:20.414Z",
   "releaseNotes": "نسخه v4.17.0 (انتشار #167) — هم‌ترازی یکنواخت توالی انتشار پس از #166، تفکیک سه‌گانه نسخه وب/سرور/بومی، بازیابی احراز هویت و RLS مدیر کلینیک، و بازمهندسی بنیادین اسکلت تطبیقی جهانی (GE-0004)",
   "entryScripts": [
-    "./assets/index-CnomJacl.js"
+    "./assets/index-BTfoQfpI.js"
   ],
   "entryStyles": [
-    "./assets/index-CROw-_yu.css"
+    "./assets/index-UO9yd7Ps.css"
   ]
 }

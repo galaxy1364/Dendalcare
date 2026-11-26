@@ -931,11 +931,18 @@ function ClinicSettingsTab({
         {/* Auto Update at Safe Point Toggle */}
         <div className="p-3 rounded-2xl bg-white dark:bg-slate-900/75 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between gap-2.5 shadow-sm">
           <div className="min-w-0 flex-1">
-            <span className="text-xs font-extrabold text-slate-900 dark:text-slate-100 block">
-              به‌روزرسانی خودکار امن
-            </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-extrabold text-slate-900 dark:text-slate-100">
+                به‌روزرسانی خودکار امن
+              </span>
+              {autoUpdate && (
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+                  همیشه فعال
+                </span>
+              )}
+            </div>
             <span className="text-[10.5px] text-slate-600 dark:text-slate-300 leading-snug block mt-0.5">
-              اعمال خودکار پس از پایان فرم و صف آفلاین
+              بررسی و اعمال خودکار در بازگشت به برنامه، اتصال مجدد و نقاط امن (بدون از دست رفتن فرم یا صف آفلاین)
             </span>
           </div>
           <label dir="ltr" className="relative inline-flex items-center cursor-pointer shrink-0">

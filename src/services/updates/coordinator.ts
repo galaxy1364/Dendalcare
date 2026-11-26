@@ -114,6 +114,7 @@ export class UpdateCoordinator {
   private activeFencingToken: number | null = null;
 
   private boundVisibilityHandler: (() => void) | null = null;
+  private boundFocusHandler: (() => void) | null = null;
   private boundOnlineHandler: (() => void) | null = null;
   private boundOfflineHandler: (() => void) | null = null;
   private boundSwUpdateHandler: ((ev: Event) => void) | null = null;
@@ -308,6 +309,13 @@ export class UpdateCoordinator {
   public setAutoUpdateEnabled(enabled: boolean): UpdateSnapshot {
     this.ledger.setAutoUpdateEnabled(enabled);
     this.emit();
+    if (enabled && this.started) {
+      if (this.candidate?.integrityVerified) {
+        void this.tryResumeDeferredActivation();
+      } else if (this.isOnline()) {
+        void this.checkForUpdates('poll');
+      }
+    }
     return this.getSnapshot();
   }
 
@@ -658,9 +666,10 @@ export class UpdateCoordinator {
     }
 
     const isAutomatic = source !== 'manual';
+    const bypassAutoDebounce = source === 'sw_event' || source === 'online' || source === 'startup';
     const minDebounce =
       this.config.minAutoDebounceMs ?? UPDATE_TIMING_POLICY.MIN_AUTO_CHECK_DEBOUNCE_MS;
-    if (isAutomatic && Date.now() - this.lastAutoCheckAtMs < minDebounce) {
+    if (isAutomatic && !bypassAutoDebounce && Date.now() - this.lastAutoCheckAtMs < minDebounce) {
       return this.getSnapshot();
     }
 
@@ -1317,7 +1326,12 @@ export class UpdateCoordinator {
       if (this.localBlockers.size > 0) {
         this.broadcastBusyState('BUSY_SNAPSHOT');
       }
-      if (this.state === 'WAITING_FOR_SAFE_POINT' && this.getSafePointEvaluation().isSafe) {
+      if (
+        (this.state === 'WAITING_FOR_SAFE_POINT' || this.state === 'READY_TO_ACTIVATE') &&
+        this.ledger.isAutoUpdateEnabled() &&
+        !this.isCandidateDeferred() &&
+        this.getSafePointEvaluation().isSafe
+      ) {
         void this.tryResumeDeferredActivation();
       }
     }, Math.floor((this.config.peerHeartbeatTtlMs ?? UPDATE_TIMING_POLICY.PEER_HEARTBEAT_TTL_MS) / 2));
@@ -1326,14 +1340,22 @@ export class UpdateCoordinator {
       this.boundVisibilityHandler = () => {
         if (document.visibilityState === 'visible') {
           this.scheduleNextPoll();
+          void this.tryResumeDeferredActivation();
           void this.checkForUpdates('visibility');
         } else if (this.pollTimer) {
           clearTimeout(this.pollTimer);
           this.pollTimer = null;
         }
       };
+      this.boundFocusHandler = () => {
+        if (this.isDocumentVisible() && this.isOnline()) {
+          void this.tryResumeDeferredActivation();
+          void this.checkForUpdates('visibility');
+        }
+      };
       this.boundOnlineHandler = () => {
         this.emit();
+        void this.tryResumeDeferredActivation();
         void this.checkForUpdates('online');
       };
       this.boundOfflineHandler = () => {
@@ -1356,6 +1378,7 @@ export class UpdateCoordinator {
       };
 
       document.addEventListener('visibilitychange', this.boundVisibilityHandler);
+      window.addEventListener('focus', this.boundFocusHandler);
       window.addEventListener('online', this.boundOnlineHandler);
       window.addEventListener('offline', this.boundOfflineHandler);
       window.addEventListener('minadental:sw-update-available', this.boundSwUpdateHandler);
@@ -1394,6 +1417,7 @@ export class UpdateCoordinator {
       document.removeEventListener('visibilitychange', this.boundVisibilityHandler);
     }
     if (typeof window !== 'undefined') {
+      if (this.boundFocusHandler) window.removeEventListener('focus', this.boundFocusHandler);
       if (this.boundOnlineHandler) window.removeEventListener('online', this.boundOnlineHandler);
       if (this.boundOfflineHandler) window.removeEventListener('offline', this.boundOfflineHandler);
       if (this.boundSwUpdateHandler) {

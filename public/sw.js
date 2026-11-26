@@ -474,12 +474,48 @@ async function isVerifiedHtmlResponse(cache, key, hit) {
 async function getVerifiedCachedShell(cache, request) {
   const candidates = [request, './index.html', './'];
   for (const key of candidates) {
-    const hit = await cache.match(key);
+    let hit = await cache.match(key);
+    if (!hit && typeof key !== 'string' && key && typeof key.url === 'string' && key.url.includes('?')) {
+      hit = await cache.match(key, { ignoreSearch: true });
+    }
     if (await isVerifiedHtmlResponse(cache, key, hit)) {
       return hit;
     }
   }
   return null;
+}
+
+async function handleManifestRequest(request, url) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const networkResponse = await fetchWithTimeout(
+      request,
+      { cache: 'no-cache' },
+      NAVIGATION_TIMEOUT_MS
+    );
+    if (isCacheableResponse(request, networkResponse, url.pathname)) {
+      await safeCachePut(cache, './manifest.json', networkResponse.clone());
+      return networkResponse;
+    }
+  } catch {
+    // Offline fallback below
+  }
+
+  const cached =
+    (await cache.match('./manifest.json')) ||
+    (await cache.match(request, { ignoreSearch: true }));
+  if (cached) {
+    const ct = cached.headers.get('content-type') || '';
+    if (isValidMimeForPath(url.pathname, ct, request.mode)) {
+      return cached;
+    }
+    await cache.delete('./manifest.json').catch(() => {});
+  }
+  return new Response('Manifest unavailable offline', {
+    status: 503,
+    statusText: 'Service Unavailable',
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
 }
 
 async function handleNavigationRequest(request, url) {
@@ -602,6 +638,13 @@ self.addEventListener('fetch', (event) => {
           })
       )
     );
+    return;
+  }
+
+  // PWA manifest: network-first with verified cache fallback so mobile Chrome/Safari always
+  // read the freshest scope, start_url, and icons while preserving offline installability.
+  if (url.pathname.endsWith('/manifest.json') || url.pathname === '/manifest.json') {
+    event.respondWith(handleManifestRequest(request, url));
     return;
   }
 

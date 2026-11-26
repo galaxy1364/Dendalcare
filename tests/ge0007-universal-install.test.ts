@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {
   GITHUB_ANDROID_RELEASE_PAGE,
   isValidApkMagicBytes,
 } from '../src/lib/downloadHelper';
+import { UpdateLedger } from '../src/services/updates/ledger';
 
 export interface Ge0007TestResult {
   name: string;
@@ -59,15 +61,82 @@ export async function runAllGe0007UniversalInstallTests(): Promise<Ge0007TestRes
       },
     },
     {
-      name: 'GE-0007 P0-APK: android-apk.yml builds, signs, verifies with apksigner & publishes to GitHub Releases android-latest',
+      name: 'GE-0007 P0-PWA: SW registers explicit scope ./, serves manifest.json network-first & preserves ignoreSearch offline start_url shell fallback',
+      fn: () => {
+        const indexSrc = readWorkspaceFile('index.html');
+        assert.ok(
+          indexSrc.includes("register('./sw.js', { scope: './', updateViaCache: 'none' })"),
+          'index.html must explicitly bind SW scope to ./ with updateViaCache: none'
+        );
+        assert.ok(
+          indexSrc.includes('reg.update()'),
+          'index.html must proactively poll reg.update() on startup/visibility/online'
+        );
+
+        const swSrc = readWorkspaceFile('public/sw.js');
+        assert.ok(swSrc.includes('handleManifestRequest'), 'public/sw.js must serve manifest.json via network-first with cache fallback');
+        assert.ok(swSrc.includes('ignoreSearch: true'), 'public/sw.js must match cached start_url shell even with query params offline');
+      },
+    },
+    {
+      name: 'GE-0007 P0-APK & CI Parity: android-apk.yml uses monotonic MINA_RELEASE_SEQUENCE (>= 167), enforces verify-apk-artifact.mjs & aligns Gradle + Vite',
       fn: () => {
         const wf = readWorkspaceFile('.github/workflows/android-apk.yml');
+        assert.ok(!wf.includes('github.run_number'), 'android-apk.yml must NEVER use github.run_number as MINA_RELEASE_SEQUENCE');
+        assert.ok(wf.includes("MINA_BASE_SEQUENCE: '167'"), 'android-apk.yml must align MINA_BASE_SEQUENCE with deploy.yml');
+        assert.ok(wf.includes('scripts/ci-release-gate.mjs --compute-sequence'), 'android-apk.yml must compute monotonic release sequence');
         assert.ok(wf.includes('gradle ${{ steps.sign_mode.outputs.gradle_task }}'), 'Workflow must assemble APK via Gradle');
-        assert.ok(wf.includes('apksigner'), 'Workflow must verify APK signature via apksigner');
-        assert.ok(wf.includes('sha256sum'), 'Workflow must compute exact APK SHA-256');
-        assert.ok(wf.includes('504b0304'), 'Workflow must verify PK\\x03\\x04 ZIP/APK header');
+        assert.ok(wf.includes('scripts/verify-apk-artifact.mjs'), 'Workflow must invoke automated verify-apk-artifact.mjs gate');
+        assert.ok(wf.includes('--require-apksigner'), 'CI APK verification gate must strictly require apksigner');
         assert.ok(wf.includes('gh release upload android-latest') || wf.includes('gh release create android-latest'), 'Workflow must publish to android-latest GitHub Release');
         assert.ok(wf.includes('apk-release.json'), 'Workflow must emit machine-readable apk-release.json');
+
+        const gradleSrc = readWorkspaceFile('app/build.gradle.kts');
+        assert.ok(gradleSrc.includes('System.getenv("MINA_RELEASE_SEQUENCE")'), 'app/build.gradle.kts must honor CI MINA_RELEASE_SEQUENCE');
+        assert.ok(gradleSrc.includes('versionCode = 167'), 'app/build.gradle.kts must preserve baseline versionCode = 167');
+        assert.ok(gradleSrc.includes('versionName = "4.17.0"'), 'app/build.gradle.kts must match package.json versionName 4.17.0');
+
+        const viteSrc = readWorkspaceFile('vite.config.ts');
+        assert.ok(viteSrc.includes('readAndroidGradleBaseline'), 'vite.config.ts must verify Web/Android version parity against app/build.gradle.kts');
+      },
+    },
+    {
+      name: 'GE-0007 P0-APK Verifier: scripts/verify-apk-artifact.mjs rejects HTML spoof, parses apksigner certs & enforces repo version parity',
+      fn: async () => {
+        const verifierModule = await import('../scripts/verify-apk-artifact.mjs');
+        assert.equal(verifierModule.hasApkZipMagicBytes(Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00])), true);
+        assert.equal(verifierModule.hasApkZipMagicBytes(Buffer.from('<!DOCTYPE html>')), false);
+        assert.equal(verifierModule.looksLikeHtmlOrJsonPayload(Buffer.from('<!DOCTYPE html><html>404</html>')), true);
+
+        const parsedSig = verifierModule.parseApksignerOutput(
+          [
+            'Verifies',
+            'Verified using v1 scheme (JAR signing): true',
+            'Verified using v2 scheme (APK Signature Scheme v2): true',
+            'Verified using v3 scheme (APK Signature Scheme v3): false',
+            'Signer #1 certificate DN: CN=MinaDental CI, O=MinaDental Clinic',
+            'Signer #1 certificate SHA-256 digest: ' + 'a'.repeat(64),
+          ].join('\n')
+        );
+        assert.equal(parsedSig.verified, true);
+        assert.equal(parsedSig.schemes.v2, true);
+        assert.equal(parsedSig.signerCertSha256, 'a'.repeat(64));
+
+        const baseline = verifierModule.readRepoVersionBaseline(process.cwd());
+        assert.equal(baseline.packageVersion, baseline.gradleVersionName);
+        assert.ok((baseline.gradleVersionCode ?? 0) >= 167);
+
+        // Fail-closed check: HTML spoofed .apk file must throw immediately
+        const tmpHtmlApk = path.join(os.tmpdir(), `minadental-fake-${Date.now()}.apk`);
+        fs.writeFileSync(tmpHtmlApk, '<!DOCTYPE html><html><body>404 Not Found</body></html>', 'utf8');
+        try {
+          assert.throws(
+            () => verifierModule.verifyApkArtifact({ apkPath: tmpHtmlApk, requireApksigner: false }),
+            /HTML\/JSON\/text/i
+          );
+        } finally {
+          fs.rmSync(tmpHtmlApk, { force: true });
+        }
       },
     },
     {
@@ -81,6 +150,30 @@ export async function runAllGe0007UniversalInstallTests(): Promise<Ge0007TestRes
         const helperSrc = readWorkspaceFile('src/lib/downloadHelper.ts');
         assert.ok(helperSrc.includes("contentType.includes('text/html')"), 'downloadHelper must reject HTML responses');
         assert.ok(helperSrc.includes('isValidApkMagicBytes'), 'downloadHelper must verify APK magic bytes');
+      },
+    },
+    {
+      name: 'GE-0007 Always-Active Auto-Update: UpdateLedger defaults ON & self-heals invalid values; coordinator immediately handles SW/online/focus & READY_TO_ACTIVATE',
+      fn: () => {
+        const mem = new Map<string, string>();
+        const storage = {
+          getItem: (k: string) => mem.get(k) ?? null,
+          setItem: (k: string, v: string) => { mem.set(k, v); },
+          removeItem: (k: string) => { mem.delete(k); },
+        };
+        const ledger = new UpdateLedger(storage);
+        assert.equal(ledger.isAutoUpdateEnabled(), true, 'Auto-update must default ON');
+        mem.set('minadental_auto_update_enabled', 'corrupted-value');
+        assert.equal(ledger.isAutoUpdateEnabled(), true, 'Auto-update must self-heal invalid storage values to ON');
+        ledger.setAutoUpdateEnabled(false);
+        assert.equal(ledger.isAutoUpdateEnabled(), false, 'Explicit false toggle must still be respected');
+        ledger.setAutoUpdateEnabled(true);
+        assert.equal(ledger.isAutoUpdateEnabled(), true);
+
+        const coordSrc = readWorkspaceFile('src/services/updates/coordinator.ts');
+        assert.ok(coordSrc.includes("source === 'sw_event' || source === 'online' || source === 'startup'"), 'SW, online & startup events must bypass debounce');
+        assert.ok(coordSrc.includes("this.state === 'WAITING_FOR_SAFE_POINT' || this.state === 'READY_TO_ACTIVATE'"), 'Heartbeat must auto-resume READY_TO_ACTIVATE as well as WAITING_FOR_SAFE_POINT');
+        assert.ok(coordSrc.includes("window.addEventListener('focus', this.boundFocusHandler)"), 'Coordinator must listen to window focus for seamless foreground updates');
       },
     },
     {

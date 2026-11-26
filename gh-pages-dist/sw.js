@@ -2,7 +2,7 @@
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
 // NOTE: Structural HTML checks below prevent cache poisoning & raw-TSX contamination;
 // they are NOT a substitute for cryptographic ECDSA manifest signature verification.
-const BUILD_ID = "v4.17.0-bea3339a02";
+const BUILD_ID = "v4.17.0-ef716574cb";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
@@ -14,15 +14,15 @@ const VALID_BUILD_ID_RE = /^v\d+\.\d+\.\d+-[0-9a-f]{10}$/;
 const CRITICAL_PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-CnomJacl.js",
-  "./assets/index-CROw-_yu.css"
+  "./assets/index-BTfoQfpI.js",
+  "./assets/index-UO9yd7Ps.css"
 ];
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-CnomJacl.js",
-  "./assets/index-CROw-_yu.css",
+  "./assets/index-BTfoQfpI.js",
+  "./assets/index-UO9yd7Ps.css",
   "./manifest.json",
   "./favicon.svg",
   "./logo.png",
@@ -478,12 +478,47 @@ async function isVerifiedHtmlResponse(cache, key, hit) {
 async function getVerifiedCachedShell(cache, request) {
   const candidates = [request, './index.html', './'];
   for (const key of candidates) {
-    const hit = await cache.match(key);
+    const hit =
+      (await cache.match(key)) ||
+      (await cache.match(key, { ignoreSearch: true }));
     if (await isVerifiedHtmlResponse(cache, key, hit)) {
       return hit;
     }
   }
   return null;
+}
+
+async function handleManifestRequest(request, url) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const networkResponse = await fetchWithTimeout(
+      request,
+      { cache: 'no-cache' },
+      NAVIGATION_TIMEOUT_MS
+    );
+    if (isCacheableResponse(request, networkResponse, url.pathname)) {
+      await safeCachePut(cache, './manifest.json', networkResponse.clone());
+      return networkResponse;
+    }
+  } catch {
+    // Offline fallback below
+  }
+
+  const cached =
+    (await cache.match('./manifest.json')) ||
+    (await cache.match(request, { ignoreSearch: true }));
+  if (cached) {
+    const ct = cached.headers.get('content-type') || '';
+    if (isValidMimeForPath(url.pathname, ct, request.mode)) {
+      return cached;
+    }
+    await cache.delete('./manifest.json').catch(() => {});
+  }
+  return new Response('Manifest unavailable offline', {
+    status: 503,
+    statusText: 'Service Unavailable',
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
 }
 
 async function handleNavigationRequest(request, url) {
@@ -606,6 +641,13 @@ self.addEventListener('fetch', (event) => {
           })
       )
     );
+    return;
+  }
+
+  // PWA manifest: network-first with verified cache fallback so mobile Chrome/Safari always
+  // read the freshest scope, start_url, and icons while preserving offline installability.
+  if (url.pathname.endsWith('/manifest.json') || url.pathname === '/manifest.json') {
+    event.respondWith(handleManifestRequest(request, url));
     return;
   }
 

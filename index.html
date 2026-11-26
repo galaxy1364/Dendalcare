@@ -567,8 +567,29 @@
           });
 
           navigator.serviceWorker
-            .register('./sw.js', { updateViaCache: 'none' })
+            .register('./sw.js', { scope: './', updateViaCache: 'none' })
             .then(function (reg) {
+              var lastSwUpdateCheckAt = 0;
+              var checkSwRegistrationUpdate = function () {
+                var now = Date.now();
+                if (now - lastSwUpdateCheckAt < 15000) return;
+                lastSwUpdateCheckAt = now;
+                try {
+                  var p = reg.update();
+                  if (p && typeof p.catch === 'function') p.catch(function () {});
+                } catch (_swErr) {
+                  // ignore transient offline SW update error
+                }
+              };
+
+              checkSwRegistrationUpdate();
+              document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState === 'visible') {
+                  checkSwRegistrationUpdate();
+                }
+              });
+              window.addEventListener('online', checkSwRegistrationUpdate);
+
               if (reg.waiting) {
                 window.dispatchEvent(
                   new CustomEvent('minadental:sw-update-available', {
