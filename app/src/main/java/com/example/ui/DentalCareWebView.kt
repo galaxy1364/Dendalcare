@@ -66,8 +66,8 @@ private class AndroidHapticBridge(private val webView: WebView) {
     fun getNativeAppInfo(): String {
         val ctx = webView.context
         val pkgName = ctx.packageName
-        var versionName = "4.9.6"
-        var versionCode = 65L
+        var versionName = com.example.BuildConfig.VERSION_NAME
+        var versionCode = com.example.BuildConfig.VERSION_CODE.toLong()
         var installerPkg: String? = null
         try {
             val pm = ctx.packageManager

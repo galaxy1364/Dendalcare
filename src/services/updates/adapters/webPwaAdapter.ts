@@ -581,11 +581,24 @@ export class WebPwaUpdateAdapter implements PlatformUpdateAdapter {
     }
 
     if (typeof window !== 'undefined') {
-      const targetUrl = new URL(input.returnUrl || window.location.href);
+      const currentUrl = window.location.href;
+      const targetUrl = new URL(input.returnUrl || currentUrl);
       targetUrl.searchParams.delete('ota_instant_sync');
       targetUrl.searchParams.delete('v_reload');
       targetUrl.searchParams.delete('hard_reload');
-      window.location.replace(targetUrl.toString());
+      const nextHref = targetUrl.toString();
+      // Per HTML navigation spec, location.replace() to the same document with a #hash fragment
+      // is a same-document no-op on Samsung Internet, Chrome, and WebKit — use location.reload()!
+      if (
+        nextHref === currentUrl ||
+        (targetUrl.origin === window.location.origin &&
+          targetUrl.pathname === window.location.pathname &&
+          targetUrl.search === window.location.search)
+      ) {
+        window.location.reload();
+      } else {
+        window.location.replace(nextHref);
+      }
       return { ok: true, reloadTriggered: true };
     }
 

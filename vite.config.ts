@@ -121,39 +121,20 @@ function resolveBuildIdentityInputs(): {
 }
 
 function canonicalManifestPayloadForSigning(manifest: Record<string, unknown>): string {
-  const assets = Array.isArray(manifest.assets) ? [...manifest.assets] : [];
-  assets.sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
-    String(a.path || '').localeCompare(String(b.path || ''))
-  );
-  return JSON.stringify({
-    schemaVersion: manifest.schemaVersion,
-    releaseId: manifest.releaseId,
-    releaseSequence: manifest.releaseSequence,
-    semver: manifest.semver,
-    gitCommit: manifest.gitCommit,
-    channel: manifest.channel,
-    platform: manifest.platform,
-    minNativeVersion: manifest.minNativeVersion,
-    minSchemaVersion: manifest.minSchemaVersion,
-    publishedAt: manifest.publishedAt,
-    expiresAt: manifest.expiresAt ?? null,
-    contentDigest: manifest.contentDigest ?? null,
-    releaseNotes: manifest.releaseNotes,
-    entryScripts: manifest.entryScripts,
-    entryStyles: manifest.entryStyles,
-    assets: assets.map((a: Record<string, unknown>) => ({
-      path: a.path,
-      sha256: a.sha256,
-      size: a.size,
-      critical: a.critical,
-      contentType: a.contentType,
-    })),
-    urgency: manifest.urgency,
-    revoked: manifest.revoked,
-    origin: manifest.origin,
-    rollbackPolicy: manifest.rollbackPolicy,
-    keyId: manifest.keyId ?? null,
-  });
+  const { signature: _omit, ...rest } = manifest;
+  const sortKeysDeep = (val: unknown): unknown => {
+    if (Array.isArray(val)) return val.map(sortKeysDeep);
+    if (val && typeof val === 'object') {
+      const sorted: Record<string, unknown> = {};
+      for (const k of Object.keys(val as Record<string, unknown>).sort()) {
+        const v = (val as Record<string, unknown>)[k];
+        if (v !== undefined) sorted[k] = sortKeysDeep(v);
+      }
+      return sorted;
+    }
+    return val;
+  };
+  return JSON.stringify(sortKeysDeep(rest));
 }
 
 function maybeSignManifestInCi(manifest: Record<string, unknown>): Record<string, unknown> {

@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import { fetchAuthoritativeRelease, verifyReleaseAssets } from '../src/services/updates/manifestClient';
+import { serializeCanonicalManifestPayload } from '../src/services/updates/releaseIdentity';
 import type { AuthoritativeReleaseManifest, PinnedPublicKey, ReleasePointer } from '../src/services/updates/contracts';
 
 interface TestResult {
@@ -27,36 +28,14 @@ async function runCase(name: string, fn: () => Promise<void> | void): Promise<Te
 }
 
 function canonicalPayloadForSigning(manifest: AuthoritativeReleaseManifest): string {
-  const assets = [...manifest.assets].sort((a, b) => a.path.localeCompare(b.path));
-  return JSON.stringify({
-    schemaVersion: manifest.schemaVersion,
-    releaseId: manifest.releaseId,
-    releaseSequence: manifest.releaseSequence,
-    semver: manifest.semver,
-    gitCommit: manifest.gitCommit,
-    channel: manifest.channel,
-    platform: manifest.platform,
-    minNativeVersion: manifest.minNativeVersion,
-    minSchemaVersion: manifest.minSchemaVersion,
-    publishedAt: manifest.publishedAt,
-    expiresAt: manifest.expiresAt ?? null,
-    contentDigest: manifest.contentDigest ?? null,
-    releaseNotes: manifest.releaseNotes,
-    entryScripts: manifest.entryScripts,
-    entryStyles: manifest.entryStyles,
-    assets: assets.map((a) => ({
-      path: a.path,
-      sha256: a.sha256,
-      size: a.size,
-      critical: a.critical,
-      contentType: a.contentType,
-    })),
-    urgency: manifest.urgency,
-    revoked: manifest.revoked,
-    origin: manifest.origin,
-    rollbackPolicy: manifest.rollbackPolicy,
-    keyId: manifest.keyId ?? null,
-  });
+  // Verify vite.config.ts implements the exact same recursive sorted-key canonicalizer
+  const viteSrc = fs.readFileSync(path.join(ROOT, 'vite.config.ts'), 'utf8');
+  assert.ok(
+    viteSrc.includes('const sortKeysDeep = (val: unknown): unknown =>') &&
+      viteSrc.includes('const { signature: _omit, ...rest } = manifest;'),
+    'vite.config.ts canonicalManifestPayloadForSigning must match releaseIdentity.ts sortKeysDeep'
+  );
+  return serializeCanonicalManifestPayload(manifest);
 }
 
 export async function runAllGe0006ReleaseRecoveryTests(): Promise<TestResult[]> {
@@ -297,6 +276,23 @@ export async function runAllGe0006ReleaseRecoveryTests(): Promise<TestResult[]> 
       assert.ok(sql.includes('app_get_my_verified_memberships'), 'Missing app_get_my_verified_memberships RPC');
       assert.ok(sql.includes('all_branches'), 'Missing manager all_branches scope handling');
       assert.ok(!sql.includes("auth.jwt() -> 'app_metadata'"), 'SQL must never fall back to JWT app_metadata for role authorization');
+    })
+  );
+
+  results.push(
+    await runCase('GE-0006 #6: WebPwaUpdateAdapter uses window.location.reload() on same-document hash URLs (prevents silent no-op reload on Samsung Browser/Safari)', () => {
+      const adapterSrc = fs.readFileSync(
+        path.join(ROOT, 'src', 'services', 'updates', 'adapters', 'webPwaAdapter.ts'),
+        'utf8'
+      );
+      assert.ok(
+        adapterSrc.includes('window.location.reload()'),
+        'WebPwaUpdateAdapter must call window.location.reload() for same-document hash URLs'
+      );
+      assert.ok(
+        adapterSrc.includes('targetUrl.pathname === window.location.pathname'),
+        'WebPwaUpdateAdapter must detect identical origin/pathname/search before reload'
+      );
     })
   );
 

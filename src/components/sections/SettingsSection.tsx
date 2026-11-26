@@ -986,9 +986,9 @@ function ClinicSettingsTab({
 
         {/* Candidate Release Notes & Trust Model */}
         {updateSnap.candidate?.manifest.releaseNotes && (
-          <div className="p-2.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-[11px] text-indigo-950 font-semibold space-y-1">
-            <div>یادداشت نسخه آماده: {updateSnap.candidate.manifest.releaseNotes}</div>
-            <div className="text-[10px] font-mono text-indigo-700">
+          <div className="p-2.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800/80 text-[11px] text-indigo-950 dark:text-indigo-100 font-semibold space-y-1">
+            <div className="leading-relaxed">یادداشت نسخه آماده: {updateSnap.candidate.manifest.releaseNotes}</div>
+            <div className="text-[10px] font-mono text-indigo-700 dark:text-indigo-300">
               وضعیت امضا:{' '}
               {updateSnap.candidate.signatureStatus === 'verified'
                 ? 'امضای دیجیتال ECDSA تأیید شد'
@@ -1056,11 +1056,15 @@ function ClinicSettingsTab({
         {updateSnap.error && (
           <div
             data-testid="update_error_box"
-            className="p-2.5 rounded-xl text-xs font-bold bg-rose-50 text-rose-900 border border-rose-200 space-y-1"
+            role="alert"
+            className="p-2.5 rounded-xl text-xs font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-900 dark:text-rose-200 border border-rose-200 dark:border-rose-800/80 space-y-1.5"
           >
-            <div className="flex items-center justify-between gap-2">
-              <span>{updateSnap.error.messageFa}</span>
-              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-100">
+            <div className="flex items-start justify-between gap-2">
+              <span className="flex items-start gap-1.5 leading-relaxed min-w-0">
+                <AlertCircle size={15} className="shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                <span>{updateSnap.error.messageFa}</span>
+              </span>
+              <span dir="ltr" className="rtl-bidi-isolate shrink-0 font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-900/80 text-rose-800 dark:text-rose-200">
                 {updateSnap.error.code}
               </span>
             </div>
@@ -1090,19 +1094,27 @@ function ClinicSettingsTab({
           </div>
         )}
 
-        {/* Update feedback message */}
-        {updateMessage && (
-          <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 ${
-            updateMessage.type === 'success'
-              ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
-              : updateMessage.type === 'info'
-              ? 'bg-blue-50 text-blue-900 border border-blue-200'
-              : 'bg-rose-50 text-rose-900 border border-rose-200'
-          }`}>
-            <CheckCircle2 size={16} className="shrink-0" />
-            <span className="leading-relaxed">{updateMessage.text}</span>
-          </div>
-        )}
+        {/* Update feedback message (suppressed if already displayed in update_error_box) */}
+        {updateMessage &&
+          !(updateMessage.type === 'error' && updateSnap.error?.messageFa === updateMessage.text) && (
+            <div
+              role={updateMessage.type === 'error' ? 'alert' : 'status'}
+              className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                updateMessage.type === 'success'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/80'
+                  : updateMessage.type === 'info'
+                  ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200 border border-blue-200 dark:border-blue-800/80'
+                  : 'bg-rose-50 dark:bg-rose-950/60 text-rose-900 dark:text-rose-200 border border-rose-200 dark:border-rose-800/80'
+              }`}
+            >
+              {updateMessage.type === 'error' ? (
+                <AlertCircle size={16} className="shrink-0 text-rose-600 dark:text-rose-400" />
+              ) : (
+                <CheckCircle2 size={16} className="shrink-0" />
+              )}
+              <span className="leading-relaxed">{updateMessage.text}</span>
+            </div>
+          )}
       </div>
 
       {/* Clinic Base Definitions & Companies Card */}
