@@ -2,7 +2,7 @@
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
 // NOTE: Structural HTML checks below prevent cache poisoning & raw-TSX contamination;
 // they are NOT a substitute for cryptographic ECDSA manifest signature verification.
-const BUILD_ID = "v4.17.0-ef716574cb";
+const BUILD_ID = "v4.17.0-3a33e14530";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
@@ -14,15 +14,15 @@ const VALID_BUILD_ID_RE = /^v\d+\.\d+\.\d+-[0-9a-f]{10}$/;
 const CRITICAL_PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-BTfoQfpI.js",
-  "./assets/index-UO9yd7Ps.css"
+  "./assets/index-DOx1311S.js",
+  "./assets/index-DR6etgu_.css"
 ];
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-BTfoQfpI.js",
-  "./assets/index-UO9yd7Ps.css",
+  "./assets/index-DOx1311S.js",
+  "./assets/index-DR6etgu_.css",
   "./manifest.json",
   "./favicon.svg",
   "./logo.png",
@@ -478,9 +478,10 @@ async function isVerifiedHtmlResponse(cache, key, hit) {
 async function getVerifiedCachedShell(cache, request) {
   const candidates = [request, './index.html', './'];
   for (const key of candidates) {
-    const hit =
-      (await cache.match(key)) ||
-      (await cache.match(key, { ignoreSearch: true }));
+    let hit = await cache.match(key);
+    if (!hit && typeof key !== 'string' && key && typeof key.url === 'string' && key.url.includes('?')) {
+      hit = await cache.match(key, { ignoreSearch: true });
+    }
     if (await isVerifiedHtmlResponse(cache, key, hit)) {
       return hit;
     }

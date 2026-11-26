@@ -646,7 +646,7 @@ export async function runAllGe0002P0RecoveryTests(): Promise<Ge0002TestResult[]>
   // GE-0002 Shell, Visual Remediation & Dark-Mode Parity Source Checks
   await runTest('GE-0002 Adaptive Shell & Screenshot Remediation contracts present across Shell, Dock, Bell, Settings, Drawer & Forms', () => {
     const appShell = `${readWorkspaceFile('src/app/AppShell.tsx')}\n${readWorkspaceFile('src/app/shell/AdaptiveTopBar.tsx')}`;
-    assert.ok(appShell.includes('px-3 sm:px-4'), 'AppShell main must use balanced horizontal padding now that duplicate right-edge bell ear is removed');
+    assert.ok(appShell.includes('px-2 sm:px-3'), 'AppShell main must use edge-to-edge balanced horizontal padding');
     assert.ok(appShell.includes('{canGoBack && ('), 'AppShell topbar_back_button must gate strictly on canGoBack');
     assert.ok(appShell.includes('onChange={(id) => navigate(id, undefined, { rootTab: true })}'), 'AppShell dock & rail must switch root tabs without creating fake back history');
     assert.ok(appShell.includes('data-testid="topbar_brand_logo_button"'), 'AppShell must keep MascotTooth prominent across all mobile routes');

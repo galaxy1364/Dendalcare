@@ -17,9 +17,9 @@ android {
     applicationId = "com.aistudio.auditpro.kxmfzq"
     minSdk = 24
     targetSdk = 36
-    val baseVersionCode = 167
+    val baseVersionCode = 175
     val ciReleaseSequence = System.getenv("MINA_RELEASE_SEQUENCE")?.trim()?.toIntOrNull()?.takeIf { it >= baseVersionCode }
-    versionCode = 167
+    versionCode = 175
     if (ciReleaseSequence != null) {
       versionCode = ciReleaseSequence
     }

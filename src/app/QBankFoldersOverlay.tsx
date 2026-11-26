@@ -361,7 +361,7 @@ export function QBankFoldersOverlay() {
       >
         <div className="px-4 pt-3 pb-2.5 bg-white dark:bg-[#11202E] border-b border-[#D8E2EA] dark:border-[#25394D] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <MascotTooth mood={normalizedQuery ? 'ai' : 'happy'} size={38} framed interactive={false} />
+            <MascotTooth mood={normalizedQuery ? 'thinking' : 'happy'} size={46} interactive={false} />
             <div>
               <h3 className="text-sm font-bold text-[#14283B] dark:text-[#F1F5F9]">
                 مرکز فرمان و خدمات مینادنتال

@@ -2,10 +2,10 @@
   "schemaVersion": 2,
   "channel": "stable",
   "platform": "web",
-  "currentReleaseId": "v4.17.0-10555f1342",
+  "currentReleaseId": "v4.17.0-3a33e14530",
   "releaseSequence": 167,
-  "manifestUrl": "./releases/v4.17.0-10555f1342/release-manifest.json",
-  "updatedAt": "2026-11-26T19:40:45.798Z",
+  "manifestUrl": "./releases/v4.17.0-3a33e14530/release-manifest.json",
+  "updatedAt": "2026-11-26T20:19:24.341Z",
   "revokedReleaseIds": [],
   "minSupportedSequence": 1
 }

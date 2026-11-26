@@ -92,7 +92,7 @@ export function NavigationRail({
             className="flex items-center gap-2.5 min-w-0 text-right group min-h-[44px]"
           >
             <div className="shrink-0 flex items-center justify-center">
-              <MascotTooth mood={mascotMood} size={40} framed interactive={false} />
+              <MascotTooth mood={mascotMood} size={48} interactive={false} />
             </div>
             <div className="hidden lg:block min-w-0">
               <p className="text-sm font-bold text-white leading-tight truncate">مینادنتال</p>

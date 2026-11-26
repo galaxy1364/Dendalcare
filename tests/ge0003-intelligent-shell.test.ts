@@ -43,7 +43,17 @@ export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestRes
     await runCase('GE-0003 #2: Duolingo-style emotional iridescent tooth mascot is unified across app, notifications & launcher icons', () => {
       const mascotSrc = fs.readFileSync(path.join(ROOT, 'src/components/ui/MascotTooth.tsx'), 'utf8');
       assert(mascotSrc.includes('useId()'), 'MascotTooth must use unique SVG gradient IDs via useId()');
-      assert(mascotSrc.includes("type MascotMood = 'happy' | 'sad' | 'pro' | 'ai' | 'celebrate' | 'offline'"), 'MascotTooth must expose all 6 emotional moods');
+      assert(
+        mascotSrc.includes("'happy'") &&
+          mascotSrc.includes("'concerned'") &&
+          mascotSrc.includes("'sad'") &&
+          mascotSrc.includes("'celebrating'") &&
+          mascotSrc.includes("'thinking'") &&
+          mascotSrc.includes("'offline'") &&
+          mascotSrc.includes("'neutral'") &&
+          mascotSrc.includes("'celebrate'"),
+        'MascotTooth must expose all 7 deterministic emotional moods plus legacy aliases'
+      );
       assert(mascotSrc.includes('#1B0B47') && mascotSrc.includes('#C084FC') && mascotSrc.includes('#38BDF8'), 'MascotTooth must preserve iridescent crystal aurora palette');
 
       const consumers = [

@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
-    "build": "vite build",
+    "sync:version": "node scripts/sync-version.mjs",
+    "sync:version:check": "node scripts/sync-version.mjs --check",
+    "build": "node scripts/sync-version.mjs --check && vite build",
     "lint": "tsc --noEmit -p tsconfig.app.json",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",

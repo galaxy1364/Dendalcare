@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * MinaDental Automated Android APK Signature, Structure & Version-Parity Verifier
+ * MinaDental Automated Android APK Signature (apksigner + keytool), Structure,
+ * Installability & Version-Parity Verifier with CI Build Report Export.
  *
  * Fail-closed verification script used both locally (`npm run verify:apk -- --apk <path>`)
- * and in `.github/workflows/android-apk.yml` BEFORE publishing any APK to GitHub Releases.
+ * and in GitHub Actions BEFORE publishing any APK to GitHub Releases.
  *
  * Checks performed:
  * 1. Binary presence, minimum valid APK size (>= 100 KB), exact PK\x03\x04 ZIP magic bytes,
@@ -16,8 +17,11 @@
  * 4. Cross-platform Web <-> Android version parity against `package.json` & `app/build.gradle.kts`.
  * 5. Cryptographic APK signature verification via Android SDK `apksigner verify --verbose --print-certs`
  *    (verifying v1/v2/v3/v3.1 scheme + extracting signer certificate SHA-256).
- * 6. Optional `--metadata apk-release.json` cross-verification of `sha256`, `sizeBytes`,
- *    `signingCertSha256`, `versionName`, `versionCode`, `applicationId`, and HTTPS `downloadUrl`.
+ * 6. X.509 certificate inspection via JDK `keytool -printcert -jarfile <apk>` (Owner DN, Issuer DN,
+ *    validity window, SHA-256 fingerprint) + debug keystore detection (`--forbid-debug-signing`).
+ * 7. Optional `--metadata apk-release.json` strict cross-check (`sha256`, `sizeBytes`,
+ *    `signingCertSha256`, `versionName`, `versionCode`, `applicationId`, HTTPS `downloadUrl`).
+ * 8. Structured CI Build Report export via `--report <path>` (+ GitHub Step Summary if available).
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -99,6 +103,31 @@ export function findApksignerBinary() {
   return null;
 }
 
+export function findKeytoolBinary() {
+  if (process.env.JAVA_HOME) {
+    const candidate = path.join(process.env.JAVA_HOME, 'bin', 'keytool');
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  try {
+    const whichOut = execFileSync('which', ['keytool'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    if (whichOut && fs.existsSync(whichOut)) return whichOut;
+  } catch {
+    // not on PATH
+  }
+  return null;
+}
+
+export function isDebugCertificateDn(dnText) {
+  const lower = String(dnText || '').toLowerCase();
+  return (
+    lower.includes('cn=android debug') ||
+    lower.includes('androiddebugkey') ||
+    lower.includes('o=android, c=us') ||
+    lower.includes('cn=minadental ci debug') ||
+    lower.includes('cn=minadental ci,')
+  );
+}
+
 export function parseApksignerOutput(outputText) {
   const schemes = {};
   const schemeRegex = /Verified using (v\d+(?:\.\d+)?) scheme \([^)]+\):\s*(true|false)/gi;
@@ -108,11 +137,32 @@ export function parseApksignerOutput(outputText) {
   }
   const sha256Match = outputText.match(/Signer #1 certificate SHA-256 digest:\s*([0-9a-fA-F]{64})/i);
   const dnMatch = outputText.match(/Signer #1 certificate DN:\s*(.+)/i);
+  const signerDn = dnMatch ? dnMatch[1].trim() : null;
   return {
     verified: outputText.includes('Verifies') && Object.values(schemes).some(Boolean),
     schemes,
     signerCertSha256: sha256Match ? sha256Match[1].toLowerCase() : null,
-    signerDn: dnMatch ? dnMatch[1].trim() : null,
+    signerDn,
+    isDebugCertificate: isDebugCertificateDn(signerDn),
+  };
+}
+
+export function parseKeytoolPrintCertOutput(outputText) {
+  const owner = outputText.match(/Owner:\s*(.+)/i)?.[1]?.trim() || null;
+  const issuer = outputText.match(/Issuer:\s*(.+)/i)?.[1]?.trim() || null;
+  const validMatch = outputText.match(/Valid from:\s*(.+?)\s+until:\s*(.+)/i);
+  const sha256Raw = outputText.match(/SHA256:\s*([0-9A-Fa-f:]+)/i)?.[1] || null;
+  const certSha256 = sha256Raw ? sha256Raw.replace(/:/g, '').toLowerCase() : null;
+  const sigAlg = outputText.match(/Signature algorithm name:\s*(.+)/i)?.[1]?.trim() || null;
+
+  return {
+    owner,
+    issuer,
+    validFrom: validMatch ? validMatch[1].trim() : null,
+    validUntil: validMatch ? validMatch[2].trim() : null,
+    certSha256,
+    signatureAlgorithm: sigAlg,
+    isDebugCertificate: isDebugCertificateDn(owner || issuer),
   };
 }
 
@@ -129,6 +179,7 @@ export function verifyApkSignatureWithApksigner(apkPath, options = {}) {
       schemes: {},
       signerCertSha256: null,
       signerDn: null,
+      isDebugCertificate: false,
     };
   }
 
@@ -155,6 +206,64 @@ export function verifyApkSignatureWithApksigner(apkPath, options = {}) {
   return {
     skipped: false,
     apksignerPath: apksigner,
+    ...parsed,
+  };
+}
+
+export function inspectApkCertificateWithKeytool(apkPath, options = {}) {
+  const keytool = options.keytoolPath || findKeytoolBinary();
+  if (!keytool) {
+    if (options.requireKeytool) {
+      throw new Error('keytool binary not found in JAVA_HOME/bin or PATH');
+    }
+    return {
+      skipped: true,
+      inspected: false,
+      keytoolPath: null,
+      owner: null,
+      issuer: null,
+      validFrom: null,
+      validUntil: null,
+      certSha256: null,
+      signatureAlgorithm: null,
+      isDebugCertificate: false,
+    };
+  }
+
+  let output = '';
+  try {
+    output = execFileSync(keytool, ['-printcert', '-jarfile', apkPath], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (err) {
+    // Note: Pure v2/v3 APKs without v1 JAR signature may return "Not a signed jar file" from keytool -jarfile;
+    // handle gracefully unless v1 signature is present and corrupt.
+    const msg = String((err && (err.stderr || err.stdout)) || err.message || '');
+    if (/not a signed jar/i.test(msg)) {
+      return {
+        skipped: false,
+        inspected: false,
+        v2OnlyNoV1JarSignature: true,
+        keytoolPath: keytool,
+        owner: null,
+        issuer: null,
+        validFrom: null,
+        validUntil: null,
+        certSha256: null,
+        signatureAlgorithm: null,
+        isDebugCertificate: false,
+      };
+    }
+    throw new Error(`keytool -printcert failed for ${apkPath}: ${msg.trim()}`);
+  }
+
+  const parsed = parseKeytoolPrintCertOutput(output);
+  return {
+    skipped: false,
+    inspected: Boolean(parsed.owner || parsed.certSha256),
+    v2OnlyNoV1JarSignature: false,
+    keytoolPath: keytool,
     ...parsed,
   };
 }
@@ -268,12 +377,50 @@ export function verifyApkMetadataCrossCheck({ metadata, sha256, sizeBytes, signa
   return true;
 }
 
+export function writeVerificationBuildReport(reportPath, report) {
+  const resolved = path.resolve(reportPath);
+  fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  fs.writeFileSync(resolved, JSON.stringify(report, null, 2) + '\n', 'utf8');
+
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const schemesList = Object.entries(report.signature?.schemes || {})
+      .filter(([, v]) => v)
+      .map(([k]) => k)
+      .join(', ') || 'n/a';
+    const md = [
+      '### MinaDental Android APK Verification Report',
+      '',
+      '| Check | Result |',
+      '|---|---|',
+      `| Status | ${report.ok ? 'PASS' : 'FAIL'} |`,
+      `| Installable on Android | ${report.installableOnAndroid ? 'YES' : 'NO'} |`,
+      `| File | \`${path.basename(report.apkPath || 'unknown')}\` (${((report.sizeBytes || 0) / (1024 * 1024)).toFixed(2)} MB) |`,
+      `| APK SHA-256 | \`${report.sha256 || 'n/a'}\` |`,
+      `| apksigner Schemes | \`${schemesList}\` |`,
+      `| Signer Cert SHA-256 | \`${report.signature?.signerCertSha256 || report.keytool?.certSha256 || 'n/a'}\` |`,
+      `| Keytool Owner DN | \`${report.keytool?.owner || report.signature?.signerDn || 'n/a'}\` |`,
+      `| Debug Signing Detected | ${report.isDebugSigned ? 'YES (non-stable)' : 'NO (production key)'} |`,
+      `| Embedded Web Bundle | \`${report.structure?.embeddedWebVersion?.releaseId || 'n/a'}\` (#${report.structure?.embeddedWebVersion?.releaseSequence || 'n/a'}) |`,
+      `| Metadata Cross-Check | ${report.metadataVerified ? 'VERIFIED' : 'not supplied'} |`,
+      '',
+    ].join('\n');
+    try {
+      fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md, 'utf8');
+    } catch {
+      // ignore non-writable summary path
+    }
+  }
+}
+
 export function verifyApkArtifact(options) {
   const {
     apkPath,
     metadataPath = null,
+    reportPath = null,
     repoRoot = DEFAULT_ROOT,
     requireApksigner = false,
+    requireKeytool = false,
+    forbidDebugSigning = false,
     requireWebBundle = true,
     minBytes = MIN_VALID_APK_BYTES,
   } = options;
@@ -306,7 +453,6 @@ export function verifyApkArtifact(options) {
 
   const structure = inspectApkZipStructure(resolvedApk, { requireWebBundle });
 
-  // Verify embedded WebView bundle matches repo semver and baseline sequence
   if (structure.embeddedWebVersion) {
     if (baseline.packageVersion && structure.embeddedWebVersion.version !== baseline.packageVersion) {
       throw new Error(
@@ -322,6 +468,21 @@ export function verifyApkArtifact(options) {
   }
 
   const signature = verifyApkSignatureWithApksigner(resolvedApk, { requireApksigner });
+  const keytool = inspectApkCertificateWithKeytool(resolvedApk, { requireKeytool });
+
+  // Cross-check apksigner SHA-256 vs keytool SHA-256 when both inspected the signer certificate
+  if (signature.signerCertSha256 && keytool.certSha256 && signature.signerCertSha256 !== keytool.certSha256) {
+    throw new Error(
+      `Certificate SHA-256 mismatch between apksigner (${signature.signerCertSha256}) and keytool (${keytool.certSha256})`
+    );
+  }
+
+  const isDebugSigned = Boolean(signature.isDebugCertificate || keytool.isDebugCertificate);
+  if (forbidDebugSigning && isDebugSigned) {
+    throw new Error(
+      `Debug signing certificate is PROHIBITED for stable releases (signer: ${signature.signerDn || keytool.owner || 'unknown'})`
+    );
+  }
 
   let metadataVerified = false;
   if (metadataPath) {
@@ -330,6 +491,9 @@ export function verifyApkArtifact(options) {
       throw new Error(`Metadata file not found: ${resolvedMeta}`);
     }
     const metadata = JSON.parse(fs.readFileSync(resolvedMeta, 'utf8'));
+    if (forbidDebugSigning && String(metadata.signingMode || '').includes('debug')) {
+      throw new Error(`Metadata signingMode (${metadata.signingMode}) is prohibited for stable releases`);
+    }
     verifyApkMetadataCrossCheck({ metadata, sha256, sizeBytes, signature, baseline });
     if (
       structure.embeddedWebVersion &&
@@ -342,23 +506,41 @@ export function verifyApkArtifact(options) {
     metadataVerified = true;
   }
 
-  return {
+  const installableOnAndroid = Boolean(
+    structure.dexCount > 0 &&
+      (signature.verified || (signature.skipped && (structure.hasV1MetaInfSignature || keytool.inspected)))
+  );
+
+  const report = {
     ok: true,
+    verifiedAt: new Date().toISOString(),
+    installableOnAndroid,
+    isDebugSigned,
     apkPath: resolvedApk,
     sizeBytes,
     sha256,
     baseline,
     structure,
     signature,
+    keytool,
     metadataVerified,
   };
+
+  if (reportPath) {
+    writeVerificationBuildReport(reportPath, report);
+  }
+
+  return report;
 }
 
 function parseCliArgs(argv) {
   const args = {
     apkPath: null,
     metadataPath: null,
+    reportPath: null,
     requireApksigner: false,
+    requireKeytool: false,
+    forbidDebugSigning: false,
     requireWebBundle: true,
     json: false,
   };
@@ -368,8 +550,14 @@ function parseCliArgs(argv) {
       args.apkPath = argv[++i];
     } else if (token === '--metadata' && argv[i + 1]) {
       args.metadataPath = argv[++i];
+    } else if (token === '--report' && argv[i + 1]) {
+      args.reportPath = argv[++i];
     } else if (token === '--require-apksigner') {
       args.requireApksigner = true;
+    } else if (token === '--require-keytool') {
+      args.requireKeytool = true;
+    } else if (token === '--forbid-debug-signing') {
+      args.forbidDebugSigning = true;
     } else if (token === '--skip-web-bundle-check') {
       args.requireWebBundle = false;
     } else if (token === '--json') {
@@ -393,17 +581,29 @@ if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
     const report = verifyApkArtifact({
       apkPath,
       metadataPath: parsed.metadataPath,
+      reportPath: parsed.reportPath,
       requireApksigner: parsed.requireApksigner,
+      requireKeytool: parsed.requireKeytool,
+      forbidDebugSigning: parsed.forbidDebugSigning,
       requireWebBundle: parsed.requireWebBundle,
     });
     if (parsed.json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
       console.log(
-        `[verify-apk] PASS: ${path.basename(report.apkPath)} | ${(report.sizeBytes / (1024 * 1024)).toFixed(2)} MB | sha256=${report.sha256.slice(0, 16)}... | entries=${report.structure.entryCount} | dex=${report.structure.dexCount} | web=${report.structure.embeddedWebVersion?.releaseId || 'n/a'} (#${report.structure.embeddedWebVersion?.releaseSequence || 'n/a'}) | apksigner=${report.signature.skipped ? 'skipped' : `VERIFIED (${Object.entries(report.signature.schemes).filter(([, v]) => v).map(([k]) => k).join(',')}) cert=${report.signature.signerCertSha256?.slice(0, 16)}...`} | metadata=${report.metadataVerified ? 'VERIFIED' : 'none'}`
+        `[verify-apk] PASS: ${path.basename(report.apkPath)} | ${(report.sizeBytes / (1024 * 1024)).toFixed(2)} MB | sha256=${report.sha256.slice(0, 16)}... | entries=${report.structure.entryCount} | dex=${report.structure.dexCount} | web=${report.structure.embeddedWebVersion?.releaseId || 'n/a'} (#${report.structure.embeddedWebVersion?.releaseSequence || 'n/a'}) | apksigner=${report.signature.skipped ? 'skipped' : `VERIFIED (${Object.entries(report.signature.schemes).filter(([, v]) => v).map(([k]) => k).join(',')})`} | keytool=${report.keytool.skipped ? 'skipped' : report.keytool.inspected ? `VERIFIED (${report.keytool.owner})` : 'v2-only'} | debugSigned=${report.isDebugSigned} | installable=${report.installableOnAndroid} | metadata=${report.metadataVerified ? 'VERIFIED' : 'none'}${parsed.reportPath ? ` | report=${parsed.reportPath}` : ''}`
       );
     }
   } catch (err) {
+    if (parsed.reportPath) {
+      writeVerificationBuildReport(parsed.reportPath, {
+        ok: false,
+        verifiedAt: new Date().toISOString(),
+        installableOnAndroid: false,
+        apkPath: apkPath || null,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
     console.error(`[verify-apk] FAIL: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }

@@ -1,32 +1,79 @@
 import React, { useId, useState } from 'react';
 
-export type MascotMood = 'happy' | 'sad' | 'pro' | 'ai' | 'celebrate' | 'offline';
+export type MascotMood =
+  | 'happy'
+  | 'concerned'
+  | 'sad'
+  | 'celebrating'
+  | 'thinking'
+  | 'offline'
+  | 'neutral'
+  | 'pro'
+  | 'ai'
+  | 'celebrate';
+
+type CanonicalMascotMood =
+  | 'happy'
+  | 'concerned'
+  | 'sad'
+  | 'celebrating'
+  | 'thinking'
+  | 'offline'
+  | 'neutral';
 
 interface MascotToothProps {
   mood?: MascotMood;
+  /** Adaptive mascot size in CSS px (recommended 44–56px across app shell & notifications) */
   size?: number;
   className?: string;
   showSparkles?: boolean;
   interactive?: boolean;
-  /** Renders the royal-indigo (#1B0B47) app-icon squircle badge behind the crystal tooth */
+  /** Deprecated: GE-0008 enforces frameless transparent 3D mascot inside the app */
   framed?: boolean;
   onClick?: () => void;
 }
 
-const MOOD_TITLES: Record<MascotMood, string> = {
-  happy: 'دندان مینا — همه چیز مرتب و پرانرژی!',
-  sad: 'دندان مینا — نیاز به توجه و بررسی فوری!',
-  pro: 'دندان مینا — آماده ثبت و پیگیری تخصصی درمان',
-  ai: 'دندان مینا — دستیار هوشمند کلینیک',
-  celebrate: 'دندان مینا — عالی انجام شد!',
-  offline: 'دندان مینا — حالت آفلاین و کش امن فعال است',
+function resolveCanonicalMood(mood: MascotMood): CanonicalMascotMood {
+  switch (mood) {
+    case 'celebrate':
+    case 'celebrating':
+      return 'celebrating';
+    case 'ai':
+    case 'thinking':
+      return 'thinking';
+    case 'pro':
+    case 'happy':
+      return 'happy';
+    case 'concerned':
+      return 'concerned';
+    case 'sad':
+      return 'sad';
+    case 'offline':
+      return 'offline';
+    case 'neutral':
+    default:
+      return 'neutral';
+  }
+}
+
+const MOOD_ACCESSIBLE_LABELS: Record<CanonicalMascotMood, string> = {
+  happy: 'مینادنتال — همه کارهای تأییدشده کلینیک کامل و مرتب است',
+  concerned: 'مینادنتال — کارهای در انتظار پیگیری وجود دارد',
+  sad: 'مینادنتال — موارد معوق یا فوری نیازمند رسیدگی است',
+  celebrating: 'مینادنتال — کار با موفقیت تکمیل شد',
+  thinking: 'مینادنتال — در حال پردازش و همگام‌سازی',
+  offline: 'مینادنتال — حالت آفلاین فعال است',
+  neutral: 'مینادنتال — وضعیت کلینیک در حال بررسی است',
 };
 
 /**
- * Emotional Duolingo-style Iridescent Glass Tooth Mascot
- * Preserves the signature translucent 3D violet/pink/cyan aurora crystal tooth
- * from the beloved MinaDental emblem, brought to life with expressive eyes,
- * eyebrows, blush, sparkles, and contextual moods across header, notifications, and states.
+ * GE-0008 Frameless Sculpted 3D Emotional Tooth Mascot
+ * - Transparent background everywhere inside the app (no dark square/squircle frame).
+ * - Sculpted 3D anatomical molar geometry with multi-layer lighting, subsurface violet/pink/cyan
+ *   aurora refraction, glossy enamel specular dome, and ambient contact depth.
+ * - Deterministic 7-state emotional engine driven strictly by real authorized clinic tasks
+ *   (happy, concerned, sad, celebrating, thinking, offline, neutral) with zero patient PHI.
+ * - Battery-efficient GPU-composited motion that respects prefers-reduced-motion & data-reduce-motion.
  */
 export const MascotTooth: React.FC<MascotToothProps> = ({
   mood = 'happy',
@@ -34,344 +81,378 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
   className = '',
   showSparkles = true,
   interactive = true,
-  framed = false,
   onClick,
 }) => {
-  const [isClicked, setIsClicked] = useState(false);
+  const [isReacting, setIsReacting] = useState(false);
   const uid = useId().replace(/:/g, '');
+  const canonicalMood = resolveCanonicalMood(mood);
+  const accessibleLabel = MOOD_ACCESSIBLE_LABELS[canonicalMood];
 
-  const handleClick = () => {
+  const handleInteract = () => {
     if (!interactive && !onClick) return;
-    setIsClicked(true);
-    setTimeout(() => setIsClicked(false), 450);
+    setIsReacting(true);
+    window.setTimeout(() => setIsReacting(false), 420);
     if (onClick) onClick();
   };
 
-  const auraBackground =
-    mood === 'sad'
-      ? 'radial-gradient(circle, rgba(244,63,94,0.52) 0%, rgba(168,85,247,0.22) 52%, transparent 74%)'
-      : mood === 'pro'
-      ? 'radial-gradient(circle, rgba(56,189,248,0.5) 0%, rgba(139,92,246,0.26) 54%, transparent 74%)'
-      : mood === 'ai'
-      ? 'radial-gradient(circle, rgba(192,132,252,0.58) 0%, rgba(244,114,182,0.3) 54%, transparent 74%)'
-      : mood === 'celebrate'
-      ? 'radial-gradient(circle, rgba(251,191,36,0.52) 0%, rgba(244,114,182,0.3) 52%, transparent 74%)'
-      : mood === 'offline'
-      ? 'radial-gradient(circle, rgba(148,163,184,0.42) 0%, rgba(99,102,241,0.18) 54%, transparent 74%)'
-      : 'radial-gradient(circle, rgba(168,85,247,0.55) 0%, rgba(56,189,248,0.28) 55%, transparent 75%)';
-
-  const frameStyle = framed
-    ? {
-        width: size,
-        height: size,
-        background: 'radial-gradient(circle at 50% 42%, #311473 0%, #1B0B47 64%, #120633 100%)',
-        borderRadius: Math.max(10, Math.round(size * 0.27)),
-        padding: Math.max(3, Math.round(size * 0.08)),
-        boxShadow: '0 6px 16px rgba(27, 11, 71, 0.34), inset 0 1px 1px rgba(255,255,255,0.22)',
-      }
-    : { width: size, height: size };
+  // Multi-stop sculptural 3D body tones tuned per emotional state (preserving #1B0B47 / #C084FC / #38BDF8 aurora DNA)
+  const palette = {
+    happy: {
+      top: '#F5F3FF',
+      mid: '#C084FC',
+      warm: '#F472B6',
+      base: '#38BDF8',
+      cheek: '#FB7185',
+      shadow: '#1B0B47',
+    },
+    concerned: {
+      top: '#FEF9C3',
+      mid: '#C084FC',
+      warm: '#F59E0B',
+      base: '#38BDF8',
+      cheek: '#FDBA74',
+      shadow: '#1B0B47',
+    },
+    sad: {
+      top: '#EDE9FE',
+      mid: '#A78BFA',
+      warm: '#FB7185',
+      base: '#60A5FA',
+      cheek: '#FDA4AF',
+      shadow: '#1B0B47',
+    },
+    celebrating: {
+      top: '#FFFBEB',
+      mid: '#E879F9',
+      warm: '#F472B6',
+      base: '#38BDF8',
+      cheek: '#FB7185',
+      shadow: '#1B0B47',
+    },
+    thinking: {
+      top: '#E0F2FE',
+      mid: '#818CF8',
+      warm: '#C084FC',
+      base: '#22D3EE',
+      cheek: '#F472B6',
+      shadow: '#1B0B47',
+    },
+    offline: {
+      top: '#F1F5F9',
+      mid: '#CBD5E1',
+      warm: '#94A3B8',
+      base: '#64748B',
+      cheek: '#CBD5E1',
+      shadow: '#1E293B',
+    },
+    neutral: {
+      top: '#F8FAFC',
+      mid: '#DDD6FE',
+      warm: '#C084FC',
+      base: '#7DD3FC',
+      cheek: '#F9A8D4',
+      shadow: '#1B0B47',
+    },
+  }[canonicalMood];
 
   return (
     <div
       data-testid="minadental_mascot_tooth"
-      data-mascot-mood={mood}
-      onClick={handleClick}
-      className={`relative inline-flex items-center justify-center transition-transform duration-300 select-none ${
-        interactive ? 'cursor-pointer hover:scale-110 active:scale-95' : ''
-      } ${isClicked ? 'animate-bounce' : ''} ${className}`}
-      style={frameStyle}
-      title={MOOD_TITLES[mood]}
+      data-mascot-mood={canonicalMood}
+      data-mascot-frameless="true"
+      role="img"
+      aria-label={accessibleLabel}
+      title={accessibleLabel}
+      onClick={handleInteract}
+      className={`relative inline-flex items-center justify-center bg-transparent select-none transition-transform duration-200 ease-out ${
+        interactive ? 'cursor-pointer hover:scale-108 active:scale-92' : ''
+      } ${isReacting ? 'mascot-touch-pop' : ''} ${className}`}
+      style={{ width: size, height: size }}
     >
-      {/* Luminous Iridescent Aura Glow */}
-      <div
-        className="absolute inset-0 rounded-full blur-md opacity-70 transition-colors duration-500 pointer-events-none"
-        style={{ background: auraBackground }}
-      />
-
-      {/* Translucent 3D Iridescent Crystal Tooth SVG */}
+      {/* Purely Transparent Frameless 3D Sculpted Crystal Tooth SVG */}
       <svg
-        viewBox="0 0 100 108"
+        viewBox="0 0 112 118"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className="relative z-10 w-full h-full overflow-visible mascot-breathe"
+        className="w-full h-full overflow-visible mascot-breathe"
         aria-hidden="true"
       >
         <defs>
-          {/* Main Iridescent Glass Body (Violet -> Pink -> Cyan Aurora) */}
-          <linearGradient id={`${uid}_body`} x1="14" y1="8" x2="88" y2="100" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor={mood === 'offline' ? '#E2E8F0' : '#E0F2FE'} />
-            <stop offset="30%" stopColor={mood === 'sad' ? '#C4B5FD' : '#C084FC'} />
-            <stop offset="66%" stopColor={mood === 'sad' ? '#FB7185' : '#F472B6'} />
-            <stop offset="100%" stopColor={mood === 'offline' ? '#94A3B8' : '#38BDF8'} />
-          </linearGradient>
-
-          {/* Inner Luminous Nebula Swirl */}
-          <radialGradient id={`${uid}_nebula`} cx="58%" cy="48%" r="48%">
-            <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.82" />
-            <stop offset="48%" stopColor="#E879F9" stopOpacity="0.58" />
-            <stop offset="100%" stopColor="#5B21B6" stopOpacity="0.08" />
+          {/* Sculpted 3D Volumetric Enamel + Crystal Body Gradient */}
+          <radialGradient id={`${uid}_vol`} cx="34%" cy="24%" r="76%" fx="28%" fy="20%">
+            <stop offset="0%" stopColor="#FFFFFF" />
+            <stop offset="22%" stopColor={palette.top} />
+            <stop offset="56%" stopColor={palette.mid} />
+            <stop offset="82%" stopColor={palette.warm} />
+            <stop offset="100%" stopColor={palette.base} />
           </radialGradient>
 
-          {/* Secondary Warm Pink-Gold Inner Ribbon */}
-          <linearGradient id={`${uid}_ribbon`} x1="20" y1="82" x2="82" y2="24" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#F472B6" stopOpacity="0.85" />
-            <stop offset="50%" stopColor="#38BDF8" stopOpacity="0.72" />
-            <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.5" />
+          {/* Deep Subsurface Scattering Core */}
+          <radialGradient id={`${uid}_core`} cx="64%" cy="58%" r="52%">
+            <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.65" />
+            <stop offset="50%" stopColor="#E879F9" stopOpacity="0.42" />
+            <stop offset="100%" stopColor="#1B0B47" stopOpacity="0.16" />
+          </radialGradient>
+
+          {/* 3D Root Occlusion Depth Shading */}
+          <linearGradient id={`${uid}_depth`} x1="56" y1="68" x2="56" y2="110" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#1B0B47" stopOpacity="0" />
+            <stop offset="100%" stopColor={palette.shadow} stopOpacity="0.34" />
           </linearGradient>
 
-          {/* Crystal Glass Rim Stroke */}
-          <linearGradient id={`${uid}_rim`} x1="12" y1="10" x2="88" y2="98" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#FFFFFF" />
-            <stop offset="48%" stopColor="#F5D0FE" />
-            <stop offset="100%" stopColor="#7DD3FC" />
+          {/* Crisp Pearlescent Rim Light */}
+          <linearGradient id={`${uid}_rim`} x1="16" y1="12" x2="96" y2="104" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.98" />
+            <stop offset="46%" stopColor="#F5D0FE" stopOpacity="0.92" />
+            <stop offset="100%" stopColor="#7DD3FC" stopOpacity="0.92" />
           </linearGradient>
 
-          {/* Specular Top-Left Glass Highlight */}
-          <linearGradient id={`${uid}_gloss`} x1="20" y1="12" x2="48" y2="54" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.94" />
+          {/* Wet Glass Top-Left Specular Dome */}
+          <linearGradient id={`${uid}_spec`} x1="22" y1="14" x2="52" y2="58" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.95" />
+            <stop offset="65%" stopColor="#FFFFFF" stopOpacity="0.28" />
             <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
           </linearGradient>
 
-          {/* AI Cyber Halo Gradient */}
-          <linearGradient id={`${uid}_halo`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#38BDF8" />
-            <stop offset="50%" stopColor="#C084FC" />
-            <stop offset="100%" stopColor="#F472B6" />
-          </linearGradient>
+          {/* Floating Ground Shadow for True 3D Depth */}
+          <radialGradient id={`${uid}_ground`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={palette.shadow} stopOpacity="0.28" />
+            <stop offset="70%" stopColor={palette.shadow} stopOpacity="0.08" />
+            <stop offset="100%" stopColor={palette.shadow} stopOpacity="0" />
+          </radialGradient>
 
-          <filter id={`${uid}_drop`} x="-22%" y="-22%" width="144%" height="144%">
-            <feDropShadow dx="0" dy="4" stdDeviation="3.2" floodColor="#1B0B47" floodOpacity="0.34" />
+          <filter id={`${uid}_softDrop`} x="-18%" y="-18%" width="136%" height="140%">
+            <feDropShadow dx="0" dy="5" stdDeviation="3.4" floodColor="#1B0B47" floodOpacity="0.24" />
           </filter>
         </defs>
 
-        {/* AI Floating Cosmic Halo */}
-        {mood === 'ai' && (
-          <ellipse
-            cx="50"
-            cy="14"
-            rx="30"
-            ry="7"
-            fill="none"
-            stroke={`url(#${uid}_halo)`}
-            strokeWidth="2.8"
-            strokeDasharray="6 3"
-          />
+        {/* Soft Ambient Ground Shadow (Floating 3D Presence) */}
+        <ellipse cx="56" cy="111" rx="28" ry="5.2" fill={`url(#${uid}_ground)`} />
+
+        {/* Thinking Orbit Dots (Processing State) */}
+        {canonicalMood === 'thinking' && (
+          <g className="mascot-sparkle">
+            <circle cx="88" cy="20" r="4.2" fill="#38BDF8" stroke="#FFFFFF" strokeWidth="1.4" />
+            <circle cx="98" cy="12" r="3" fill="#C084FC" stroke="#FFFFFF" strokeWidth="1.2" />
+            <circle cx="79" cy="28" r="2.4" fill="#F472B6" />
+          </g>
         )}
 
-        {/* Outer Sculpted 3D Crystal Tooth Silhouette */}
+        {/* Sculpted 3D Anatomical Tooth Body */}
         <path
-          d="M 29,14
-             C 14,14 9,33 13,52
-             C 16,66 23,86 33,98
-             C 38,104 44,103 47,93
-             C 49,85 51,85 53,93
-             C 56,103 62,104 67,98
-             C 77,86 84,66 87,52
-             C 91,33 86,14 71,14
-             C 61,14 56,21 50,21
-             C 44,21 39,14 29,14 Z"
-          fill={`url(#${uid}_body)`}
+          d="M 33,15
+             C 17,15 11,34 15,54
+             C 18,70 26,91 36,104
+             C 42,110 49,108 52,97
+             C 54.5,88 57.5,88 60,97
+             C 63,108 70,110 76,104
+             C 86,91 94,70 97,54
+             C 101,34 95,15 79,15
+             C 68,15 62.5,22.5 56,22.5
+             C 49.5,22.5 44,15 33,15 Z"
+          fill={`url(#${uid}_vol)`}
           stroke={`url(#${uid}_rim)`}
-          strokeWidth="2.6"
+          strokeWidth="2.4"
           strokeLinejoin="round"
-          filter={`url(#${uid}_drop)`}
+          filter={`url(#${uid}_softDrop)`}
         />
 
-        {/* Iridescent Aurora Swirl Inside Glass */}
+        {/* Subsurface Iridescent Core Refraction */}
         <path
-          d="M 29,14
-             C 14,14 9,33 13,52
-             C 16,66 23,86 33,98
-             C 38,104 44,103 47,93
-             C 49,85 51,85 53,93
-             C 56,103 62,104 67,98
-             C 77,86 84,66 87,52
-             C 91,33 86,14 71,14
-             C 61,14 56,21 50,21
-             C 44,21 39,14 29,14 Z"
-          fill={`url(#${uid}_nebula)`}
+          d="M 33,15
+             C 17,15 11,34 15,54
+             C 18,70 26,91 36,104
+             C 42,110 49,108 52,97
+             C 54.5,88 57.5,88 60,97
+             C 63,108 70,110 76,104
+             C 86,91 94,70 97,54
+             C 101,34 95,15 79,15
+             C 68,15 62.5,22.5 56,22.5
+             C 49.5,22.5 44,15 33,15 Z"
+          fill={`url(#${uid}_core)`}
         />
 
-        {/* Luminous Internal Aurora Ribbon */}
+        {/* Sculpted Lower Root Ambient Occlusion */}
         <path
-          d="M 26,76 C 36,64 46,66 56,55 C 65,45 73,37 78,24 C 76,42 68,58 58,67 C 49,75 38,76 31,88 Z"
-          fill={`url(#${uid}_ribbon)`}
-          opacity="0.62"
+          d="M 18,62 C 22,78 29,94 37,104 C 42,109 49,107 52,97 C 54.5,88 57.5,88 60,97 C 63,107 70,109 75,104 C 83,94 90,78 94,62 C 84,78 72,82 56,82 C 40,82 28,78 18,62 Z"
+          fill={`url(#${uid}_depth)`}
         />
 
-        {/* Glossy 3D Top-Left Specular Glass Reflection */}
+        {/* Crown Cusp 3D Specular Highlights */}
         <path
-          d="M 27,20 C 19,21 16,34 18,46 C 19,53 22,60 25,66 C 24,49 28,35 36,28 C 40,24 44,24 46,25 C 39,20 33,19 27,20 Z"
-          fill={`url(#${uid}_gloss)`}
+          d="M 31,21 C 22,23 19,35 21,49 C 22,56 25,63 28,69 C 27,51 31,37 40,30 C 44,26 48,26 51,27 C 44,21 37,20 31,21 Z"
+          fill={`url(#${uid}_spec)`}
         />
-        <ellipse cx="26" cy="27" rx="5.5" ry="3" transform="rotate(-34 26 27)" fill="#FFFFFF" opacity="0.88" />
+        <ellipse cx="30" cy="29" rx="6.5" ry="3.2" transform="rotate(-32 30 29)" fill="#FFFFFF" opacity="0.92" />
+        <ellipse cx="81" cy="29" rx="4.5" ry="2.2" transform="rotate(28 81 29)" fill="#FFFFFF" opacity="0.56" />
 
-        {/* Soft Glowing Rosy Cheeks */}
+        {/* Soft Dimensional Cheek Blush */}
         <ellipse
-          cx="26"
-          cy="58"
-          rx="6"
-          ry="3.4"
-          fill={mood === 'sad' ? '#FDA4AF' : '#FB7185'}
-          opacity={mood === 'offline' ? 0.35 : 0.72}
+          cx="30"
+          cy="63"
+          rx="6.6"
+          ry="3.6"
+          fill={palette.cheek}
+          opacity={canonicalMood === 'offline' ? 0.28 : 0.72}
         />
         <ellipse
-          cx="74"
-          cy="58"
-          rx="6"
-          ry="3.4"
-          fill={mood === 'sad' ? '#FDA4AF' : '#FB7185'}
-          opacity={mood === 'offline' ? 0.35 : 0.72}
+          cx="82"
+          cy="63"
+          rx="6.6"
+          ry="3.6"
+          fill={palette.cheek}
+          opacity={canonicalMood === 'offline' ? 0.28 : 0.72}
         />
 
-        {/* ===== DUOLINGO-STYLE EXPRESSIVE EYES & EYEBROWS ===== */}
-        {(mood === 'happy' || mood === 'celebrate') && (
+        {/* ===== EXPRESSIVE 3D EYES & EYEBROWS ===== */}
+        {(canonicalMood === 'happy' || canonicalMood === 'celebrating') && (
           <g className="mascot-eyes">
-            {/* Joyful Raised Eyebrows */}
-            <path d="M 30,36 Q 36,32 42,35" stroke="#2E1065" strokeWidth="2.4" strokeLinecap="round" fill="none" />
-            <path d="M 58,35 Q 64,32 70,36" stroke="#2E1065" strokeWidth="2.4" strokeLinecap="round" fill="none" />
+            <path d="M 33,39 Q 40,34.5 47,38" stroke="#1E1B4B" strokeWidth="2.6" strokeLinecap="round" fill="none" />
+            <path d="M 65,38 Q 72,34.5 79,39" stroke="#1E1B4B" strokeWidth="2.6" strokeLinecap="round" fill="none" />
 
-            {/* Left Glossy Eye */}
-            <circle cx="36" cy="48" r="8.2" fill="#FFFFFF" />
-            <circle cx="36.5" cy="48" r="6.3" fill="#1E1B4B" />
-            <circle cx="34" cy="45.2" r="2.4" fill="#FFFFFF" />
-            <circle cx="39" cy="50.5" r="1.2" fill="#7DD3FC" />
-            {mood === 'celebrate' && (
-              <path d="M 37,44 L 38,46.5 L 40.5,47.5 L 38,48.5 L 37,51 L 36,48.5 L 33.5,47.5 L 36,46.5 Z" fill="#FDE047" />
+            <circle cx="40.5" cy="52" r="8.8" fill="#FFFFFF" />
+            <circle cx="41" cy="52" r="6.6" fill="#1E1B4B" />
+            <circle cx="38.2" cy="49" r="2.6" fill="#FFFFFF" />
+            <circle cx="43.8" cy="54.8" r="1.3" fill="#7DD3FC" />
+            {canonicalMood === 'celebrating' && (
+              <path d="M 41,47.5 L 42.2,50.5 L 45.2,51.7 L 42.2,52.9 L 41,55.9 L 39.8,52.9 L 36.8,51.7 L 39.8,50.5 Z" fill="#FDE047" />
             )}
 
-            {/* Right Glossy Eye */}
-            <circle cx="64" cy="48" r="8.2" fill="#FFFFFF" />
-            <circle cx="63.5" cy="48" r="6.3" fill="#1E1B4B" />
-            <circle cx="61" cy="45.2" r="2.4" fill="#FFFFFF" />
-            <circle cx="66" cy="50.5" r="1.2" fill="#7DD3FC" />
-            {mood === 'celebrate' && (
-              <path d="M 63,44 L 64,46.5 L 66.5,47.5 L 64,48.5 L 63,51 L 62,48.5 L 59.5,47.5 L 62,46.5 Z" fill="#FDE047" />
+            <circle cx="71.5" cy="52" r="8.8" fill="#FFFFFF" />
+            <circle cx="71" cy="52" r="6.6" fill="#1E1B4B" />
+            <circle cx="68.2" cy="49" r="2.6" fill="#FFFFFF" />
+            <circle cx="73.8" cy="54.8" r="1.3" fill="#7DD3FC" />
+            {canonicalMood === 'celebrating' && (
+              <path d="M 71,47.5 L 72.2,50.5 L 75.2,51.7 L 72.2,52.9 L 71,55.9 L 69.8,52.9 L 66.8,51.7 L 69.8,50.5 Z" fill="#FDE047" />
             )}
           </g>
         )}
 
-        {mood === 'pro' && (
-          <g>
-            {/* Confident Wink + Clinical Sparkle */}
-            <path d="M 29,37 Q 36,33 42,36" stroke="#2E1065" strokeWidth="2.4" strokeLinecap="round" fill="none" />
-            <path d="M 29,48 Q 36,41 43,48" stroke="#1E1B4B" strokeWidth="3.2" strokeLinecap="round" fill="none" />
+        {canonicalMood === 'concerned' && (
+          <g className="mascot-eyes">
+            {/* Gently Tilted Attentive Eyebrows */}
+            <path d="M 33,40 Q 40,38.5 47,36.5" stroke="#1E1B4B" strokeWidth="2.6" strokeLinecap="round" fill="none" />
+            <path d="M 79,40 Q 72,38.5 65,36.5" stroke="#1E1B4B" strokeWidth="2.6" strokeLinecap="round" fill="none" />
 
-            <path d="M 58,36 Q 64,32 71,36" stroke="#2E1065" strokeWidth="2.4" strokeLinecap="round" fill="none" />
-            <circle cx="64" cy="48" r="8" fill="#FFFFFF" />
-            <circle cx="63.5" cy="48" r="6.1" fill="#1E1B4B" />
-            <circle cx="61.2" cy="45.4" r="2.4" fill="#FFFFFF" />
-            <circle cx="66" cy="50.4" r="1.1" fill="#38BDF8" />
+            <circle cx="40.5" cy="52.5" r="8.5" fill="#FFFFFF" />
+            <circle cx="41.5" cy="52.5" r="6.2" fill="#1E1B4B" />
+            <circle cx="38.8" cy="49.8" r="2.5" fill="#FFFFFF" />
+            <circle cx="44" cy="55" r="1.2" fill="#FDE68A" />
+
+            <circle cx="71.5" cy="52.5" r="8.5" fill="#FFFFFF" />
+            <circle cx="70.5" cy="52.5" r="6.2" fill="#1E1B4B" />
+            <circle cx="68" cy="49.8" r="2.5" fill="#FFFFFF" />
+            <circle cx="73.2" cy="55" r="1.2" fill="#FDE68A" />
           </g>
         )}
 
-        {mood === 'ai' && (
-          <g>
-            {/* Futuristic Glossy Visor with Glowing Expressive Eyes */}
-            <rect x="23" y="39" width="54" height="17" rx="8.5" fill="#1B0B47" stroke="#7DD3FC" strokeWidth="1.8" />
-            <circle cx="37" cy="47.5" r="4.3" fill="#38BDF8" />
-            <circle cx="35.6" cy="46" r="1.6" fill="#FFFFFF" />
-            <circle cx="63" cy="47.5" r="4.3" fill="#F472B6" />
-            <circle cx="61.6" cy="46" r="1.6" fill="#FFFFFF" />
-          </g>
-        )}
+        {canonicalMood === 'sad' && (
+          <g className="mascot-eyes">
+            <path d="M 33,42 Q 39.5,39.5 47,36" stroke="#1E1B4B" strokeWidth="2.7" strokeLinecap="round" fill="none" />
+            <path d="M 79,42 Q 72.5,39.5 65,36" stroke="#1E1B4B" strokeWidth="2.7" strokeLinecap="round" fill="none" />
 
-        {mood === 'sad' && (
-          <g>
-            {/* Empathetic Worried Duolingo Eyebrows + Pleading Glossy Eyes */}
-            <path d="M 29,39 Q 35,37 42,34" stroke="#2E1065" strokeWidth="2.6" strokeLinecap="round" fill="none" />
-            <path d="M 71,39 Q 65,37 58,34" stroke="#2E1065" strokeWidth="2.6" strokeLinecap="round" fill="none" />
+            <circle cx="40.5" cy="53" r="8.4" fill="#FFFFFF" />
+            <circle cx="41" cy="53.6" r="6.1" fill="#1E1B4B" />
+            <circle cx="38.5" cy="50.8" r="2.6" fill="#FFFFFF" />
+            <circle cx="43.5" cy="56.2" r="1.2" fill="#BAE6FD" />
 
-            <circle cx="36" cy="49" r="7.8" fill="#FFFFFF" />
-            <circle cx="36.5" cy="49.5" r="5.8" fill="#1E1B4B" />
-            <circle cx="34.2" cy="47" r="2.4" fill="#FFFFFF" />
-            <circle cx="38.5" cy="52" r="1.1" fill="#BAE6FD" />
+            <circle cx="71.5" cy="53" r="8.4" fill="#FFFFFF" />
+            <circle cx="71" cy="53.6" r="6.1" fill="#1E1B4B" />
+            <circle cx="68.5" cy="50.8" r="2.6" fill="#FFFFFF" />
+            <circle cx="73.5" cy="56.2" r="1.2" fill="#BAE6FD" />
 
-            <circle cx="64" cy="49" r="7.8" fill="#FFFFFF" />
-            <circle cx="63.5" cy="49.5" r="5.8" fill="#1E1B4B" />
-            <circle cx="61.2" cy="47" r="2.4" fill="#FFFFFF" />
-            <circle cx="65.5" cy="52" r="1.1" fill="#BAE6FD" />
-
-            {/* Shimmering Teardrop */}
+            {/* Crystal Teardrop */}
             <path
-              d="M 73,57 C 73,57 78,64 74.5,68 C 71.5,70.5 68,67.5 70.2,62.5 Z"
+              d="M 81,61 C 81,61 86.5,68.5 82.6,73 C 79.4,75.8 75.5,72.4 77.9,67 Z"
               fill="#38BDF8"
               stroke="#FFFFFF"
-              strokeWidth="1"
+              strokeWidth="1.2"
             />
           </g>
         )}
 
-        {mood === 'offline' && (
-          <g>
-            {/* Cozy Sleepy Curved Eyes */}
-            <path d="M 29,48 Q 36,53 43,48" stroke="#1E1B4B" strokeWidth="3" strokeLinecap="round" fill="none" />
-            <path d="M 57,48 Q 64,53 71,48" stroke="#1E1B4B" strokeWidth="3" strokeLinecap="round" fill="none" />
-            <text x="74" y="30" fill="#E0F2FE" fontSize="11" fontWeight="900" fontFamily="sans-serif">
-              z
-            </text>
-            <text x="82" y="22" fill="#C4B5FD" fontSize="9" fontWeight="900" fontFamily="sans-serif">
-              z
-            </text>
+        {canonicalMood === 'thinking' && (
+          <g className="mascot-eyes">
+            <path d="M 33,38.5 Q 40,35.5 47,37.5" stroke="#1E1B4B" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+            <path d="M 65,36.5 Q 72,33.5 79,37" stroke="#1E1B4B" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+
+            {/* Upward-Right Focused Thinking Gaze */}
+            <circle cx="40.5" cy="52" r="8.5" fill="#FFFFFF" />
+            <circle cx="42.5" cy="50" r="6.1" fill="#1E1B4B" />
+            <circle cx="40.2" cy="47.8" r="2.4" fill="#FFFFFF" />
+
+            <circle cx="71.5" cy="52" r="8.5" fill="#FFFFFF" />
+            <circle cx="73.5" cy="50" r="6.1" fill="#1E1B4B" />
+            <circle cx="71.2" cy="47.8" r="2.4" fill="#FFFFFF" />
           </g>
         )}
 
-        {/* ===== EXPRESSIVE MOUTH LAYER ===== */}
-        {(mood === 'happy' || mood === 'pro') && (
-          <path
-            d="M 42,58 Q 50,67 58,58"
-            fill="none"
-            stroke="#2E1065"
-            strokeWidth="3.2"
-            strokeLinecap="round"
-          />
-        )}
+        {canonicalMood === 'neutral' && (
+          <g className="mascot-eyes">
+            <path d="M 34,39 Q 40.5,38 47,39" stroke="#1E1B4B" strokeWidth="2.4" strokeLinecap="round" fill="none" />
+            <path d="M 65,39 Q 71.5,38 78,39" stroke="#1E1B4B" strokeWidth="2.4" strokeLinecap="round" fill="none" />
 
-        {mood === 'celebrate' && (
-          <g>
-            <path d="M 38,57 Q 50,71 62,57 Z" fill="#F43F5E" stroke="#2E1065" strokeWidth="2.2" strokeLinejoin="round" />
-            <path d="M 42,57.5 Q 50,62 58,57.5" fill="#FFFFFF" />
+            <circle cx="40.5" cy="52" r="8.2" fill="#FFFFFF" />
+            <circle cx="40.8" cy="52" r="5.9" fill="#1E1B4B" />
+            <circle cx="38.4" cy="49.4" r="2.3" fill="#FFFFFF" />
+
+            <circle cx="71.5" cy="52" r="8.2" fill="#FFFFFF" />
+            <circle cx="71.2" cy="52" r="5.9" fill="#1E1B4B" />
+            <circle cx="68.8" cy="49.4" r="2.3" fill="#FFFFFF" />
           </g>
         )}
 
-        {mood === 'ai' && (
-          <path
-            d="M 44,60 Q 50,66 56,60"
-            fill="none"
-            stroke="#2E1065"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
+        {canonicalMood === 'offline' && (
+          <g>
+            <path d="M 33,52 Q 40.5,57.5 48,52" stroke="#1E293B" strokeWidth="3.1" strokeLinecap="round" fill="none" />
+            <path d="M 64,52 Q 71.5,57.5 79,52" stroke="#1E293B" strokeWidth="3.1" strokeLinecap="round" fill="none" />
+            <text x="84" y="30" fill="#475569" fontSize="12" fontWeight="900" fontFamily="sans-serif">z</text>
+            <text x="93" y="21" fill="#64748B" fontSize="9.5" fontWeight="900" fontFamily="sans-serif">z</text>
+          </g>
         )}
 
-        {mood === 'sad' && (
-          <path
-            d="M 42,65 Q 50,58 58,65"
-            fill="none"
-            stroke="#2E1065"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
+        {/* ===== EXPRESSIVE MOUTH ===== */}
+        {canonicalMood === 'happy' && (
+          <path d="M 47,63.5 Q 56,73 65,63.5" fill="none" stroke="#1E1B4B" strokeWidth="3.3" strokeLinecap="round" />
         )}
 
-        {mood === 'offline' && (
-          <circle cx="50" cy="61" r="2.8" fill="#2E1065" />
+        {canonicalMood === 'celebrating' && (
+          <g>
+            <path d="M 43,62 Q 56,77.5 69,62 Z" fill="#F43F5E" stroke="#1E1B4B" strokeWidth="2.4" strokeLinejoin="round" />
+            <path d="M 47,62.5 Q 56,67.2 65,62.5" fill="#FFFFFF" />
+          </g>
         )}
 
-        {/* ===== FLOATING DIAMOND SPARKLES ===== */}
-        {showSparkles && mood !== 'offline' && (
+        {canonicalMood === 'concerned' && (
+          <path d="M 48,66 Q 56,63.5 64,66" fill="none" stroke="#1E1B4B" strokeWidth="3.1" strokeLinecap="round" />
+        )}
+
+        {canonicalMood === 'sad' && (
+          <path d="M 47,70 Q 56,62.5 65,70" fill="none" stroke="#1E1B4B" strokeWidth="3.2" strokeLinecap="round" />
+        )}
+
+        {canonicalMood === 'thinking' && (
+          <path d="M 50,65.5 Q 56,67 62,64.5" fill="none" stroke="#1E1B4B" strokeWidth="3" strokeLinecap="round" />
+        )}
+
+        {canonicalMood === 'neutral' && (
+          <path d="M 49,65.5 L 63,65.5" fill="none" stroke="#1E1B4B" strokeWidth="3" strokeLinecap="round" />
+        )}
+
+        {canonicalMood === 'offline' && (
+          <circle cx="56" cy="65.5" r="2.8" fill="#1E293B" />
+        )}
+
+        {/* Subtle Luminous Sparkles (Celebration & Happy Accent) */}
+        {showSparkles && (canonicalMood === 'happy' || canonicalMood === 'celebrating') && (
           <g className="mascot-sparkle">
             <path
-              d="M 10,28 L 12,22 L 18,20 L 12,18 L 10,12 L 8,18 L 2,20 L 8,22 Z"
-              fill={mood === 'sad' ? '#FDA4AF' : '#FFFFFF'}
+              d="M 10,30 L 12.2,23.5 L 18.5,21.5 L 12.2,19.5 L 10,13 L 7.8,19.5 L 1.5,21.5 L 7.8,23.5 Z"
+              fill={canonicalMood === 'celebrating' ? '#FDE047' : '#C084FC'}
             />
             <path
-              d="M 88,26 L 90.2,20 L 96,17.8 L 90.2,15.6 L 88,10 L 85.8,15.6 L 80,17.8 L 85.8,20 Z"
-              fill={mood === 'celebrate' ? '#FDE047' : '#7DD3FC'}
-            />
-            <path
-              d="M 13,74 L 14.5,70 L 18.5,68.5 L 14.5,67 L 13,63 L 11.5,67 L 7.5,68.5 L 11.5,70 Z"
-              fill="#F9A8D4"
+              d="M 100,28 L 102.2,22 L 108,20 L 102.2,18 L 100,12 L 97.8,18 L 92,20 L 97.8,22 Z"
+              fill={canonicalMood === 'celebrating' ? '#F472B6' : '#38BDF8'}
             />
           </g>
         )}

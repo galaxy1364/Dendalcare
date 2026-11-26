@@ -6,17 +6,17 @@
   "releaseSequence": 167,
   "androidVersionCode": 167,
   "androidVersionName": "4.17.0",
-  "buildId": "v4.17.0-ef716574cb",
-  "releaseId": "v4.17.0-ef716574cb",
-  "contentDigest": "ef716574cb6ae1ca765c1a105378c7bc00eff8035a95fd4adad78bb735c40e05",
+  "buildId": "v4.17.0-3a33e14530",
+  "releaseId": "v4.17.0-3a33e14530",
+  "contentDigest": "3a33e14530343c6bc1e8dbdda9d9562c9aca388dfbca00e912cfc62f3f88070c",
   "packageVersion": "4.17.0",
   "channel": "stable",
-  "publishedAt": "2026-11-26T19:37:20.414Z",
+  "publishedAt": "2026-11-26T20:19:24.341Z",
   "releaseNotes": "نسخه v4.17.0 (انتشار #167) — هم‌ترازی یکنواخت توالی انتشار پس از #166، تفکیک سه‌گانه نسخه وب/سرور/بومی، بازیابی احراز هویت و RLS مدیر کلینیک، و بازمهندسی بنیادین اسکلت تطبیقی جهانی (GE-0004)",
   "entryScripts": [
-    "./assets/index-BTfoQfpI.js"
+    "./assets/index-DOx1311S.js"
   ],
   "entryStyles": [
-    "./assets/index-UO9yd7Ps.css"
+    "./assets/index-DR6etgu_.css"
   ]
 }

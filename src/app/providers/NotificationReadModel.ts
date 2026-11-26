@@ -119,15 +119,50 @@ export function computeNotificationCount(
   return Math.max(liveSmartAlertsCount, pendingRemindersCount) + unreadMessagesCount;
 }
 
+export interface MascotTaskSignals {
+  isOnline?: boolean;
+  isProcessing?: boolean;
+  /** True when user session/membership is verified; false maps to deterministic 'neutral' (unknown state) */
+  isAuthorized?: boolean;
+  justCompleted?: boolean;
+  overdueCount?: number;
+  pendingCount?: number;
+}
+
+/**
+ * GE-0008 Deterministic 7-State Emotional Engine:
+ * Strictly derived from real authorized clinic task state — zero randomness, zero patient PHI.
+ * Priority:
+ *  1. Offline -> 'offline'
+ *  2. Processing / syncing -> 'thinking'
+ *  3. Unknown / unauthorized state -> 'neutral'
+ *  4. Overdue / critical tasks -> 'sad'
+ *  5. Successful completion pulse -> 'celebrating'
+ *  6. Pending tasks / reminders -> 'concerned'
+ *  7. All verified tasks completed -> 'happy'
+ */
 export function computeMascotMood(
   liveSmartAlerts: readonly LiveSmartAlert[],
-  pendingRemindersCount: number
+  pendingRemindersCount: number,
+  signals?: MascotTaskSignals
 ): MascotMood {
-  if (
+  if (signals?.isOnline === false) return 'offline';
+  if (signals?.isProcessing) return 'thinking';
+  if (signals?.isAuthorized === false) return 'neutral';
+
+  const hasOverdueOrCritical =
+    (signals?.overdueCount ?? 0) > 0 ||
     liveSmartAlerts.some((a) => a.urgency === 'critical' || a.urgency === 'today') ||
-    pendingRemindersCount > 5
-  ) {
-    return 'sad';
-  }
+    pendingRemindersCount > 5;
+  if (hasOverdueOrCritical) return 'sad';
+
+  if (signals?.justCompleted) return 'celebrating';
+
+  const hasPending =
+    (signals?.pendingCount ?? 0) > 0 ||
+    liveSmartAlerts.length > 0 ||
+    pendingRemindersCount > 0;
+  if (hasPending) return 'concerned';
+
   return 'happy';
 }

@@ -94,11 +94,11 @@ export interface UnifiedStateViewProps {
 }
 
 const STATE_MASCOT_MOOD: Record<UnifiedStateKind, MascotMood> = {
-  loading: 'ai',
+  loading: 'thinking',
   empty: 'happy',
   error: 'sad',
   offline: 'offline',
-  unauthorized: 'sad',
+  unauthorized: 'neutral',
 };
 
 /**
@@ -120,7 +120,7 @@ export function UnifiedStateView({
       className="flex flex-col items-center justify-center text-center py-8 px-5 rounded-[24px] bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] shadow-sm animate-fade-in"
     >
       <div className="mb-3">
-        <MascotTooth mood={STATE_MASCOT_MOOD[kind]} size={58} framed interactive={false} />
+        <MascotTooth mood={STATE_MASCOT_MOOD[kind]} size={56} interactive={false} />
       </div>
 
       <div className="flex items-center justify-center gap-1.5 mb-1">

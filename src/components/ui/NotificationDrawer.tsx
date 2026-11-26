@@ -360,7 +360,7 @@ export function NotificationDrawer({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="relative shrink-0">
-                <MascotTooth mood={drawerMascotMood} size={42} framed interactive={false} />
+                <MascotTooth mood={drawerMascotMood} size={48} interactive={false} />
                 <span
                   className={`absolute -bottom-0.5 -left-0.5 w-4 h-4 rounded-full flex items-center justify-center text-white border border-white ${
                     urgentGroup.length > 0 ? 'bg-rose-600' : 'bg-indigo-600'
@@ -667,7 +667,7 @@ export function NotificationDrawer({
           {/* Smart Grouped Swipeable Notification Cards */}
           {filteredAlerts.length === 0 && unreadMessages.length === 0 ? (
             <div className="flex flex-col items-center text-center py-9 px-4 bg-white dark:bg-[#11202E] rounded-2xl border border-slate-200 dark:border-[#25394D]">
-              <MascotTooth mood="celebrate" size={56} framed interactive={false} className="mb-3" />
+              <MascotTooth mood="celebrating" size={56} interactive={false} className="mb-3" />
               <p className="text-sm text-slate-900 dark:text-slate-100 font-black">همه یادآوری‌ها بررسی شده‌اند</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">مورد فوری فعالی وجود ندارد — عالی پیش رفتید!</p>
             </div>

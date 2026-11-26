@@ -1,10 +1,16 @@
-name: Build & Publish Signed Android APK
+name: Build & Verify Signed Android APK (Manual / Standalone)
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Release channel (stable strictly requires upload keystore; debug-preview is QA only)'
+        required: true
+        default: 'stable'
+        type: choice
+        options:
+          - stable
+          - debug-preview
 
 permissions:
   contents: write
@@ -15,7 +21,7 @@ concurrency:
 
 jobs:
   build_and_publish_apk:
-    name: Build, Sign, Verify & Publish MinaDental Android APK
+    name: Build, Sign, Verify (apksigner + keytool) & Publish MinaDental Android APK
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -41,9 +47,10 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Install lockfile dependencies & typecheck
+      - name: Install lockfile dependencies, sync-check versions & typecheck
         run: |
           npm ci
+          npm run sync:version:check
           npm run typecheck
 
       - name: Compute strict monotonic Web & Android release sequence (aligned with deploy.yml)
@@ -63,9 +70,10 @@ jobs:
           node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin --verify-parity
           npm run verify:assets
 
-      - name: Prepare signing keystore (Release upload key if configured, else deterministic CI debug keystore)
+      - name: Prepare signing keystore (stable PROHIBITS debug signing)
         id: sign_mode
         env:
+          TARGET_CHANNEL: ${{ inputs.channel || 'stable' }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -75,7 +83,9 @@ jobs:
             echo "mode=release_upload_keystore" >> "$GITHUB_OUTPUT"
             echo "gradle_task=:app:assembleRelease" >> "$GITHUB_OUTPUT"
             echo "apk_path=app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_OUTPUT"
-          else
+            echo "forbid_debug_flag=--forbid-debug-signing" >> "$GITHUB_OUTPUT"
+            echo "release_tag=android-latest" >> "$GITHUB_OUTPUT"
+          elif [ "$TARGET_CHANNEL" = "debug-preview" ]; then
             if [ ! -f "${GITHUB_WORKSPACE}/debug.keystore" ]; then
               keytool -genkeypair -v \
                 -keystore "${GITHUB_WORKSPACE}/debug.keystore" \
@@ -85,11 +95,16 @@ jobs:
                 -keyalg RSA \
                 -keysize 2048 \
                 -validity 10000 \
-                -dname "CN=MinaDental CI, O=MinaDental Clinic, L=Tehran, C=IR"
+                -dname "CN=Android Debug, O=Android, C=US"
             fi
-            echo "mode=ci_debug_keystore" >> "$GITHUB_OUTPUT"
+            echo "mode=qa_debug_preview_keystore" >> "$GITHUB_OUTPUT"
             echo "gradle_task=:app:assembleDebug" >> "$GITHUB_OUTPUT"
             echo "apk_path=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+            echo "forbid_debug_flag=" >> "$GITHUB_OUTPUT"
+            echo "release_tag=android-debug-preview" >> "$GITHUB_OUTPUT"
+          else
+            echo "ERROR: Stable Android release requires ANDROID_KEYSTORE_BASE64, STORE_PASSWORD, and KEY_PASSWORD secrets. Debug signing is prohibited in stable releases."
+            exit 1
           fi
 
       - name: Assemble signed Android APK with synchronized MINA_RELEASE_SEQUENCE
@@ -101,11 +116,13 @@ jobs:
         run: |
           gradle ${{ steps.sign_mode.outputs.gradle_task }} --no-daemon --stacktrace
 
-      - name: Emit apk-release.json & run automated APK signature/structure/parity gate
+      - name: Emit apk-release.json (env vars before node) & run apksigner + keytool verification report
         id: verify_apk
         env:
           APK_PATH: ${{ steps.sign_mode.outputs.apk_path }}
           SIGNING_MODE: ${{ steps.sign_mode.outputs.mode }}
+          RELEASE_TAG: ${{ steps.sign_mode.outputs.release_tag }}
+          FORBID_DEBUG_FLAG: ${{ steps.sign_mode.outputs.forbid_debug_flag }}
           MINA_RELEASE_SEQUENCE: ${{ steps.seq.outputs.value }}
           GIT_SHA: ${{ github.sha }}
           GITHUB_RUN_ID_VAL: ${{ github.run_id }}
@@ -113,7 +130,6 @@ jobs:
           set -euo pipefail
           test -f "$APK_PATH"
 
-          # Ensure Android SDK build-tools (apksigner) is installed
           APKSIGNER=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -name apksigner -type f 2>/dev/null | sort -V | tail -n 1 || true)
           if [ -z "$APKSIGNER" ]; then
             echo "Installing build-tools for apksigner..."
@@ -134,12 +150,15 @@ jobs:
           APK_SIZE=$(stat -c%s release-apk/MinaDental-android.apk)
           echo "${APK_SHA256}  MinaDental-android.apk" > release-apk/MinaDental-android.apk.sha256
 
+          # GE-0008: Export env vars strictly BEFORE node execution!
+          export APK_SHA256 APK_SIZE CERT_SHA256
           node -e '
             const fs = require("node:fs");
             const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
             const webMeta = JSON.parse(fs.readFileSync("dist/version.json", "utf8"));
             const versionCode = Number(process.env.MINA_RELEASE_SEQUENCE || webMeta.releaseSequence || 167);
             const versionName = String(pkg.version);
+            const tag = process.env.RELEASE_TAG || "android-latest";
             const meta = {
               schemaVersion: 1,
               appName: "MinaDental",
@@ -155,25 +174,27 @@ jobs:
               sha256: process.env.APK_SHA256,
               signingMode: process.env.SIGNING_MODE,
               signingCertSha256: process.env.CERT_SHA256,
-              downloadUrl: "https://github.com/galaxy1364/Dendalcare/releases/download/android-latest/MinaDental-android.apk",
-              compatDownloadUrl: "https://github.com/galaxy1364/Dendalcare/releases/download/android-latest/DentalCare.apk",
-              releasePageUrl: "https://github.com/galaxy1364/Dendalcare/releases/tag/android-latest",
+              downloadUrl: `https://github.com/galaxy1364/Dendalcare/releases/download/${tag}/MinaDental-android.apk`,
+              compatDownloadUrl: `https://github.com/galaxy1364/Dendalcare/releases/download/${tag}/DentalCare.apk`,
+              releasePageUrl: `https://github.com/galaxy1364/Dendalcare/releases/tag/${tag}`,
               publishedAt: new Date().toISOString(),
             };
             fs.writeFileSync("release-apk/apk-release.json", JSON.stringify(meta, null, 2) + "\n", "utf8");
-          ' APK_SHA256="$APK_SHA256" APK_SIZE="$APK_SIZE" CERT_SHA256="$CERT_SHA256"
+          '
 
-          # Mandatory automated fail-closed APK verification gate (magic bytes, ZIP, core APK, embedded web parity, apksigner, metadata)
           node scripts/verify-apk-artifact.mjs \
             --apk release-apk/MinaDental-android.apk \
             --metadata release-apk/apk-release.json \
-            --require-apksigner
+            --require-apksigner \
+            --require-keytool \
+            $FORBID_DEBUG_FLAG \
+            --report release-apk/apk-verification-report.json
 
           echo "sha256=${APK_SHA256}" >> "$GITHUB_OUTPUT"
           echo "size_bytes=${APK_SIZE}" >> "$GITHUB_OUTPUT"
           echo "cert_sha256=${CERT_SHA256}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload signed APK workflow artifact
+      - name: Upload signed APK & verification report workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: minadental-signed-android-apk
@@ -181,11 +202,13 @@ jobs:
             release-apk/MinaDental-android.apk
             release-apk/MinaDental-android.apk.sha256
             release-apk/apk-release.json
+            release-apk/apk-verification-report.json
           retention-days: 30
 
-      - name: Publish signed APK & metadata to GitHub Release (android-latest)
+      - name: Publish signed APK & verification report to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.sign_mode.outputs.release_tag }}
         run: |
           set -euo pipefail
           NOTES="MinaDental Signed Android APK (Release #${{ steps.seq.outputs.value }})
@@ -198,20 +221,22 @@ jobs:
           - Commit: ${{ github.sha }}
           - CI Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-          if gh release view android-latest >/dev/null 2>&1; then
-            gh release edit android-latest --title "MinaDental Android APK (Latest Signed)" --notes "$NOTES"
-            gh release upload android-latest \
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "MinaDental Android APK (${RELEASE_TAG})" --notes "$NOTES"
+            gh release upload "$RELEASE_TAG" \
               release-apk/MinaDental-android.apk \
               release-apk/DentalCare.apk \
               release-apk/MinaDental-android.apk.sha256 \
               release-apk/apk-release.json \
+              release-apk/apk-verification-report.json \
               --clobber
           else
-            gh release create android-latest \
+            gh release create "$RELEASE_TAG" \
               release-apk/MinaDental-android.apk \
               release-apk/DentalCare.apk \
               release-apk/MinaDental-android.apk.sha256 \
               release-apk/apk-release.json \
-              --title "MinaDental Android APK (Latest Signed)" \
+              release-apk/apk-verification-report.json \
+              --title "MinaDental Android APK (${RELEASE_TAG})" \
               --notes "$NOTES"
           fi

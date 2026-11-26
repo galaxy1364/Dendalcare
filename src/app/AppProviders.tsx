@@ -530,11 +530,6 @@ function ClinicShellProviders({
     unreadMessages.length
   );
 
-  const mascotMood: MascotMood = useMemo(
-    () => computeMascotMood(liveSmartAlerts, pendingReminders.length),
-    [liveSmartAlerts, pendingReminders.length]
-  );
-
   const unifiedGlobalAlerts: GlobalReminderPopupItem[] = useMemo(
     () =>
       buildUnifiedNotificationAlerts({
@@ -1025,6 +1020,17 @@ function ClinicShellProviders({
         sessionStatus: verifiedSession.status,
       }),
     [verifiedSession.serverVerifiedRole, verifiedSession.status, currentUser.role]
+  );
+
+  const mascotMood: MascotMood = useMemo(
+    () =>
+      computeMascotMood(liveSmartAlerts, pendingReminders.length, {
+        isOnline,
+        isProcessing: syncPulse || flushingQueue,
+        isAuthorized: effectiveRole !== 'unauthorized',
+        justCompleted: Boolean(liveSyncToast) && !syncPulse && !flushingQueue,
+      }),
+    [liveSmartAlerts, pendingReminders.length, isOnline, syncPulse, flushingQueue, effectiveRole, liveSyncToast]
   );
 
   const value: ClinicShellContextValue = {
