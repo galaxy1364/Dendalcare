@@ -1241,6 +1241,31 @@ export class UpdateCoordinator {
     this.adapter.openStoreAction?.(this.candidate.manifest);
   }
 
+  public injectTestCandidate(manifest: AuthoritativeReleaseManifest): UpdateSnapshot {
+    const correlationId = createCorrelationId('test');
+    this.candidate = {
+      manifest,
+      pointer: {
+        schemaVersion: 2,
+        channel: manifest.channel,
+        platform: manifest.platform,
+        currentReleaseId: manifest.releaseId,
+        releaseSequence: manifest.releaseSequence,
+        manifestUrl: './release-manifest.json',
+        updatedAt: manifest.publishedAt,
+        revokedReleaseIds: [],
+        minSupportedSequence: 1,
+      },
+      integrityVerified: true,
+      verifiedAt: new Date().toISOString(),
+      stagedAssets: new Map(),
+    };
+    this.ledger.saveCandidate(this.candidate);
+    this.transition('READY_TO_ACTIVATE', correlationId, 'TEST_CANDIDATE_INJECTED', manifest.releaseId);
+    this.emit();
+    return this.getSnapshot();
+  }
+
   /**
    * V8-01 Autonomous Resume:
    * When safe-point blockers clear (or defer deadline expires), transitions to `READY_TO_ACTIVATE`

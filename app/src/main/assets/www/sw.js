@@ -2,7 +2,7 @@
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
 // NOTE: Structural HTML checks below prevent cache poisoning & raw-TSX contamination;
 // they are NOT a substitute for cryptographic ECDSA manifest signature verification.
-const BUILD_ID = "v4.18.0-f11b1b9973";
+const BUILD_ID = "v4.18.0-3160d0338c";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
 const RELEASE_SEQ_RAW = "230";
 const RESOLVED_RELEASE_SEQ = /^\d+$/.test(RELEASE_SEQ_RAW) ? Number(RELEASE_SEQ_RAW) : 0;
@@ -16,14 +16,14 @@ const VALID_BUILD_ID_RE = /^v\d+\.\d+\.\d+-[0-9a-f]{10}$/;
 const CRITICAL_PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-DQYXXV8p.js",
+  "./assets/index-h9TYJOUo.js",
   "./assets/index-BEpPobBr.css"
 ];
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-DQYXXV8p.js",
+  "./assets/index-h9TYJOUo.js",
   "./assets/index-BEpPobBr.css",
   "./manifest.json",
   "./favicon.svg",

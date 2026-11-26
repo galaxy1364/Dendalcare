@@ -275,3 +275,29 @@ export async function broadcastNewAppBuild(
     };
   }
 }
+
+export function injectTestUpdateCandidate(nextSequence = 231, nextVersion = '4.18.1'): UpdateSnapshot {
+  const current = getInstalledReleaseInfo();
+  const testManifest = {
+    schemaVersion: 2,
+    releaseId: `v${nextVersion}-test${Date.now().toString(36)}`,
+    releaseSequence: nextSequence,
+    semver: nextVersion,
+    gitCommit: 'test-force-commit',
+    channel: 'stable' as const,
+    platform: 'web' as const,
+    minNativeVersion: '4.9.0',
+    minSchemaVersion: 4,
+    publishedAt: new Date().toISOString(),
+    contentDigest: 'f1f2f3f4f5f6f1f2f3f4f5f6f1f2f3f4f5f6f1f2f3f4f5f6f1f2f3f4f5f6f1f2',
+    releaseNotes: `نسخه آزمایشی تستی v${nextVersion} (توالی #${nextSequence}) جهت راستی‌آزمایی و تست انیمیشنی به‌روزرسانی`,
+    entryScripts: [],
+    entryStyles: [],
+    assets: [],
+    urgency: 'standard' as const,
+    revoked: false,
+    origin: 'ci_pipeline' as const,
+    rollbackPolicy: { strategy: 'forward_release' as const, minRollbackSequence: current.build, schemaBackwardCompatible: true, preserveUserData: true },
+  };
+  return updateCoordinator.injectTestCandidate(testManifest);
+}
