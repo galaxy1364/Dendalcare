@@ -21,6 +21,7 @@ import type {
   Safteh,
   Treatment,
 } from '@/lib/supabase';
+import { rawSupabase } from '@/lib/supabaseCore';
 import { useRealtimeTable } from '@/lib/useRealtimeTable';
 import { toJalaliStr, todayGregorian } from '@/lib/jalali';
 import { computeLiveSmartAlerts, loadSmartReminderRules, type LiveSmartAlert } from '@/lib/smartReminderEngine';
@@ -142,6 +143,7 @@ interface ClinicShellContextValue {
   addNewUser: (input: NewUserInput) => Promise<void>;
   signInSupabase: (email: string, password: string) => Promise<void>;
   signOutSupabase: () => Promise<void>;
+  retryAuthVerification: () => Promise<void>;
 
   isOnline: boolean;
   onlinePeersCount: number;
@@ -372,32 +374,72 @@ function ClinicShellProviders({
     }
   }, []);
 
-  // Post-commit shell handshake & explicit Auth bootstrap state machine
+  const verifyAndApplySession = useCallback(async (explicitBranch?: string) => {
+    try {
+      const session = await getVerifiedSupabaseSession(explicitBranch);
+      setVerifiedSession(session);
+      if (session.status === 'authenticated') {
+        syncLocalUserToVerifiedSession(session);
+        appBootstrap.transition('READY');
+      } else {
+        appBootstrap.transition('DEGRADED', {
+          code: session.status === 'unauthenticated' ? 'UNAUTHENTICATED' : 'AUTH_DEGRADED',
+          message: 'نشست سرور تایید نشده است؛ دسترسی بر اساس سیاست امنیتی محدود می‌ماند.',
+        });
+      }
+      return session;
+    } catch (err) {
+      appBootstrap.transition('DEGRADED', {
+        code: 'AUTH_CHECK_FAILED',
+        message: sanitizeLogMessage(err),
+      });
+      return null;
+    }
+  }, [syncLocalUserToVerifiedSession]);
+
+  const retryAuthVerification = useCallback(async () => {
+    setAuthBusy(true);
+    const session = await verifyAndApplySession();
+    setAuthBusy(false);
+    if (session?.status === 'authenticated') {
+      HapticEngine.success();
+      showSyncToast(`دسترسی تاییدشده سرور (${ROLE_LABELS[session.serverVerifiedRole as ClinicUserRole] || session.serverVerifiedRole}) فعال شد`, 3000);
+    }
+  }, [showSyncToast, verifyAndApplySession]);
+
+  // Post-commit shell handshake, live Supabase onAuthStateChange listener & explicit Auth bootstrap state machine
   // (Runs before parent UpdateProvider's useEffect so markShellCommitted() always precedes updateCoordinator.start())
   useEffect(() => {
     // V5 P0-04: Genuine post-commit handshake (replaces premature main.tsx flag)
     markShellCommitted();
     appBootstrap.transition('AUTH_RESOLVING');
 
-    getVerifiedSupabaseSession()
-      .then((session) => {
-        setVerifiedSession(session);
-        if (session.status === 'authenticated') {
-          syncLocalUserToVerifiedSession(session);
-          appBootstrap.transition('READY');
-        } else {
-          appBootstrap.transition('DEGRADED', {
-            code: session.status === 'unauthenticated' ? 'UNAUTHENTICATED' : 'AUTH_DEGRADED',
-            message: 'نشست سرور تایید نشده است؛ دسترسی بر اساس سیاست امنیتی محدود می‌ماند.',
-          });
-        }
-      })
-      .catch((err) => {
-        appBootstrap.transition('DEGRADED', {
-          code: 'AUTH_CHECK_FAILED',
-          message: sanitizeLogMessage(err),
+    void verifyAndApplySession();
+
+    // GE-0005 P0-1: Subscribe to real Supabase auth lifecycle events (INITIAL_SESSION / SIGNED_IN / TOKEN_REFRESHED / SIGNED_OUT)
+    // so mobile PWA token refreshes immediately re-verify membership and recover manager access without manual reload.
+    let authSub: { unsubscribe: () => void } | null = null;
+    try {
+      const authApi = rawSupabase.auth as unknown as {
+        onAuthStateChange?: (cb: (event: string) => void) => { data?: { subscription?: { unsubscribe: () => void } } };
+      };
+      if (typeof authApi?.onAuthStateChange === 'function') {
+        const res = authApi.onAuthStateChange((event: string) => {
+          if (
+            event === 'INITIAL_SESSION' ||
+            event === 'SIGNED_IN' ||
+            event === 'TOKEN_REFRESHED' ||
+            event === 'USER_UPDATED' ||
+            event === 'SIGNED_OUT'
+          ) {
+            void verifyAndApplySession();
+          }
         });
-      });
+        authSub = res?.data?.subscription ?? null;
+      }
+    } catch {
+      // Ignore if test mock omits onAuthStateChange
+    }
 
     purgeExpiredVaultMirrors().catch(() => {});
 
@@ -409,7 +451,11 @@ function ClinicShellProviders({
       actor: currentUser.fullName || 'سیستم مرکزی',
       status: 'pass',
     });
-  }, []);
+
+    return () => {
+      authSub?.unsubscribe();
+    };
+  }, [verifyAndApplySession]);
 
   // V10 P1 Data-Minimized realtime shell tables (strictly excluding clinical PHI/PII columns)
   const { data: reminders } = useRealtimeTable<Reminder>(
@@ -991,6 +1037,7 @@ function ClinicShellProviders({
     addNewUser,
     signInSupabase,
     signOutSupabase,
+    retryAuthVerification,
     isOnline,
     onlinePeersCount,
     platformInfo,

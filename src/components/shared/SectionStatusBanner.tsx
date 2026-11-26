@@ -71,14 +71,25 @@ export function SectionStatusBanner({
       <div
         role="alert"
         data-testid="section_status_unauthorized"
-        className="rounded-card px-3.5 py-2.5 bg-[#FFF1F2] dark:bg-[#2A1218] border border-[#FECDD3] dark:border-[#7F1D1D] flex items-center justify-between gap-2 text-xs font-bold text-[#AD293C] dark:text-[#FDA4AF]"
+        className="rounded-card px-3.5 py-2.5 bg-[#FFF1F2] dark:bg-[#2A1218] border border-[#FECDD3] dark:border-[#7F1D1D] flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 text-xs font-bold text-[#AD293C] dark:text-[#FDA4AF]"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <Lock size={16} className="shrink-0" />
-          <span className="truncate">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
+          <Lock size={16} className="shrink-0 mt-0.5" />
+          <span className="leading-relaxed">
             {errorMessage || 'دسترسی این نقش به اطلاعات این بخش محدود است. لطفاً با حساب مجاز وارد شوید.'}
           </span>
         </div>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            data-testid="section_status_unauthorized_retry"
+            className="min-h-[40px] px-3 py-1 rounded-btn bg-white dark:bg-[#11202E] border border-[#FECDD3] dark:border-[#7F1D1D] text-[#AD293C] dark:text-[#FDA4AF] font-bold flex items-center gap-1 shrink-0"
+          >
+            <RefreshCw size={13} />
+            <span>بررسی مجدد</span>
+          </button>
+        )}
       </div>
     );
   }
@@ -146,9 +157,9 @@ export function SectionStatusBanner({
         data-testid="section_status_offline"
         className="rounded-card px-3.5 py-2.5 bg-[#FFFBEB] dark:bg-[#291E0B] border border-[#FDE68A] dark:border-[#78350F] flex items-center justify-between gap-2 text-xs font-bold text-[#92510C] dark:text-[#FCD34D]"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <WifiOff size={16} className="shrink-0" />
-          <span className="truncate">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
+          <WifiOff size={16} className="shrink-0 mt-0.5" />
+          <span className="leading-relaxed">
             حالت آفلاین — نمایش نسخه رمزنگاری‌شده محلی (داده‌ها ممکن است به‌روز نباشند)
           </span>
         </div>
@@ -200,9 +211,9 @@ export function SectionStatusBanner({
         data-testid="section_status_error"
         className="rounded-card px-3.5 py-2.5 bg-[#FFF1F2] dark:bg-[#2A1218] border border-[#FECDD3] dark:border-[#7F1D1D] flex items-center justify-between gap-2 text-xs font-bold text-[#AD293C] dark:text-[#FDA4AF]"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <AlertCircle size={16} className="shrink-0" />
-          <span className="truncate">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <span className="leading-relaxed">
             {errorMessage || 'خطا در ارتباط با سرور کلینیک. داده‌های نمایش‌داده‌شده ممکن است ناقص باشند.'}
           </span>
         </div>

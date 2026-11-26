@@ -7,6 +7,22 @@ import path from 'node:path';
 // MinaDental Clinical & Architecture Comprehensive Audit Test Suite
 // Verifiable Trace IDs: TRC-MINA-CORE-9001-A to TRC-MINA-QBANK-9008-H
 // =========================================================================
+function readProjectFileWithShellModules(rootDir, rel) {
+  const base = fs.readFileSync(path.join(rootDir, rel), 'utf8');
+  if (rel === 'src/app/AppShell.tsx') {
+    const shellDir = path.join(rootDir, 'src/app/shell');
+    if (fs.existsSync(shellDir)) {
+      const extras = fs
+        .readdirSync(shellDir)
+        .filter((f) => f.endsWith('.ts') || f.endsWith('.tsx'))
+        .sort()
+        .map((f) => fs.readFileSync(path.join(shellDir, f), 'utf8'))
+        .join('\n');
+      return `${base}\n${extras}`;
+    }
+  }
+  return base;
+}
 
 describe('Phase 1 [TRC-MINA-CORE-9001-A]: Core Engine & Perpetual Calendar Math', () => {
   // Test Jalali Calendar calculations
@@ -199,7 +215,7 @@ describe('Phase 5 [TRC-MINA-CLOUD-9005-E]: OmniRoute, MemPalace & Verifiable Tra
 
 describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Verification)', () => {
   const root = process.cwd();
-  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const read = (rel) => readProjectFileWithShellModules(root, rel);
 
   test('all 13 modules have strictly unique non-repeating colors and CSS theme classes including theme-calendar', () => {
     const tokensSrc = read('src/design-system/tokens/colors.ts');
@@ -276,7 +292,7 @@ describe('Phase 6 [TRC-MINA-VAULT-9006-F]: Codebase Super-Audit (10/10 Lock Veri
 
 describe('Phase 7 [TRC-MINA-GUARD-9007-G]: App-Wide Zero-Delete Guardian, Offline Queue & 3-Mode Doctor Share Engine', () => {
   const root = process.cwd();
-  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const read = (rel) => readProjectFileWithShellModules(root, rel);
 
   test('supabase.ts exports Guarded Proxy wrapping all 18 sections with eqFilters sharing, Zero-Delete archival & Offline Queue', () => {
     const supabaseSrc = read('src/lib/supabase.ts');
@@ -351,7 +367,7 @@ describe('Phase 7 [TRC-MINA-GUARD-9007-G]: App-Wide Zero-Delete Guardian, Offlin
 
 describe('Phase 8 [TRC-MINA-QBANK-9008-H]: Authentic QBank Curved-Notch UI, Project Folder, Right Draggable Drawer, Real OS Notifications, iOS 27 Haptics & Clinic-Paid Implant Fixture', () => {
   const root = process.cwd();
-  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const read = (rel) => readProjectFileWithShellModules(root, rel);
 
   test('QBankTile implements authentic concave SVG notch cutout and renders in FavoriteModules & QBankFoldersOverlay cleanly', () => {
     const tileSrc = read('src/components/ui/QBankTile.tsx');
@@ -436,7 +452,7 @@ describe('Phase 8 [TRC-MINA-QBANK-9008-H]: Authentic QBank Curved-Notch UI, Proj
 
 describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPad/Windows), Manager-Exclusive Audit in Settings, Smart Cross-Role Workflow Popups & Zero-AI-Fingerprint', () => {
   const root = process.cwd();
-  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const read = (rel) => readProjectFileWithShellModules(root, rel);
 
   test('platform/capabilities & NavigationRail provide native iPhone, Android, iPad & Windows 10/11 support', () => {
     const platSrc = read('src/platform/capabilities.ts');
@@ -758,7 +774,7 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
 
 describe('Phase 11 [TRC-MINA-IOS27-V2-9011-K]: V2 Viewport-Based No-Scroll Home, Full-Screen Navigation Stack, Global Haptic Engine, Server-Confirmed Mutations, Appearance & Honest Platform Capabilities', () => {
   const root = process.cwd();
-  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const read = (rel) => readProjectFileWithShellModules(root, rel);
 
   test('35. IOS27-OVERRIDE.fa.md lock & Strict No-Scroll Home Screen Caps (4 Indicators, 4 Services, 1 Summary, 1 Priority, 1 Conditional Next Appointment)', () => {
     const overrideDoc = read('IOS27-OVERRIDE.fa.md');
@@ -872,7 +888,7 @@ describe('Phase 11 [TRC-MINA-IOS27-V2-9011-K]: V2 Viewport-Based No-Scroll Home,
 
 describe('Phase 12 [TRC-MINA-AUDIT-9012-L]: Master Audit Remediation (Phases 01–10 Verification)', () => {
   const root = process.cwd();
-  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const read = (rel) => readProjectFileWithShellModules(root, rel);
 
   test('39. Phase 01 — Zero Artificial KPI Constants, Solar Month + Asia/Tehran Filtering, Real Capacity & Payment Deduplication', () => {
     const metricsSrc = read('src/features/dashboard/dashboard.metrics.ts');
@@ -980,7 +996,7 @@ describe('Phase 12 [TRC-MINA-AUDIT-9012-L]: Master Audit Remediation (Phases 01�
 
 describe('Phase 13 [TRC-MINA-SECOND-AUDIT-9013-M]: Second Audit Remediation (QBank Visual Fidelity, Live Aurora, Duotone Icons, Full-Screen Forms, Accounting & Multi-Tenant RLS)', () => {
   const root = process.cwd();
-  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const read = (rel) => readProjectFileWithShellModules(root, rel);
 
   test('42. FIX 01–03 — Live Aurora Mesh Background, Exact QBank Notch Geometry (96–108px / 22px) & Custom Filled Duotone Icons', () => {
     const auroraSrc = read('src/design-system/components/AuroraBackground.tsx');
@@ -1090,7 +1106,7 @@ describe('Phase 13 [TRC-MINA-SECOND-AUDIT-9013-M]: Second Audit Remediation (QBa
 
 describe('Phase 14 [TRC-MINA-THIRD-AUDIT-9014-N]: Third Audit Final Correction (Fail-Closed RLS, Zero Column-Stripping, Financial Truth, Exact QBank Dock/Launcher/Home, URL Routing & Request Cancellation)', () => {
   const root = process.cwd();
-  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const read = (rel) => readProjectFileWithShellModules(root, rel);
 
   test('46. FIX 01 — Fail-Closed RLS Migration, Financial Table Restrictions, AES-GCM Vault Encryption, Cross-User/Cross-Branch/Cross-Role Matrix & Switch Cleanup', async () => {
     const hardeningSql = read('supabase/migrations/20261126_rls_hardening.sql');

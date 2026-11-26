@@ -25,6 +25,7 @@ try {
   const ge0002Mod = await server.ssrLoadModule('/tests/ge0002-p0-recovery.test.ts');
   const ge0003Mod = await server.ssrLoadModule('/tests/ge0003-intelligent-shell.test.ts');
   const ge0004Mod = await server.ssrLoadModule('/tests/ge0004-adaptive-foundation.test.ts');
+  const ge0005Mod = await server.ssrLoadModule('/tests/ge0005-mandatory-acceptance.test.ts');
 
   const v4Results = await v4Mod.runAllV4ProductionTests();
   const v5Results = await v5Mod.runAllV5ReliabilityTests();
@@ -42,6 +43,7 @@ try {
   const ge0002Results = await ge0002Mod.runAllGe0002P0RecoveryTests();
   const ge0003Results = await ge0003Mod.runAllGe0003IntelligentShellTests();
   const ge0004Results = await ge0004Mod.runAllGe0004AdaptiveFoundationTests();
+  const ge0005Results = await ge0005Mod.runAllGe0005MandatoryAcceptanceTests();
   const allResults = [
     ...v4Results,
     ...v5Results,
@@ -59,6 +61,7 @@ try {
     ...ge0002Results,
     ...ge0003Results,
     ...ge0004Results,
+    ...ge0005Results,
   ];
 
   let passed = 0;
@@ -75,7 +78,7 @@ try {
   }
 
   console.log(
-    `\nProduction-Import Tests (V4..V16 + GE-0002..GE-0004): ${passed} passed, ${failed} failed (total ${allResults.length})`
+    `\nProduction-Import Tests (V4..V16 + GE-0002..GE-0005): ${passed} passed, ${failed} failed (total ${allResults.length})`
   );
   if (failed > 0) {
     exitCode = 1;

@@ -3,7 +3,7 @@ import { useRealtimeTable, type TableDataStatus } from '@/lib/useRealtimeTable';
 import { rawSupabase } from '@/lib/supabaseCore';
 import { getCurrentJalaliMonthBounds, todayGregorian } from '@/lib/jalali';
 import { getActiveClinicUser } from '@/lib/cloudSyncEngine';
-import { ACTIVE_TENANT_ID, getActiveBranchId } from '@/services/authentication/authService';
+import { ACTIVE_TENANT_ID, getActiveBranchId, getActiveTenantId } from '@/services/authentication/authService';
 import type {
   Appointment,
   Check,
@@ -270,7 +270,7 @@ export function useDashboardDataSources() {
   const loadServerSummary = useCallback(async () => {
     const gen = ++rpcGenRef.current;
     const activeUser = getActiveClinicUser();
-    const tenantId = activeUser.tenantId || ACTIVE_TENANT_ID;
+    const tenantId = getActiveTenantId() || activeUser.tenantId || ACTIVE_TENANT_ID;
     const branchId = getActiveBranchId();
     const todayIso = todayGregorian();
     const bounds = getCurrentJalaliMonthBounds(todayIso);
@@ -295,9 +295,11 @@ export function useDashboardDataSources() {
     };
     window.addEventListener('minadental-user-changed', onScopeChange);
     window.addEventListener('minadental-branch-changed', onScopeChange);
+    window.addEventListener('minadental-auth-changed', onScopeChange);
     return () => {
       window.removeEventListener('minadental-user-changed', onScopeChange);
       window.removeEventListener('minadental-branch-changed', onScopeChange);
+      window.removeEventListener('minadental-auth-changed', onScopeChange);
     };
   }, [loadServerSummary, scopeEpoch]);
 
@@ -339,6 +341,7 @@ export function useDashboardDataSources() {
   const isStale = allHooks.some((h) => h.isStale);
   const firstError =
     allHooks.find((h) => h.status === 'migration_required')?.error ||
+    allHooks.find((h) => h.status === 'unauthorized')?.error ||
     allHooks.find((h) => h.status === 'locked_offline')?.error ||
     allHooks.find((h) => h.status === 'timeout')?.error ||
     allHooks.find((h) => h.status === 'partial')?.error ||

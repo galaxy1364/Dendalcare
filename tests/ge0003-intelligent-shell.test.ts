@@ -47,7 +47,7 @@ export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestRes
       assert(mascotSrc.includes('#1B0B47') && mascotSrc.includes('#C084FC') && mascotSrc.includes('#38BDF8'), 'MascotTooth must preserve iridescent crystal aurora palette');
 
       const consumers = [
-        'src/app/AppShell.tsx',
+        'src/app/shell/AdaptiveTopBar.tsx',
         'src/navigation/NavigationRail.tsx',
         'src/components/ui/IOSReminderPopup.tsx',
         'src/components/ui/NotificationDrawer.tsx',

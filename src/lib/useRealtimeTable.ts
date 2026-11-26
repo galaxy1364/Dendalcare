@@ -796,6 +796,7 @@ export function useRealtimeTable<T extends { id: string }>(
       window.removeEventListener('minadental-sync-event', handleSyncEvent);
       window.removeEventListener('minadental-user-changed', handleScopeSwitch);
       window.removeEventListener('minadental-branch-changed', handleScopeSwitch);
+      window.removeEventListener('minadental-auth-changed', handleScopeSwitch);
       unsubscribeRealtime();
     };
   }, [table, select, filter?.column, filter?.value, scopeVersion, fetchData, persistLocalMirror]);

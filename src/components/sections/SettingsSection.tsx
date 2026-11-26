@@ -145,18 +145,21 @@ export function SettingsSection({
   return (
     <div className="space-y-2.5 pb-2 animate-fade-in-up">
       {/* QBank Top Bar: Sliding Horizontal Chip Bar */}
-      <div className="glass-card p-2.5">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+      <div className="glass-card p-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 px-0.5" role="tablist" aria-label="بخش‌های تنظیمات">
           {[
-            { key: 'clinic' as const, label: 'کلینیک، تعرفه‌ها و نسخه‌ها', icon: <Building2 size={13} /> },
-            { key: 'integrations' as const, label: 'گیت‌هاب، سوپابیس و گوگل درایو', icon: <FolderGit2 size={13} /> },
-            { key: 'diagnostics' as const, label: 'عیب‌یابی فنی و کش', icon: <Activity size={13} /> },
-            { key: 'ads' as const, label: `تبلیغات مطب (${ads.length.toLocaleString('fa-IR')})`, icon: <Megaphone size={13} /> },
+            { key: 'clinic' as const, label: 'کلینیک و نسخه‌ها', icon: <Building2 size={13} /> },
+            { key: 'integrations' as const, label: 'گیت‌هاب و سوپابیس', icon: <FolderGit2 size={13} /> },
+            { key: 'diagnostics' as const, label: 'عیب‌یابی و کش', icon: <Activity size={13} /> },
+            { key: 'ads' as const, label: `تبلیغات (${ads.length.toLocaleString('fa-IR')})`, icon: <Megaphone size={13} /> },
           ].map(ch => (
             <button
               key={ch.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === ch.key}
               onClick={() => setTab(ch.key)}
-              className={`px-3 py-1.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all haptic shrink-0 flex items-center gap-1.5 ${
+              className={`min-h-[40px] px-3 py-1.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all haptic shrink-0 flex items-center gap-1.5 ${
                 tab === ch.key
                   ? 'bg-gradient-to-r from-slate-700 to-slate-900 dark:from-indigo-600 dark:to-violet-700 text-white shadow-sm'
                   : 'bg-gray-100/90 dark:bg-slate-800 text-gray-600 dark:text-slate-300'
@@ -935,15 +938,16 @@ function ClinicSettingsTab({
               اعمال خودکار پس از پایان فرم و صف آفلاین
             </span>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+          <label dir="ltr" className="relative inline-flex items-center cursor-pointer shrink-0">
             <input
               type="checkbox"
               data-testid="toggle_auto_update_switch"
+              aria-label="به‌روزرسانی خودکار امن"
               checked={autoUpdate}
               onChange={(e) => handleToggleAutoUpdate(e.target.checked)}
               className="sr-only peer"
             />
-            <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 rounded-full peer peer-checked:after:translate-x-5 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:shadow-xs after:transition-transform peer-checked:bg-emerald-600"></div>
           </label>
         </div>
 

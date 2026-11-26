@@ -910,6 +910,9 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     await page.goto('/#/settings', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
 
+    await expect(page.getByTestId('shell_skip_to_main')).toHaveAttribute('href', '#main-clinic-content');
+    await expect(page.getByTestId('shell_route_live_announcer')).toContainText('تنظیمات');
+
     await expect(page.getByTestId('settings_version_separation_card')).toBeVisible();
     await expect(page.getByTestId('version_installed_web')).toBeVisible();
     await expect(page.getByTestId('version_available_release')).toBeVisible();
@@ -922,6 +925,9 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     await expect(disclosureToggle).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByTestId('settings_technical_disclosure_panel')).toBeVisible();
 
+    await page.getByTestId('settings_unified_update_center').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(evidenceDir, 'settings-update-center-390px-light.png') });
+    await page.evaluate(() => document.querySelector('main')?.scrollTo({ top: 0 }));
     await page.screenshot({ path: path.join(evidenceDir, 'settings-390px-light.png') });
 
     await page.getByTestId('appearance_font_double').click();

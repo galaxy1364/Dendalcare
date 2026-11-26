@@ -645,7 +645,7 @@ export async function runAllGe0002P0RecoveryTests(): Promise<Ge0002TestResult[]>
 
   // GE-0002 Shell, Visual Remediation & Dark-Mode Parity Source Checks
   await runTest('GE-0002 Adaptive Shell & Screenshot Remediation contracts present across Shell, Dock, Bell, Settings, Drawer & Forms', () => {
-    const appShell = readWorkspaceFile('src/app/AppShell.tsx');
+    const appShell = `${readWorkspaceFile('src/app/AppShell.tsx')}\n${readWorkspaceFile('src/app/shell/AdaptiveTopBar.tsx')}`;
     assert.ok(appShell.includes('pr-9 pl-2.5'), 'AppShell main must reserve >=36px right-edge gutter for 30px bell ear');
     assert.ok(appShell.includes('{canGoBack && ('), 'AppShell topbar_back_button must gate strictly on canGoBack');
     assert.ok(appShell.includes('onChange={(id) => navigate(id, undefined, { rootTab: true })}'), 'AppShell dock & rail must switch root tabs without creating fake back history');
