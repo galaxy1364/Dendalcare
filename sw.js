@@ -2,9 +2,9 @@
 // Single source of truth: stamped with deterministic content-derived BUILD_ID during Vite build.
 // NOTE: Structural HTML checks below prevent cache poisoning & raw-TSX contamination;
 // they are NOT a substitute for cryptographic ECDSA manifest signature verification.
-const BUILD_ID = "v4.18.0-1ec20b815f";
+const BUILD_ID = "v4.18.0-ed718602c1";
 const RESOLVED_BUILD_ID = BUILD_ID.startsWith('__') ? 'dev-local' : BUILD_ID;
-const RELEASE_SEQ_RAW = "224";
+const RELEASE_SEQ_RAW = "230";
 const RESOLVED_RELEASE_SEQ = /^\d+$/.test(RELEASE_SEQ_RAW) ? Number(RELEASE_SEQ_RAW) : 0;
 const CACHE_PREFIX = 'minadental-shell-';
 const CACHE_NAME = CACHE_PREFIX + RESOLVED_BUILD_ID;
@@ -16,15 +16,15 @@ const VALID_BUILD_ID_RE = /^v\d+\.\d+\.\d+-[0-9a-f]{10}$/;
 const CRITICAL_PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-BOGLpFtt.js",
-  "./assets/index-DR6etgu_.css"
+  "./assets/index-DQYXXV8p.js",
+  "./assets/index-BEpPobBr.css"
 ];
 
 const PRECACHE_ASSETS = [
   "./",
   "./index.html",
-  "./assets/index-BOGLpFtt.js",
-  "./assets/index-DR6etgu_.css",
+  "./assets/index-DQYXXV8p.js",
+  "./assets/index-BEpPobBr.css",
   "./manifest.json",
   "./favicon.svg",
   "./logo.png",

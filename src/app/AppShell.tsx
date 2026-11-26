@@ -253,7 +253,6 @@ export function AppShell() {
       </div>
 
       <ReleaseWatcher />
-      <ReleaseWatcher />
       <OverlayManager />
     </div>
   );
