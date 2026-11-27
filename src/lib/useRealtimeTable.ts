@@ -790,16 +790,17 @@ export function useRealtimeTable<T extends { id: string }>(
         const currentScope = resolveCurrentScope(table, filter);
         if (currentScope.scopeKey !== activeScopeKeyRef.current) return;
         // Full-read consumers must re-establish completeness after incremental events.
-        if (fetchAllPages) { setServerComplete(false); void fetchData(); return; }
         setData((prev) => {
           const fullRecord = prev.find((item) => item.id === oldRow.id) ?? (oldRow as Record<string, unknown>);
           const actor = getActiveClinicUser().fullName;
           archiveDeletedRecord(table, fullRecord, actor, 'بایگانی خودکار ضدحذف هنگام حذف از جدول').catch(() => {});
+          if (fetchAllPages) return prev;
           const updated = prev.filter((item) => item.id !== oldRow.id);
           persistLocalMirror(updated, currentScope);
           setStatus(prevStatus => prevStatus === 'ready' || prevStatus === 'empty' ? (updated.length === 0 ? 'empty' : 'ready') : prevStatus);
           return updated;
         });
+        if (fetchAllPages) { setServerComplete(false); void fetchData(); }
       },
     });
 
