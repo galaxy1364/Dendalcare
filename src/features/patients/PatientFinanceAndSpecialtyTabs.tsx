@@ -71,9 +71,9 @@ export function PaymentsTab({ patientId, payments, treatments }: { patientId: st
     }
     saveLock.current = true;
     setSaving(true);
+    try {
     requestKey.current ??= globalThis.crypto.randomUUID();
     const selectedTreat = treatmentId ? treatments.filter((t) => t.id === treatmentId) : treatments;
-    try {
     const res = await postPatientPaymentCommand({
       idempotencyKey: requestKey.current,
       patientId,
