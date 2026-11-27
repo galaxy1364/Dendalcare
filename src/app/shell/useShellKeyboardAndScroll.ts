@@ -44,6 +44,7 @@ export function useShellKeyboardAndScroll({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.key === 'F5') return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         openQBankMenu(true);
@@ -62,7 +63,6 @@ export function useShellKeyboardAndScroll({
         F2: 'patients',
         F3: 'appointments',
         F4: 'treatments',
-        F5: 'dashboard',
         F6: 'finance',
         F7: 'implants',
         F8: 'lab',
