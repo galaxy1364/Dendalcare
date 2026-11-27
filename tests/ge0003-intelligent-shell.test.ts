@@ -38,6 +38,15 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0022A: reminder financial shortcuts never bypass ledger and sync requires server confirmation', () => {
+      const page = fs.readFileSync(path.join(ROOT, 'src/components/sections/Reminders.tsx'), 'utf8');
+      const engine = fs.readFileSync(path.join(ROOT, 'src/lib/smartReminderEngine.ts'), 'utf8');
+      assert(!page.includes("supabase.from('checks').update") && !page.includes("supabase.from('installments').update"), 'Reminder cards must not modify financial state directly');
+      assert(page.includes("canAccessRoute(effectiveRole, 'finance')") && page.includes("emitGlobalFocus({ section: 'finance', subTab })"), 'Financial shortcuts navigate only with permission');
+      assert(page.includes('if (scanLock.current) return;') && page.includes('scanLock.current = false'), 'Prevent simultaneous scans in one view');
+      assert(engine.includes('attempted.has(refTag)') && engine.includes('attempted.add(refTag)'), 'Same-run duplicate alerts must be skipped');
+      assert(engine.includes("getMutationOutcome(result) === 'confirmed' && result.serverConfirmed === true") && engine.includes('REMINDER_SYNC_UNCONFIRMED'), 'Queued or failed insert must never count as confirmed');
+    }),
     await runCase('GE-0021D: receivables dashboard withholds incomplete totals and prevents new actions', () => {
       const root = fs.readFileSync(path.join(ROOT, 'src/components/sections/Finance.tsx'), 'utf8');
       const tab = fs.readFileSync(path.join(ROOT, 'src/features/finance/FinanceDebtorsTab.tsx'), 'utf8');
