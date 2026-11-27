@@ -147,7 +147,18 @@ Certificate fingerprints:
     await runCase('GE-0008 #4: Emotional 3D Mascot is frameless everywhere in-app (44-56px), has 7 deterministic states & zero patient PHI', () => {
       const mascotSrc = fs.readFileSync(path.join(ROOT, 'src/components/ui/MascotTooth.tsx'), 'utf8');
       assert(mascotSrc.includes('data-mascot-frameless="true"'), 'MascotTooth must render frameless transparent 3D mascot');
-      assert(mascotSrc.includes('role="img"'), 'MascotTooth must expose accessible role="img"');
+      assert(mascotSrc.includes("role={interactive || onClick ? 'button' : 'img'}"), 'Mascot must expose image semantics or interactive button semantics as appropriate');
+      assert(mascotSrc.includes('onKeyDown=') && mascotSrc.includes('tabIndex='), 'Interactive mascot must support keyboard activation');
+      for (const part of ['body', 'left-eye', 'right-eye', 'brows', 'mouth', 'left-arm', 'right-arm', 'sweat', 'tear']) {
+        assert(mascotSrc.includes('data-mascot-part="' + part + '"'), 'Independent SVG rig missing ' + part);
+      }
+      assert(!mascotSrc.includes('overflow-visible mascot-breathe'), 'Mascot must not animate by bouncing the entire icon');
+      const rigCss = fs.readFileSync(path.join(ROOT, 'src/index.css'), 'utf8');
+      for (const motion of ['mascotRigBlink', 'mascotRigWaveLeft', 'mascotRigWaveRight', 'mascotRigConcern', 'mascotRigDrop', 'mascotRigFocus', 'mascotRigJoy']) {
+        assert(rigCss.includes('@keyframes ' + motion), 'Missing expressive motion ' + motion);
+      }
+      assert(rigCss.includes('.mascot-rig *, .mascot-rig-reacting { animation: none !important;'), 'Rig must respect OS reduced motion');
+      assert(rigCss.includes('html[data-reduce-motion="true"] .mascot-rig *'), 'Rig must respect app reduced motion');
       assert(mascotSrc.includes('aria-label='), 'MascotTooth must expose accessible Persian aria-label');
       assert(
         !mascotSrc.includes('patientName') && !mascotSrc.includes('nationalCode') && !mascotSrc.includes('phoneNumber'),
@@ -162,7 +173,7 @@ Certificate fingerprints:
         computeMascotMood(
           [{ id: 'a1', domain: 'finance', targetSection: 'finance', patientName: 'بیمار', title: 'چک سررسید گذشته', subtitle: '', dueDate: '2026-11-20', urgency: 'critical' }],
           1,
-          { isOnline: true, isAuthorized: true }
+          { isOnline: true, isAuthorized: true, isDataReady: true }
         ) === 'sad',
         'Overdue/critical alert -> sad'
       );
@@ -170,15 +181,22 @@ Certificate fingerprints:
         computeMascotMood(
           [{ id: 'a2', domain: 'appointment', targetSection: 'appointments', patientName: 'بیمار', title: 'یادآوری پیش‌رو', subtitle: '', dueDate: '2026-11-28', urgency: 'upcoming' }],
           1,
-          { isOnline: true, isAuthorized: true }
+          { isOnline: true, isAuthorized: true, isDataReady: true }
         ) === 'concerned',
         'Pending upcoming alert -> concerned'
       );
       assert(
-        computeMascotMood([], 0, { isOnline: true, isAuthorized: true, justCompleted: true }) === 'celebrating',
+        computeMascotMood([], 0, { isOnline: true, isAuthorized: true, isDataReady: true, justCompleted: true }) === 'celebrating',
         'Completed task with zero overdue -> celebrating'
       );
-      assert(computeMascotMood([], 0, { isOnline: true, isAuthorized: true }) === 'happy', 'Clear clinic state -> happy');
+      assert(computeMascotMood([], 0, { isOnline: true, isAuthorized: true, isDataReady: true }) === 'happy', 'Clear clinic state -> happy');
+
+      assert(computeMascotMood([], 0) === 'neutral', 'Unknown authorization must not show success');
+      assert(computeMascotMood([], 0, { isAuthorized: true }) === 'neutral', 'Unknown data readiness must not show success');
+      assert(computeMascotMood([], 0, { isAuthorized: true, isDataReady: false, justCompleted: true }) === 'neutral', 'Incomplete data must not show celebration');
+      assert(computeMascotMood([], 12, { isAuthorized: true, isDataReady: true }) === 'concerned', 'Pending count alone is not overdue');
+      assert(computeMascotMood([], 1, { isAuthorized: true, isDataReady: true, overdueCount: 1 }) === 'sad', 'Explicit overdue evidence triggers attention');
+      assert(computeMascotMood([{ id: 'today', domain: 'appointment', targetSection: 'appointments', patientName: 'آزمایشی', title: 'امروز', subtitle: '', dueDate: '2026-11-27', urgency: 'today' }], 1, { isAuthorized: true, isDataReady: true }) === 'concerned', 'Today alone is not overdue');
 
       // Ensure NO in-app consumer passes framed={true} or oversized/tiny dimensions
       const consumers = [
