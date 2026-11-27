@@ -20,11 +20,20 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       const root = document.documentElement;
       root.style.setProperty('--safe-left', '7px');
       root.style.setProperty('--safe-right', '19px');
+      root.style.setProperty('--safe-bottom', '23px');
       root.setAttribute('data-platform-design', 'material');
     });
     const shell = page.locator('.app-shell-viewport');
     await expect(shell).toHaveCSS('padding-left', '7px');
     await expect(shell).toHaveCSS('padding-right', '19px');
+    await expect(shell).toHaveCSS('padding-bottom', '23px');
+    const dock = page.getByTestId('floating_bottom_dock');
+    await expect(dock).toBeVisible();
+    const dockBox = await dock.boundingBox();
+    const shellBox = await shell.boundingBox();
+    expect(dockBox).not.toBeNull();
+    expect(shellBox).not.toBeNull();
+    expect(dockBox!.y + dockBox!.height).toBeLessThanOrEqual(shellBox!.y + shellBox!.height - 23 + 1);
     for (const button of ['topbar_global_search_button', 'topbar_notifications_button', 'topbar_user_avatar_button', 'topbar_project_folder_button']) {
       const control = page.getByTestId(button);
       await expect(control).toBeVisible();
