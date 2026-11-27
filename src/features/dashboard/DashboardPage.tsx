@@ -38,6 +38,8 @@ export function DashboardPage() {
   const [fitsViewport, setFitsViewport] = useState(true);
 
   const hasStatusBanner = status.overall !== 'ready' || status.isStale;
+  // Urgent actions must never disappear just to fit a fixed-height viewport.
+  const priorityVisible = metrics.priorityAction.urgent || showPriorityAlert;
 
   useEffect(() => {
     const el = shellRef.current;
@@ -109,7 +111,7 @@ export function DashboardPage() {
       data-home-quick-actions="5"
       data-home-fits-viewport={fitsViewport ? 'true' : 'false'}
       data-compact-scroll-mode={fitsViewport ? 'false' : 'true'}
-      data-priority-visible={showPriorityAlert ? 'true' : 'false'}
+      data-priority-visible={priorityVisible ? 'true' : 'false'}
       data-data-source-mode={metrics.dataSourceMode}
     >
       <div className="sr-only" data-testid="global_benchmark_dashboard" />
@@ -144,15 +146,15 @@ export function DashboardPage() {
             financialDataComplete={status.financialDataComplete}
             isLoading={status.isLoading}
             hiddenUrgentAction={
-              !showPriorityAlert && metrics.priorityAction.urgent ? metrics.priorityAction : null
+              !priorityVisible && metrics.priorityAction.urgent ? metrics.priorityAction : null
             }
             onRefresh={refreshAll}
             onNavigate={navigate}
           />
 
-          {/* 4. One Important Alert — Shown on desktop Bento column or on mobile when viewport fits */}
-          {showPriorityAlert && (
-            <div className="hidden lg:block">
+          {/* Urgent action precedes shortcuts on mobile; nonurgent desktop placement is unchanged. */}
+          {priorityVisible && (
+            <div className={metrics.priorityAction.urgent ? 'block' : 'hidden lg:block'}>
               <PriorityAction
                 action={metrics.priorityAction}
                 revenue={metrics.revenue}
@@ -179,8 +181,8 @@ export function DashboardPage() {
             onNavigate={navigate}
           />
 
-          {/* Mobile Priority Alert Slot */}
-          {showPriorityAlert && (
+          {/* Nonurgent mobile alert may be omitted in compact viewport mode. */}
+          {priorityVisible && !metrics.priorityAction.urgent && (
             <div className="lg:hidden">
               <PriorityAction
                 action={metrics.priorityAction}
