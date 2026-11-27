@@ -121,6 +121,8 @@ export class UpdateCoordinator {
   private boundSwUpdateHandler: ((ev: Event) => void) | null = null;
   private boundStorageQueueHandler: (() => void) | null = null;
   private boundPageHideHandler: (() => void) | null = null;
+  private boundPageShowHandler: (() => void) | null = null;
+  private pageSuspended = false;
 
   constructor(config: UpdateCoordinatorConfig = {}) {
     this.config = config;
@@ -667,6 +669,7 @@ export class UpdateCoordinator {
     }
 
     const isAutomatic = source !== 'manual';
+    if (this.pageSuspended || (isAutomatic && !this.isDocumentVisible())) return this.getSnapshot();
     const bypassAutoDebounce = source === 'sw_event' || source === 'online' || source === 'startup';
     const minDebounce =
       this.config.minAutoDebounceMs ?? UPDATE_TIMING_POLICY.MIN_AUTO_CHECK_DEBOUNCE_MS;
@@ -678,7 +681,7 @@ export class UpdateCoordinator {
 
     const snap = await this.runSerializedOperation(async (gen) => {
       const execute = async (): Promise<UpdateSnapshot> => {
-        if (gen !== this.operationGeneration) return this.getSnapshot();
+        if (gen !== this.operationGeneration || this.pageSuspended || (isAutomatic && !this.isDocumentVisible())) return this.getSnapshot();
         const correlationId = createCorrelationId('chk');
         const startedAtMs = Date.now();
         this.telemetry.increment('checksTotal');
@@ -1294,6 +1297,7 @@ export class UpdateCoordinator {
   public start(): () => void {
     if (this.started) return () => this.stop();
     this.started = true;
+    this.pageSuspended = false;
 
     if (typeof BroadcastChannel !== 'undefined') {
       try {
@@ -1376,7 +1380,15 @@ export class UpdateCoordinator {
         void this.tryResumeDeferredActivation();
       };
       this.boundPageHideHandler = () => {
+        this.pageSuspended = true;
+        if (this.state === 'CHECKING') this.activeAbortController?.abort();
         this.broadcastBusyState('TAB_CLOSING');
+      };
+      this.boundPageShowHandler = () => {
+        if (!this.pageSuspended) return;
+        this.pageSuspended = false;
+        this.scheduleNextPoll();
+        void this.checkForUpdates('visibility').catch(() => {});
       };
 
       document.addEventListener('visibilitychange', this.boundVisibilityHandler);
@@ -1386,13 +1398,16 @@ export class UpdateCoordinator {
       window.addEventListener('minadental:sw-update-available', this.boundSwUpdateHandler);
       window.addEventListener('minadental-offline-queue-changed', this.boundStorageQueueHandler);
       window.addEventListener('pagehide', this.boundPageHideHandler);
+      window.addEventListener('pageshow', this.boundPageShowHandler);
     }
 
     // Post-boot verification first, then startup discovery check
-    void this.verifyPostBoot().finally(() => {
-      if (!this.started) return;
-      void this.checkForUpdates('startup');
+    void this.verifyPostBoot().then(() => {
+      if (!this.started || this.pageSuspended) return;
+      void this.checkForUpdates('startup').catch(() => {});
       this.scheduleNextPoll();
+    }).catch(() => {
+      if (this.started && !this.pageSuspended) this.scheduleNextPoll();
     });
 
     return () => this.stop();
@@ -1431,6 +1446,7 @@ export class UpdateCoordinator {
       if (this.boundPageHideHandler) {
         window.removeEventListener('pagehide', this.boundPageHideHandler);
       }
+      if (this.boundPageShowHandler) window.removeEventListener('pageshow', this.boundPageShowHandler);
     }
     if (this.broadcastChannel) {
       try {

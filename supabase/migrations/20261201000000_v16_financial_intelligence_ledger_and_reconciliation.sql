@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS public.service_charges (
   due_date date,
   posted_at timestamptz,
   version integer NOT NULL DEFAULT 1 CHECK (version >= 1),
-  created_by uuid NOT NULL DEFAULT (SELECT auth.uid()),
+  created_by uuid NOT NULL DEFAULT auth.uid(),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   FOREIGN KEY (tenant_id, branch_id) REFERENCES public.clinic_branches(tenant_id, id) ON DELETE RESTRICT
@@ -237,7 +237,7 @@ CREATE TABLE IF NOT EXISTS public.payment_allocations (
   allocation_kind text NOT NULL DEFAULT 'payment' CHECK (allocation_kind IN ('payment', 'credit_apply', 'reversal')),
   reversal_of_allocation_id uuid REFERENCES public.payment_allocations(id) ON DELETE RESTRICT,
   stable_key text NOT NULL,
-  created_by uuid NOT NULL DEFAULT (SELECT auth.uid()),
+  created_by uuid NOT NULL DEFAULT auth.uid(),
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id, branch_id, stable_key),
   FOREIGN KEY (tenant_id, branch_id) REFERENCES public.clinic_branches(tenant_id, id) ON DELETE RESTRICT
@@ -271,7 +271,7 @@ CREATE TABLE IF NOT EXISTS public.journal_entries (
   currency_unit text NOT NULL DEFAULT 'IRR_TOMAN' CHECK (currency_unit = 'IRR_TOMAN'),
   status text NOT NULL DEFAULT 'posted' CHECK (status IN ('posted', 'reversed')),
   memo text,
-  created_by uuid NOT NULL DEFAULT (SELECT auth.uid()),
+  created_by uuid NOT NULL DEFAULT auth.uid(),
   posted_at timestamptz NOT NULL DEFAULT now(),
   FOREIGN KEY (tenant_id, branch_id) REFERENCES public.clinic_branches(tenant_id, id) ON DELETE RESTRICT
 );
@@ -431,7 +431,7 @@ CREATE TABLE IF NOT EXISTS public.financial_audit_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id text NOT NULL,
   branch_id text NOT NULL,
-  actor_user_id uuid NOT NULL DEFAULT (SELECT auth.uid()),
+  actor_user_id uuid NOT NULL DEFAULT auth.uid(),
   actor_role text NOT NULL,
   operation text NOT NULL,
   entity_type text NOT NULL,

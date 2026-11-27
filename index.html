@@ -569,8 +569,10 @@
           navigator.serviceWorker
             .register('./sw.js', { scope: './', updateViaCache: 'none' })
             .then(function (reg) {
-              var lastSwUpdateCheckAt = 0;
+              // Registration itself checks for a new script; do not start a duplicate fetch on boot.
+              var lastSwUpdateCheckAt = Date.now();
               var checkSwRegistrationUpdate = function () {
+                if (document.visibilityState !== 'visible' || reg.installing) return;
                 var now = Date.now();
                 if (now - lastSwUpdateCheckAt < 15000) return;
                 lastSwUpdateCheckAt = now;
@@ -582,7 +584,6 @@
                 }
               };
 
-              checkSwRegistrationUpdate();
               document.addEventListener('visibilitychange', function () {
                 if (document.visibilityState === 'visible') {
                   checkSwRegistrationUpdate();
