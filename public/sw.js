@@ -640,6 +640,14 @@ self.addEventListener('fetch', (event) => {
     url.pathname.endsWith('build-manifest.json') ||
     url.pathname.endsWith('chunks.json')
   ) {
+    // The update client already uses no-store and owns its deadline, retry and
+    // validation. Let the browser complete that request directly instead of
+    // re-fetching a document-bound Request through a worker during warm reload.
+    // In particular WebKit can cancel the old document's intercepted fetch
+    // with an access-control error when the navigation changes.
+    if (request.cache === 'no-store') return;
+
+    // Retain network-only behavior for other metadata consumers.
     event.respondWith(
       fetchWithTimeout(request, { cache: 'no-store' }, NAVIGATION_TIMEOUT_MS).catch(
         () =>
