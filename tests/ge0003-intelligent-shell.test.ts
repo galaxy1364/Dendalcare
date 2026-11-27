@@ -38,6 +38,17 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0023A: shared design primitives consume semantic platform and theme tokens', () => {
+      const appearance = fs.readFileSync(path.join(ROOT, 'src/design-system/themes/appearance.ts'), 'utf8');
+      const surfaces = fs.readFileSync(path.join(ROOT, 'src/design-system/primitives/Surface.tsx'), 'utf8');
+      const layout = fs.readFileSync(path.join(ROOT, 'src/design-system/primitives/AdaptiveLayout.tsx'), 'utf8');
+      for (const token of ['--md-muted-surface', '--md-on-primary', '--md-on-critical', '--md-on-navy']) {
+        assert(appearance.includes(token) && surfaces.includes(token), 'Theme and surface must share ' + token);
+      }
+      assert(surfaces.includes('var(--radius-card,20px)') && surfaces.includes('var(--radius-btn,12px)'), 'Platform geometry is shared');
+      assert(surfaces.includes('min-h-[48px] min-w-[48px]') && surfaces.includes('focus-visible:outline-offset-2'), 'Shared controls retain accessible target and focus');
+      assert(layout.includes('<CardSurface') && layout.includes('<TouchButton') && layout.includes('grid min-w-0'), 'State and layout primitives reuse common surfaces without overflow');
+    }),
     await runCase('GE-0022A: reminder financial shortcuts never bypass ledger and sync requires server confirmation', () => {
       const page = fs.readFileSync(path.join(ROOT, 'src/components/sections/Reminders.tsx'), 'utf8');
       const engine = fs.readFileSync(path.join(ROOT, 'src/lib/smartReminderEngine.ts'), 'utf8');
