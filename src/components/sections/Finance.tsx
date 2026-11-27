@@ -46,26 +46,26 @@ type FinanceTab =
   | 'transactions';
 
 export function Finance() {
-  const transactionsRead = useRealtimeTable<FinanceTransaction>('finance_transactions');
+  const transactionsRead = useRealtimeTable<FinanceTransaction>('finance_transactions', undefined, null, { fetchAllPages: true });
   const { data: transactions, refresh: rt } = transactionsRead;
-  const patientsRead = useRealtimeTable<Patient>('patients');
+  const patientsRead = useRealtimeTable<Patient>('patients', undefined, null, { fetchAllPages: true });
   const { data: patients } = patientsRead;
-  const installmentsRead = useRealtimeTable<Installment>('installments');
+  const installmentsRead = useRealtimeTable<Installment>('installments', undefined, null, { fetchAllPages: true });
   const { data: installments, refresh: ri } = installmentsRead;
-  const checksRead = useRealtimeTable<Check>('checks');
+  const checksRead = useRealtimeTable<Check>('checks', undefined, null, { fetchAllPages: true });
   const { data: checks, refresh: rc } = checksRead;
-  const saftehRead = useRealtimeTable<Safteh>('safteh');
+  const saftehRead = useRealtimeTable<Safteh>('safteh', undefined, null, { fetchAllPages: true });
   const { data: safteh, refresh: rs } = saftehRead;
-  const treatmentsRead = useRealtimeTable<Treatment>('treatments');
+  const treatmentsRead = useRealtimeTable<Treatment>('treatments', undefined, null, { fetchAllPages: true });
   const { data: treatments } = treatmentsRead;
-  const paymentsRead = useRealtimeTable<Payment>('payments');
+  const paymentsRead = useRealtimeTable<Payment>('payments', undefined, null, { fetchAllPages: true });
   const { data: payments, refresh: rpay } = paymentsRead;
   const { data: staff } = useRealtimeTable<Staff>('staff');
-  const remindersRead = useRealtimeTable<Reminder>('reminders');
+  const remindersRead = useRealtimeTable<Reminder>('reminders', undefined, null, { fetchAllPages: true });
   const { data: reminders, refresh: rrem } = remindersRead;
 
-  const completeRead = (read: { status: string; loading: boolean; isStale: boolean; truncated: boolean }) =>
-    (read.status === 'ready' || read.status === 'empty') && !read.loading && !read.isStale && !read.truncated;
+  const completeRead = (read: { status: string; loading: boolean; isStale: boolean; truncated: boolean; serverComplete: boolean }) =>
+    (read.status === 'ready' || read.status === 'empty') && !read.loading && !read.isStale && !read.truncated && read.serverComplete;
   const receivablesReady = [patientsRead, treatmentsRead, paymentsRead, installmentsRead, checksRead, saftehRead, transactionsRead].every(completeRead);
   const remindersReady = receivablesReady && completeRead(remindersRead);
 
