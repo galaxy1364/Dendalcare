@@ -446,14 +446,14 @@ export function Patients() {
             onEdit={() => { setEditing(detailPatient); setDetailPatient(null); setFormOpen(true); }}
             onDelete={() => { setDeleteId(detailPatient.id); setDetailPatient(null); }}
             onOpenGallery={() => setGalleryOpen(true)}
-            onOpenPrint={() => setPrintOpen(true)}
+            onOpenPrint={() => { if (financialReady) setPrintOpen(true); }}
             onOpenConsent={() => setConsentOpen(true)}
           />
         )}
       </Sheet>
 
       <PatientGalleryModal open={galleryOpen} onClose={() => setGalleryOpen(false)} patient={detailPatient} />
-      <PrintInvoiceModal open={printOpen && canViewFinance} onClose={() => setPrintOpen(false)} patient={detailPatient} treatments={treatments.filter((t) => t.patient_id === detailPatient?.id)} />
+      <PrintInvoiceModal open={printOpen && canViewFinance && financialReady} onClose={() => setPrintOpen(false)} patient={detailPatient} treatments={treatments.filter((t) => t.patient_id === detailPatient?.id)} />
       <ConsentModal open={consentOpen} onClose={() => setConsentOpen(false)} patient={detailPatient} />
 
       <ConfirmDialog
