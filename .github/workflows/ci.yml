@@ -64,6 +64,17 @@ jobs:
       - name: Run release gate E2E (Chromium + WebKit)
         run: npm run test:e2e
 
+      - name: Preserve architecture visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-browser-screenshots
+          path: |
+            test-results/**/ge0024a-dark-focus.png
+            test-results/**/viewport-*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
   android_compile:
     name: Android native compile (no signing or publication)
     runs-on: ubuntu-24.04
@@ -86,14 +97,3 @@ jobs:
           gradle-version: '9.3.1'
       - name: Compile native Android sources
         run: gradle :app:compileDebugKotlin --no-daemon --stacktrace
-
-      - name: Preserve architecture visual evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: architecture-browser-screenshots
-          path: |
-            test-results/**/ge0024a-dark-focus.png
-            test-results/**/viewport-*.png
-          if-no-files-found: ignore
-          retention-days: 14
