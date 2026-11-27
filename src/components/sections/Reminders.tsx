@@ -127,6 +127,7 @@ export function Reminders() {
 
   const [rules, setRules] = useState<SmartReminderRules>(() => loadSmartReminderRules());
   const [scanningAll, setScanningAll] = useState(false);
+  const scanLock = useRef(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [zeroLossTick, setZeroLossTick] = useState(0);
 
@@ -242,6 +243,8 @@ export function Reminders() {
 
   // Sync Live Alerts into Supabase Reminders Table
   const handleSyncToDatabase = async () => {
+    if (scanLock.current) return;
+    scanLock.current = true;
     setScanningAll(true);
     setScanResult(null);
     try {
@@ -253,8 +256,10 @@ export function Reminders() {
           : 'تمامی هشدارهای زنده مطب از قبل در پایگاه داده یادآوری‌ها ثبت و همگام هستند.'
       );
     } catch {
-      setScanResult('خطا در همگام‌سازی خودکار یادآوری‌ها.');
+      refresh();
+      setScanResult('همه ثبت‌ها تأیید نشدند؛ پیش از تلاش مجدد، فهرست یادآوری‌ها را بررسی کنید.');
     } finally {
+      scanLock.current = false;
       setScanningAll(false);
     }
   };
