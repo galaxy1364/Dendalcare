@@ -12,6 +12,7 @@ type SheetProps = {
   subtitle?: string;
   icon?: ReactNode;
   color?: string;
+  layout?: 'form' | 'workspace';
   children: ReactNode;
 };
 
@@ -22,6 +23,7 @@ export function Sheet({
   subtitle,
   icon,
   color = '#3B82F6',
+  layout = 'form',
   children,
 }: SheetProps) {
   const sheetGuardId = useId();
@@ -72,7 +74,8 @@ export function Sheet({
         aria-modal="true"
         aria-labelledby={titleId}
         data-testid="ios27_registration_sheet"
-        className="ios27-sheet-surface relative w-full h-[100dvh] sm:h-[92dvh] max-w-2xl mx-auto flex flex-col bg-[#F4F5F9] rounded-none sm:rounded-[32px] shadow-2xl overflow-hidden animate-scale-in border-0 sm:border sm:border-white/80 safe-top safe-bottom"
+        data-sheet-layout={layout}
+        className={`ios27-sheet-surface relative w-full h-[100dvh] sm:h-[92dvh] mx-auto flex flex-col bg-[#F4F5F9] rounded-none sm:rounded-[32px] shadow-2xl overflow-hidden animate-scale-in border-0 sm:border sm:border-white/80 safe-top safe-bottom ${layout === 'workspace' ? 'max-w-7xl' : 'max-w-2xl'}`}
         style={{
           boxShadow: '0 -12px 48px rgba(15, 23, 42, 0.24), 0 20px 60px rgba(15, 23, 42, 0.28)',
           transform: swipeBackX < 0 ? `translateX(${swipeBackX}px)` : undefined,
@@ -182,7 +185,7 @@ export function Sheet({
           className="flex-1 overflow-y-auto p-3.5 sm:p-5 pb-24 safe-bottom desktop-scroll"
           style={{ paddingBottom: 'calc(6rem + var(--keyboard-inset-bottom, 0px))' }}
         >
-          <div className="max-w-2xl mx-auto space-y-3">{children}</div>
+          <div className={`${layout === 'workspace' ? 'max-w-none' : 'max-w-2xl'} mx-auto min-w-0 space-y-3`}>{children}</div>
         </div>
       </div>
     </div>,
