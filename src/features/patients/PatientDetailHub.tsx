@@ -90,7 +90,7 @@ export function PatientDetail({
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0" data-testid="patient_record_workspace">
       {allergySafety.assistiveFreeTextAlerts.length > 0 && (
         <div className="rounded-2xl border-2 border-red-500/50 bg-red-50/95 p-3 space-y-2 shadow-sm">
           <div className="flex items-center justify-between gap-2 text-red-700 font-bold text-xs flex-wrap">
@@ -111,14 +111,14 @@ export function PatientDetail({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
-        <button onClick={onOpenGallery} className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white text-[11px] font-bold shadow-md">
+      <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
+        <button onClick={onOpenGallery} className="min-h-[48px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white text-[11px] font-bold shadow-md">
           <Camera size={14} /> گالری و OPG
         </button>
-        <button onClick={onOpenPrint} className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-md">
+        <button onClick={onOpenPrint} className="min-h-[48px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-md">
           <Printer size={14} /> فاکتور بیمه
         </button>
-        <button onClick={onOpenConsent} className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-md">
+        <button onClick={onOpenConsent} className="min-h-[48px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-md">
           <FileSignature size={14} /> رضایت‌نامه A4
         </button>
       </div>
@@ -139,7 +139,7 @@ export function PatientDetail({
         }} />
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2" aria-label="خلاصه مالی پرونده">
         <div className="glass-card p-3 text-center">
           <p className="text-[10px] text-gray-400">هزینه کل</p>
           <p className="text-sm font-bold text-gray-700">{totalCost.toLocaleString('fa-IR')}</p>
@@ -154,17 +154,20 @@ export function PatientDetail({
         </div>
       </div>
 
-      <div className="flex gap-1 p-1 rounded-xl bg-gray-100/80 overflow-x-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(160px,220px)_minmax(0,1fr)] gap-3 items-start" data-testid="patient_record_adaptive_layout">
+      <nav aria-label="بخش‌های پرونده بیمار" className="flex gap-1 p-1 rounded-xl bg-[var(--md-bg)] overflow-x-auto lg:overflow-visible lg:flex-col min-w-0" data-testid="patient_record_navigation">
         {tabs.map((t) => {
           const Icon = t.icon;
           return (
             <button
               key={t.id}
+              type="button"
+              aria-current={tab === t.id ? 'true' : undefined}
+              data-testid={`patient_record_tab_${t.id}`}
               onClick={() => setTab(t.id)}
-              className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap ${
-                tab === t.id ? 'bg-white shadow-sm' : 'text-gray-400'
+              className={`min-h-[48px] shrink-0 flex items-center justify-center lg:justify-start gap-2 py-2 px-3 rounded-lg text-sm font-semibold whitespace-nowrap focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--md-primary)] ${
+                tab === t.id ? 'bg-[var(--md-surface)] text-[var(--md-primary)] shadow-sm' : 'text-[var(--md-text)]'
               }`}
-              style={tab === t.id ? { color: t.color } : undefined}
             >
               <Icon size={13} />
               {t.label}
@@ -176,8 +179,8 @@ export function PatientDetail({
             </button>
           );
         })}
-      </div>
-
+      </nav>
+      <section className="min-w-0 space-y-3" aria-label={tabs.find(item => item.id === tab)?.label} data-testid="patient_record_content">
       {tab === 'info' && <InfoTab patient={patient} />}
       {tab === 'chart' && <PalmerChart patientId={patient.id} />}
       {tab === 'treatments' && <TreatmentsTab patientId={patient.id} treatments={treatments} />}
@@ -189,7 +192,9 @@ export function PatientDetail({
       {tab === 'implants' && <ImplantsTab patientId={patient.id} implants={implants} />}
       {tab === 'reminders' && <RemindersTab patientId={patient.id} reminders={reminders} />}
 
-      <div className="flex gap-2 pt-2">
+      </section>
+      </div>
+      <div className="flex flex-wrap gap-2 pt-2">
         <Button variant="secondary" color="#10B981" onClick={onEdit} className="flex-1">
           ویرایش پرونده
         </Button>
