@@ -45,7 +45,7 @@ export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestRes
       assert(page.includes("canAccessRoute(effectiveRole, 'finance')") && page.includes("emitGlobalFocus({ section: 'finance', subTab })"), 'Financial shortcuts navigate only with permission');
       assert(page.includes('if (scanLock.current) return;') && page.includes('scanLock.current = false'), 'Prevent simultaneous scans in one view');
       assert(engine.includes('attempted.has(refTag)') && engine.includes('attempted.add(refTag)'), 'Same-run duplicate alerts must be skipped');
-      assert(engine.includes("getMutationOutcome(result) === 'confirmed' && result.serverConfirmed === true") && engine.includes('REMINDER_SYNC_UNCONFIRMED'), 'Queued or failed insert must never count as confirmed');
+      assert(engine.includes("getMutationOutcome(result) === 'confirmed' && 'serverConfirmed' in result && result.serverConfirmed === true") && engine.includes('REMINDER_SYNC_UNCONFIRMED'), 'Queued or failed insert must never count as confirmed');
     }),
     await runCase('GE-0021D: receivables dashboard withholds incomplete totals and prevents new actions', () => {
       const root = fs.readFileSync(path.join(ROOT, 'src/components/sections/Finance.tsx'), 'utf8');
