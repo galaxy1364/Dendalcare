@@ -134,7 +134,7 @@ export function DashboardPage() {
         data-testid="dashboard_adaptive_bento_grid"
       >
         <div className="flex flex-col gap-2 lg:col-span-5 xl:col-span-5 min-w-0">
-          {/* 1. Bright Colorful Smart Clinic Overview (with concise date, refresh control, & compact urgent fallback) */}
+          {/* 1. Clinic overview; urgent action is kept in its full standalone slot below. */}
           <SmartBrief
             brief={metrics.smartBrief}
             todayIso={metrics.todayIso}
@@ -145,9 +145,6 @@ export function DashboardPage() {
             monthLabel={metrics.monthLabel}
             financialDataComplete={status.financialDataComplete}
             isLoading={status.isLoading}
-            hiddenUrgentAction={
-              !priorityVisible && metrics.priorityAction.urgent ? metrics.priorityAction : null
-            }
             onRefresh={refreshAll}
             onNavigate={navigate}
           />
