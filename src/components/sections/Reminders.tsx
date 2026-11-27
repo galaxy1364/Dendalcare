@@ -33,7 +33,9 @@ import {
   reconcileZeroLossAlerts,
 } from '@/lib/deviceNotifications';
 import { HapticEngine, playTactileFeedback } from '@/lib/hapticsAudio';
-import { subscribeGlobalFocus } from '@/lib/globalFocus';
+import { subscribeGlobalFocus, emitGlobalFocus } from '@/lib/globalFocus';
+import { useClinicShell } from '@/app/AppProviders';
+import { canAccessRoute } from '@/services/permissions/accessControl';
 import { getMutationOutcome } from '@/lib/supabaseGuardian';
 
 const CATEGORIES = [
@@ -100,11 +102,13 @@ type ReminderTabMode =
   | 'stored';
 
 export function Reminders() {
+  const { effectiveRole } = useClinicShell();
+  const canOpenFinance = canAccessRoute(effectiveRole, 'finance');
   const { data: reminders, loading, refresh } = useRealtimeTable<Reminder>('reminders');
   const { data: patients } = useRealtimeTable<Patient>('patients');
-  const { data: checks, refresh: rChecks } = useRealtimeTable<CheckType>('checks');
+  const { data: checks } = useRealtimeTable<CheckType>('checks');
   const { data: safteh } = useRealtimeTable<Safteh>('safteh');
-  const { data: installments, refresh: rInst } = useRealtimeTable<Installment>('installments');
+  const { data: installments } = useRealtimeTable<Installment>('installments');
   const { data: labOrders, refresh: rLab } = useRealtimeTable<LabOrder>('lab_orders');
   const { data: implants, refresh: rImp } = useRealtimeTable<Implant>('implants');
   const { data: appointments } = useRealtimeTable<Appointment>('appointments');
@@ -281,34 +285,10 @@ export function Reminders() {
     rLab();
   };
 
-  const handleQuickClearCheck = async (checkId: string) => {
-    const res = await supabase.from('checks').update({ status: 'cleared' }).eq('id', checkId);
-    const outcome = getMutationOutcome(res);
-    if (outcome === 'confirmed') HapticEngine.success();
-    else if (outcome === 'queued_offline') HapticEngine.warning();
-    else HapticEngine.error();
-    rChecks();
-  };
-
-  const handleQuickPayInstallment = async (instId: string) => {
-    const inst = installments.find(i => i.id === instId);
-    if (!inst) return;
-    const newPaid = Number(inst.paid_amount) + Number(inst.monthly_amount);
-    const newMonths = inst.paid_months + 1;
-    const nextDue = new Date(inst.next_due_date || today);
-    nextDue.setMonth(nextDue.getMonth() + 1);
-    const isComplete = newPaid >= Number(inst.total_amount);
-    const res = await supabase.from('installments').update({
-      paid_amount: newPaid,
-      paid_months: newMonths,
-      next_due_date: isComplete ? null : nextDue.toISOString().slice(0, 10),
-      status: isComplete ? 'completed' : 'active',
-    }).eq('id', inst.id);
-    const outcome = getMutationOutcome(res);
-    if (outcome === 'confirmed') HapticEngine.success();
-    else if (outcome === 'queued_offline') HapticEngine.warning();
-    else HapticEngine.error();
-    rInst();
+  // Reminder cards navigate to finance; they never post or simulate a receipt.
+  const openFinancialReview = (subTab: 'checks' | 'installments') => {
+    if (!canOpenFinance) return;
+    emitGlobalFocus({ section: 'finance', subTab });
   };
 
   const handleSave = async (data: Partial<Reminder>): Promise<boolean> => {
@@ -791,21 +771,21 @@ export function Reminders() {
                   {/* Action Buttons Row */}
                   <div className="flex items-center gap-1.5 pt-1 flex-wrap">
                     {/* Quick Financial Actions */}
-                    {alert.domain === 'check' && alert.stageEntityId && (
+                    {canOpenFinance && alert.domain === 'check' && alert.stageEntityId && (
                       <button
-                        onClick={() => handleQuickClearCheck(alert.stageEntityId!)}
+                        onClick={() => openFinancialReview('checks')}
                         className="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95"
                       >
-                        <CheckCircle2 size={13} /> ثبت پاس شدن چک
+                        <CheckCircle2 size={13} /> بررسی و وصول چک در امور مالی
                       </button>
                     )}
 
-                    {alert.domain === 'installment' && alert.stageEntityId && (
+                    {canOpenFinance && alert.domain === 'installment' && alert.stageEntityId && (
                       <button
-                        onClick={() => handleQuickPayInstallment(alert.stageEntityId!)}
+                        onClick={() => openFinancialReview('installments')}
                         className="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95"
                       >
-                        <CheckCircle2 size={13} /> ثبت وصول این قسط
+                        <CheckCircle2 size={13} /> بررسی و وصول قسط در امور مالی
                       </button>
                     )}
 
