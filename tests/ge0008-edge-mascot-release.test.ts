@@ -45,7 +45,8 @@ export async function runAllGe0008EdgeMascotReleaseTests(): Promise<Ge0008TestRe
         setItem: (k: string, v: string) => { entries.set(k, v); },
       };
       const mockGlobals = {
-        window: {},
+        // Browser feature detection checks both window.Notification and the global binding.
+        window: { Notification: { permission: 'granted' } },
         localStorage: mockStorage,
         Notification: { permission: 'granted' },
         navigator: { serviceWorker: { getRegistration: async () => ({
