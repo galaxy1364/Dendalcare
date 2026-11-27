@@ -44,6 +44,10 @@
   --md-warning: #92510C;
   --md-success: #176B52;
   --md-border: #D8E2EA;
+  --md-muted-surface: #EEF3F7;
+  --md-on-primary: #FFFFFF;
+  --md-on-critical: #FFFFFF;
+  --md-on-navy: #FFFFFF;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-press: cubic-bezier(0.32, 0.72, 0, 1);
