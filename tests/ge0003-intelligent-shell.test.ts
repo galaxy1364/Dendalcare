@@ -38,6 +38,14 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0024G: historical installment progress queue entries remain available for reconciliation', () => {
+      const queue = fs.readFileSync(path.join(ROOT, 'src/lib/offlineQueue.ts'), 'utf8');
+      const start = queue.indexOf('// Historical installment progress writes');
+      const end = queue.indexOf('let res: any;', start);
+      const guard = queue.slice(start, end);
+      assert(start >= 0 && end > start && guard.includes("item.table === 'installments' && item.type === 'UPDATE'"), 'Legacy progress updates must be intercepted before execution');
+      assert(guard.includes("'paid_months', 'paid_amount', 'next_due_date'") && guard.includes("remainingQueue.push({ ...item, status: 'failed', error: 'MINA_INSTALLMENT_RECONCILIATION_REQUIRED' })") && guard.includes('continue;'), 'Preserve blocked drafts, never replay by ID');
+    }),
     await runCase('GE-0024E: offline and incomplete reads cannot become confirmed financial totals', () => {
       const hook = fs.readFileSync(path.join(ROOT, 'src/lib/useRealtimeTable.ts'), 'utf8');
       const finance = fs.readFileSync(path.join(ROOT, 'src/components/sections/Finance.tsx'), 'utf8');
