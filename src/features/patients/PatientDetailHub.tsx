@@ -119,7 +119,7 @@ export function PatientDetail({
         <button onClick={onOpenGallery} className="min-h-[48px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white text-[11px] font-bold shadow-md">
           <Camera size={14} /> گالری و OPG
         </button>
-        {canViewFinance && <button onClick={onOpenPrint} className="min-h-[48px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-md">
+        {canViewFinance && financialReady && <button onClick={onOpenPrint} className="min-h-[48px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-md">
           <Printer size={14} /> فاکتور بیمه
         </button>}
         <button onClick={onOpenConsent} className="min-h-[48px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-md">
@@ -188,10 +188,11 @@ export function PatientDetail({
       {tab === 'info' && <InfoTab patient={patient} />}
       {tab === 'chart' && <PalmerChart patientId={patient.id} />}
       {tab === 'treatments' && <TreatmentsTab patientId={patient.id} treatments={treatments} />}
-      {tab === 'payments' && <PaymentsTab patientId={patient.id} payments={payments} treatments={treatments} />}
-      {tab === 'installments' && <InstallmentsTab patientId={patient.id} installments={installments} />}
-      {tab === 'checks' && <ChecksTab patientId={patient.id} checks={checks} installments={installments} />}
-      {tab === 'safteh' && <SaftehTab patientId={patient.id} safteh={safteh} />}
+      {financialTabs.includes(tab) && !financialReady && <p role="status" className="rounded-xl border border-[var(--md-border)] bg-[var(--md-surface)] p-4 text-sm text-[var(--md-text)]">اطلاعات مالی کامل نیست؛ پس از همگام‌سازی مجدد بررسی کنید.</p>}
+      {financialReady && tab === 'payments' && <PaymentsTab patientId={patient.id} payments={payments} treatments={treatments} />}
+      {financialReady && tab === 'installments' && <InstallmentsTab patientId={patient.id} installments={installments} />}
+      {financialReady && tab === 'checks' && <ChecksTab patientId={patient.id} checks={checks} installments={installments} />}
+      {financialReady && tab === 'safteh' && <SaftehTab patientId={patient.id} safteh={safteh} />}
       {tab === 'lab' && <LabTab patientId={patient.id} labOrders={labOrders} />}
       {tab === 'implants' && <ImplantsTab patientId={patient.id} implants={implants} />}
       {tab === 'reminders' && <RemindersTab patientId={patient.id} reminders={reminders} />}
