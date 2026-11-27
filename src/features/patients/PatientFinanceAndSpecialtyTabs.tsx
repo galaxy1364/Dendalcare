@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Wallet, CreditCard, ScrollText, ArrowUpCircle, CalendarClock,
 } from 'lucide-react';
@@ -125,6 +125,9 @@ export function PaymentsTab({ patientId, payments, treatments }: { patientId: st
 export function InstallmentsTab({ patientId, installments }: { patientId: string; installments: Installment[] }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const collectionLock = useRef(false);
+  const [collecting, setCollecting] = useState(false);
+  const [collectionMessage, setCollectionMessage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [form, setForm] = useState({ total_amount: '', monthly_amount: '', total_months: '1', start_date: todayGregorian(), notes: '' });
 
@@ -160,30 +163,55 @@ export function InstallmentsTab({ patientId, installments }: { patientId: string
   };
 
   const payInstallment = async (inst: Installment) => {
-    const payRes = await postPatientPaymentCommand({
-      patientId,
-      amountInput: Number(inst.monthly_amount),
-      paymentMethod: 'installment',
-      businessDate: todayGregorian(),
-      description: `قسط ${inst.paid_months + 1}/${inst.total_months}`,
-      installmentId: inst.id,
-      idempotencyKey: `patient_inst_${inst.id}_${inst.paid_months + 1}`,
-    });
-    if (!payRes.ok && payRes.resolution !== 'queued') return;
-    const newPaid = Number(inst.paid_amount) + Number(inst.monthly_amount);
-    const newMonths = inst.paid_months + 1;
-    const nextDue = new Date(inst.next_due_date ?? new Date()); nextDue.setMonth(nextDue.getMonth() + 1);
-    const status = newMonths >= inst.total_months ? 'completed' : 'active';
-    await supabase.from('installments').update({
-      paid_amount: newPaid, paid_months: newMonths,
-      next_due_date: status === 'completed' ? null : nextDue.toISOString().slice(0, 10), status,
-    }).eq('id', inst.id);
+    if (collectionLock.current || inst.status !== 'active') return;
+    collectionLock.current = true;
+    setCollecting(true);
+    setCollectionMessage(null);
+    try {
+      const payRes = await postPatientPaymentCommand({
+        patientId: patientId,
+        amountInput: Number(inst.monthly_amount),
+        paymentMethod: 'installment',
+        businessDate: todayGregorian(),
+        description: `قسط ${inst.paid_months + 1}/${inst.total_months}`,
+        installmentId: inst.id,
+        idempotencyKey: `patient_inst_${inst.id}_${inst.paid_months + 1}`,
+      });
+      // Queued/unknown/rejected requests are not confirmed receipts.
+      if (!payRes.ok || payRes.resolution !== 'confirmed') {
+        setCollectionMessage(payRes.messageFa + ' وضعیت قسط تغییر نکرد؛ پیش از تلاش مجدد دریافت وجه را بررسی کنید.');
+        return;
+      }
+      const newPaid = Number(inst.paid_amount) + Number(inst.monthly_amount);
+      const newMonths = inst.paid_months + 1;
+      const nextDue = new Date(inst.next_due_date ?? new Date()); nextDue.setMonth(nextDue.getMonth() + 1);
+      const status = newMonths >= inst.total_months ? 'completed' : 'active';
+      // This remains a separate write; never describe partial completion as atomic.
+      const updated = await supabase.from('installments').update({
+        paid_amount: newPaid, paid_months: newMonths,
+        next_due_date: status === 'completed' ? null : nextDue.toISOString().slice(0, 10),
+        status: status,
+      }).eq('id', inst.id).eq('paid_months', inst.paid_months);
+      if (getMutationOutcome(updated) !== 'confirmed') {
+        setCollectionMessage('دریافت وجه تأیید شد، اما وضعیت قسط نیازمند تطبیق است. وجه را دوباره ثبت نکنید.');
+        
+        return;
+      }
+      
+      setCollectionMessage('دریافت وجه و به‌روزرسانی وضعیت قسط تأیید شد.');
+    } catch {
+      setCollectionMessage('نتیجه عملیات نامشخص است؛ پیش از ثبت مجدد، دفتر کل و وضعیت قسط را بررسی کنید.');
+    } finally {
+      collectionLock.current = false;
+      setCollecting(false);
+    }
   };
 
   const del = async (id: string) => { await supabase.from('installments').delete().eq('id', id); };
 
   return (
     <div className="space-y-3 animate-fade-in">
+      {collectionMessage && <p role="status" className="text-sm text-slate-700 dark:text-slate-200 p-2">{collectionMessage}</p>}
       <SectionHeader title="اقساط" count={installments.length} onAdd={() => setShowForm(true)} color="#3B82F6" icon={<CreditCard size={16} />} />
       <Sheet open={showForm} onClose={() => setShowForm(false)} title="تعریف پلن اقساطی جدید" icon={<CreditCard size={20} />} color="#3B82F6">
         <div className="space-y-4">
@@ -228,7 +256,7 @@ export function InstallmentsTab({ patientId, installments }: { patientId: string
               </div>
             )}
             {inst.status === 'active' && (
-              <Button color="#3B82F6" className="w-full" onClick={() => payInstallment(inst)}>ثبت پرداخت اتمیک قسط ({Number(inst.monthly_amount).toLocaleString('fa-IR')} ت)</Button>
+              <Button disabled={collecting} color="#3B82F6" className="w-full" onClick={() => payInstallment(inst)}>ثبت پرداخت قسط ({Number(inst.monthly_amount).toLocaleString('fa-IR')} ت)</Button>
             )}
           </div>
         );
