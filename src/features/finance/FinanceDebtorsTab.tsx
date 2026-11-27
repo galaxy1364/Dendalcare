@@ -10,6 +10,7 @@ import {
 import {
   supabase,
   type Check,
+  type FinanceTransaction,
   type Installment,
   type Patient,
   type Payment,
@@ -44,6 +45,9 @@ export function FinanceDebtorsTab({
   checks,
   safteh,
   reminders,
+  transactions,
+  receivablesReady,
+  remindersReady,
   searchQuery,
   onRefreshAll,
 }: {
@@ -54,6 +58,9 @@ export function FinanceDebtorsTab({
   checks: Check[];
   safteh: Safteh[];
   reminders: Reminder[];
+  transactions: FinanceTransaction[];
+  receivablesReady: boolean;
+  remindersReady: boolean;
   searchQuery: string;
   onRefreshAll: () => void;
 }) {
@@ -96,8 +103,8 @@ export function FinanceDebtorsTab({
   const summary = useMemo(() => computeClinicReceivablesSummary(patientLedgers, today), [patientLedgers, today]);
   const arPriorities = useMemo(() => prioritizeAccountsReceivable(patientLedgers).slice(0, 5), [patientLedgers]);
   const anomalies = useMemo(
-    () => detectFinancialAnomalies({ payments, finance: [], checks, treatments, referenceDateIso: today }),
-    [payments, checks, treatments, today]
+    () => detectFinancialAnomalies({ payments, finance: transactions, checks, treatments, referenceDateIso: today }),
+    [payments, transactions, checks, treatments, today]
   );
 
   const filteredLedgers = useMemo(() => {
@@ -128,6 +135,7 @@ export function FinanceDebtorsTab({
   }, [quickPayPatient, quickPayAmount, treatments]);
 
   const handleGenerateSmartReminders = async () => {
+    if (!remindersReady || syncingReminders) return;
     setSyncingReminders(true);
     setSyncResultMsg(null);
     let createdCount = 0;
@@ -234,7 +242,8 @@ export function FinanceDebtorsTab({
   };
 
   const handleQuickPaySubmit = async () => {
-    if (!quickPayPatient) return;
+    if (!quickPayPatient || savingQuickPay) return;
+    if (!receivablesReady) { setQuickPayError('اطلاعات مالی کامل و به‌روز نیست؛ ثبت وجه متوقف شد.'); return; }
     setQuickPayError(null);
     setQuickPayStatusMsg(null);
 
@@ -278,6 +287,8 @@ export function FinanceDebtorsTab({
 
   return (
     <div className="space-y-3 animate-fade-in">
+      {!receivablesReady && <div role="status" data-testid="finance_incomplete_reads" className="glass-card p-4 space-y-2"><p className="font-bold text-sm">اطلاعات مطالبات هنوز کامل و به‌روز نیست.</p><p className="text-xs">تا دریافت اطلاعات، مانده حساب و تحلیل مغایرت نمایش داده نمی‌شود.</p><button type="button" onClick={onRefreshAll} className="min-h-[48px] px-4 rounded-xl border border-teal-600 text-sm font-semibold">بررسی مجدد</button></div>}
+      {receivablesReady && <>
       <FinanceDebtorsOverview
         summary={summary}
         arPriorities={arPriorities}
@@ -287,6 +298,7 @@ export function FinanceDebtorsTab({
         leadDaysBefore={leadDaysBefore}
         onChangeLeadDays={setLeadDaysBefore}
         syncingReminders={syncingReminders}
+        remindersReady={remindersReady}
         syncResultMsg={syncResultMsg}
         onSyncReminders={handleGenerateSmartReminders}
       />
@@ -301,8 +313,10 @@ export function FinanceDebtorsTab({
         ].map((f) => (
           <button
             key={f.id}
+            type="button"
+            aria-pressed={filterMode === f.id}
             onClick={() => setFilterMode(f.id)}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-all haptic ${filterMode === f.id ? 'bg-slate-800 text-white shadow-sm' : 'bg-white/80 text-gray-600 border border-gray-200'}`}
+            className={`min-h-[44px] px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-all haptic ${filterMode === f.id ? 'bg-slate-800 text-white shadow-sm' : 'bg-white/80 text-gray-600 border border-gray-200'}`}
           >
             {f.label}
           </button>
@@ -314,7 +328,7 @@ export function FinanceDebtorsTab({
       )}
 
       {filteredLedgers.length === 0 ? (
-        <EmptyState icon={<CheckCircle2 size={28} />} title="موردی یافت نشد" subtitle="تمامی حساب‌های این بخش تسویه شده‌اند" color="#10B981" />
+        <EmptyState icon={<CheckCircle2 size={28} />} title="موردی یافت نشد" subtitle="در اطلاعات دریافت‌شده، موردی مطابق فیلتر فعلی یافت نشد." color="#10B981" />
       ) : (
         <div className="space-y-2.5 stagger">
           {filteredLedgers.map((item) => {
@@ -401,12 +415,13 @@ export function FinanceDebtorsTab({
         </div>
       )}
 
+      </>}
       <FinanceQuickPaySheet
         patient={quickPayPatient}
         amount={quickPayAmount}
         method={quickPayMethod}
         error={quickPayError}
-        saving={savingQuickPay}
+        saving={savingQuickPay || !receivablesReady}
         allocationPreview={allocationPreview}
         onAmountChange={(val) => {
           setQuickPayAmount(val);
