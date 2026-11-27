@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 
 export type MascotMood =
   | 'happy'
@@ -76,7 +76,7 @@ const MOOD_ACCESSIBLE_LABELS: Record<CanonicalMascotMood, string> = {
  * - Battery-efficient GPU-composited motion that respects prefers-reduced-motion & data-reduce-motion.
  */
 export const MascotTooth: React.FC<MascotToothProps> = ({
-  mood = 'happy',
+  mood = 'neutral',
   size = 48,
   className = '',
   showSparkles = true,
@@ -84,14 +84,17 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
   onClick,
 }) => {
   const [isReacting, setIsReacting] = useState(false);
+  const reactionTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(reactionTimer.current), []);
   const uid = useId().replace(/:/g, '');
   const canonicalMood = resolveCanonicalMood(mood);
   const accessibleLabel = MOOD_ACCESSIBLE_LABELS[canonicalMood];
 
   const handleInteract = () => {
     if (!interactive && !onClick) return;
+    window.clearTimeout(reactionTimer.current);
     setIsReacting(true);
-    window.setTimeout(() => setIsReacting(false), 420);
+    reactionTimer.current = window.setTimeout(() => setIsReacting(false), 650);
     if (onClick) onClick();
   };
 
@@ -106,18 +109,18 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
       shadow: '#1B0B47',
     },
     concerned: {
-      top: '#FEF9C3',
-      mid: '#C084FC',
+      top: '#FFF7ED',
+      mid: '#FDBA74',
       warm: '#F59E0B',
       base: '#38BDF8',
       cheek: '#FDBA74',
       shadow: '#1B0B47',
     },
     sad: {
-      top: '#EDE9FE',
-      mid: '#A78BFA',
-      warm: '#FB7185',
-      base: '#60A5FA',
+      top: '#FFF1F2',
+      mid: '#FB7185',
+      warm: '#E11D48',
+      base: '#FDA4AF',
       cheek: '#FDA4AF',
       shadow: '#1B0B47',
     },
@@ -160,13 +163,20 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
       data-testid="minadental_mascot_tooth"
       data-mascot-mood={canonicalMood}
       data-mascot-frameless="true"
-      role="img"
+      role={interactive || onClick ? 'button' : 'img'}
+      tabIndex={interactive || onClick ? 0 : undefined}
       aria-label={accessibleLabel}
       title={accessibleLabel}
-      onClick={handleInteract}
+      onClick={interactive || onClick ? handleInteract : undefined}
+      onKeyDown={interactive || onClick ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          handleInteract();
+        }
+      } : undefined}
       className={`relative inline-flex items-center justify-center bg-transparent select-none transition-transform duration-200 ease-out ${
-        interactive ? 'cursor-pointer hover:scale-108 active:scale-92' : ''
-      } ${isReacting ? 'mascot-touch-pop' : ''} ${className}`}
+        interactive || onClick ? 'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 rounded-full' : ''
+      } ${isReacting ? 'mascot-rig-reacting' : ''} ${className}`}
       style={{ width: size, height: size }}
     >
       {/* Purely Transparent Frameless 3D Sculpted Crystal Tooth SVG */}
@@ -174,7 +184,7 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
         viewBox="0 0 112 118"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className="w-full h-full overflow-visible mascot-breathe"
+        className="w-full h-full overflow-visible mascot-rig"
         aria-hidden="true"
       >
         <defs>
@@ -238,6 +248,10 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
           </g>
         )}
 
+        <g className="mascot-rig-body" data-mascot-part="body">
+        {/* Independent arms anchored beside the crown. */}
+        <path className="mascot-rig-arm mascot-rig-arm-left" data-mascot-part="left-arm" d="M 20,60 Q 11,63 8,72" stroke={palette.mid} strokeWidth="5.5" strokeLinecap="round" />
+        <path className="mascot-rig-arm mascot-rig-arm-right" data-mascot-part="right-arm" d="M 92,60 Q 101,63 104,72" stroke={palette.mid} strokeWidth="5.5" strokeLinecap="round" />
         {/* Sculpted 3D Anatomical Tooth Body */}
         <path
           d="M 33,15
@@ -306,11 +320,13 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
 
         {/* ===== EXPRESSIVE 3D EYES & EYEBROWS ===== */}
         {(canonicalMood === 'happy' || canonicalMood === 'celebrating') && (
-          <g className="mascot-eyes">
+          <g className="mascot-rig-face">
+            <g className="mascot-rig-brows" data-mascot-part="brows">
             <path d="M 33,39 Q 40,34.5 47,38" stroke="#1E1B4B" strokeWidth="2.6" strokeLinecap="round" fill="none" />
             <path d="M 65,38 Q 72,34.5 79,39" stroke="#1E1B4B" strokeWidth="2.6" strokeLinecap="round" fill="none" />
 
-            <circle cx="40.5" cy="52" r="8.8" fill="#FFFFFF" />
+            </g>
+            <g className="mascot-rig-eye mascot-rig-eye-left" data-mascot-part="left-eye"><circle cx="40.5" cy="52" r="8.8" fill="#FFFFFF" />
             <circle cx="41" cy="52" r="6.6" fill="#1E1B4B" />
             <circle cx="38.2" cy="49" r="2.6" fill="#FFFFFF" />
             <circle cx="43.8" cy="54.8" r="1.3" fill="#7DD3FC" />
@@ -318,7 +334,8 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
               <path d="M 41,47.5 L 42.2,50.5 L 45.2,51.7 L 42.2,52.9 L 41,55.9 L 39.8,52.9 L 36.8,51.7 L 39.8,50.5 Z" fill="#FDE047" />
             )}
 
-            <circle cx="71.5" cy="52" r="8.8" fill="#FFFFFF" />
+            </g>
+            <g className="mascot-rig-eye mascot-rig-eye-right" data-mascot-part="right-eye"><circle cx="71.5" cy="52" r="8.8" fill="#FFFFFF" />
             <circle cx="71" cy="52" r="6.6" fill="#1E1B4B" />
             <circle cx="68.2" cy="49" r="2.6" fill="#FFFFFF" />
             <circle cx="73.8" cy="54.8" r="1.3" fill="#7DD3FC" />
@@ -326,79 +343,102 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
               <path d="M 71,47.5 L 72.2,50.5 L 75.2,51.7 L 72.2,52.9 L 71,55.9 L 69.8,52.9 L 66.8,51.7 L 69.8,50.5 Z" fill="#FDE047" />
             )}
           </g>
+            
+          </g>
         )}
 
         {canonicalMood === 'concerned' && (
-          <g className="mascot-eyes">
+          <g className="mascot-rig-face">
+            <g className="mascot-rig-brows" data-mascot-part="brows">
             {/* Gently Tilted Attentive Eyebrows */}
             <path d="M 33,40 Q 40,38.5 47,36.5" stroke="#1E1B4B" strokeWidth="2.6" strokeLinecap="round" fill="none" />
             <path d="M 79,40 Q 72,38.5 65,36.5" stroke="#1E1B4B" strokeWidth="2.6" strokeLinecap="round" fill="none" />
 
-            <circle cx="40.5" cy="52.5" r="8.5" fill="#FFFFFF" />
+            </g>
+            <g className="mascot-rig-eye mascot-rig-eye-left" data-mascot-part="left-eye"><circle cx="40.5" cy="52.5" r="8.5" fill="#FFFFFF" />
             <circle cx="41.5" cy="52.5" r="6.2" fill="#1E1B4B" />
             <circle cx="38.8" cy="49.8" r="2.5" fill="#FFFFFF" />
             <circle cx="44" cy="55" r="1.2" fill="#FDE68A" />
 
-            <circle cx="71.5" cy="52.5" r="8.5" fill="#FFFFFF" />
+            </g>
+            <g className="mascot-rig-eye mascot-rig-eye-right" data-mascot-part="right-eye"><circle cx="71.5" cy="52.5" r="8.5" fill="#FFFFFF" />
             <circle cx="70.5" cy="52.5" r="6.2" fill="#1E1B4B" />
             <circle cx="68" cy="49.8" r="2.5" fill="#FFFFFF" />
             <circle cx="73.2" cy="55" r="1.2" fill="#FDE68A" />
           </g>
+            
+          </g>
         )}
 
         {canonicalMood === 'sad' && (
-          <g className="mascot-eyes">
+          <g className="mascot-rig-face">
+            <g className="mascot-rig-brows" data-mascot-part="brows">
             <path d="M 33,42 Q 39.5,39.5 47,36" stroke="#1E1B4B" strokeWidth="2.7" strokeLinecap="round" fill="none" />
             <path d="M 79,42 Q 72.5,39.5 65,36" stroke="#1E1B4B" strokeWidth="2.7" strokeLinecap="round" fill="none" />
 
-            <circle cx="40.5" cy="53" r="8.4" fill="#FFFFFF" />
+            </g>
+            <g className="mascot-rig-eye mascot-rig-eye-left" data-mascot-part="left-eye"><circle cx="40.5" cy="53" r="8.4" fill="#FFFFFF" />
             <circle cx="41" cy="53.6" r="6.1" fill="#1E1B4B" />
             <circle cx="38.5" cy="50.8" r="2.6" fill="#FFFFFF" />
             <circle cx="43.5" cy="56.2" r="1.2" fill="#BAE6FD" />
 
-            <circle cx="71.5" cy="53" r="8.4" fill="#FFFFFF" />
+            </g>
+            <g className="mascot-rig-eye mascot-rig-eye-right" data-mascot-part="right-eye"><circle cx="71.5" cy="53" r="8.4" fill="#FFFFFF" />
             <circle cx="71" cy="53.6" r="6.1" fill="#1E1B4B" />
             <circle cx="68.5" cy="50.8" r="2.6" fill="#FFFFFF" />
             <circle cx="73.5" cy="56.2" r="1.2" fill="#BAE6FD" />
 
+            </g>
             {/* Crystal Teardrop */}
             <path
+              className="mascot-rig-tear" data-mascot-part="tear"
               d="M 81,61 C 81,61 86.5,68.5 82.6,73 C 79.4,75.8 75.5,72.4 77.9,67 Z"
               fill="#38BDF8"
               stroke="#FFFFFF"
               strokeWidth="1.2"
             />
+          
           </g>
         )}
 
         {canonicalMood === 'thinking' && (
-          <g className="mascot-eyes">
+          <g className="mascot-rig-face">
+            <g className="mascot-rig-brows" data-mascot-part="brows">
             <path d="M 33,38.5 Q 40,35.5 47,37.5" stroke="#1E1B4B" strokeWidth="2.5" strokeLinecap="round" fill="none" />
             <path d="M 65,36.5 Q 72,33.5 79,37" stroke="#1E1B4B" strokeWidth="2.5" strokeLinecap="round" fill="none" />
 
             {/* Upward-Right Focused Thinking Gaze */}
-            <circle cx="40.5" cy="52" r="8.5" fill="#FFFFFF" />
+            </g>
+            <g className="mascot-rig-eye mascot-rig-eye-left" data-mascot-part="left-eye"><circle cx="40.5" cy="52" r="8.5" fill="#FFFFFF" />
             <circle cx="42.5" cy="50" r="6.1" fill="#1E1B4B" />
             <circle cx="40.2" cy="47.8" r="2.4" fill="#FFFFFF" />
 
-            <circle cx="71.5" cy="52" r="8.5" fill="#FFFFFF" />
+            </g>
+            <g className="mascot-rig-eye mascot-rig-eye-right" data-mascot-part="right-eye"><circle cx="71.5" cy="52" r="8.5" fill="#FFFFFF" />
             <circle cx="73.5" cy="50" r="6.1" fill="#1E1B4B" />
             <circle cx="71.2" cy="47.8" r="2.4" fill="#FFFFFF" />
+          </g>
+            
           </g>
         )}
 
         {canonicalMood === 'neutral' && (
-          <g className="mascot-eyes">
+          <g className="mascot-rig-face">
+            <g className="mascot-rig-brows" data-mascot-part="brows">
             <path d="M 34,39 Q 40.5,38 47,39" stroke="#1E1B4B" strokeWidth="2.4" strokeLinecap="round" fill="none" />
             <path d="M 65,39 Q 71.5,38 78,39" stroke="#1E1B4B" strokeWidth="2.4" strokeLinecap="round" fill="none" />
 
-            <circle cx="40.5" cy="52" r="8.2" fill="#FFFFFF" />
+            </g>
+            <g className="mascot-rig-eye mascot-rig-eye-left" data-mascot-part="left-eye"><circle cx="40.5" cy="52" r="8.2" fill="#FFFFFF" />
             <circle cx="40.8" cy="52" r="5.9" fill="#1E1B4B" />
             <circle cx="38.4" cy="49.4" r="2.3" fill="#FFFFFF" />
 
-            <circle cx="71.5" cy="52" r="8.2" fill="#FFFFFF" />
+            </g>
+            <g className="mascot-rig-eye mascot-rig-eye-right" data-mascot-part="right-eye"><circle cx="71.5" cy="52" r="8.2" fill="#FFFFFF" />
             <circle cx="71.2" cy="52" r="5.9" fill="#1E1B4B" />
             <circle cx="68.8" cy="49.4" r="2.3" fill="#FFFFFF" />
+          </g>
+            
           </g>
         )}
 
@@ -411,6 +451,7 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
           </g>
         )}
 
+        <g className="mascot-rig-mouth" data-mascot-part="mouth">
         {/* ===== EXPRESSIVE MOUTH ===== */}
         {canonicalMood === 'happy' && (
           <path d="M 47,63.5 Q 56,73 65,63.5" fill="none" stroke="#1E1B4B" strokeWidth="3.3" strokeLinecap="round" />
@@ -443,6 +484,11 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
           <circle cx="56" cy="65.5" r="2.8" fill="#1E293B" />
         )}
 
+        </g>
+        {canonicalMood === 'concerned' && (
+          <path className="mascot-rig-sweat" data-mascot-part="sweat" d="M 92,35 Q 100,45 95,49 Q 89,52 89,46 Z" fill="#38BDF8" stroke="#FFFFFF" strokeWidth="1.5" />
+        )}
+        </g>
         {/* Subtle Luminous Sparkles (Celebration & Happy Accent) */}
         {showSparkles && (canonicalMood === 'happy' || canonicalMood === 'celebrating') && (
           <g className="mascot-sparkle">
