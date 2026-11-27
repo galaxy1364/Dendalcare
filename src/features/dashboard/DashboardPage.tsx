@@ -15,7 +15,7 @@ const HYSTERESIS_PX = 14;
  * 2. Optional Status Banner (only on non-ready/stale/partial/locked_offline/migration_required)
  * 3. Bright Colorful Smart Clinic Overview Card (includes Jalali date, 1-tap refresh, & compact urgent pill fallback)
  * 4. 5 Quick Actions Row
- * 5. 4 Curved QBankTile Favorite Cards
+ * 5. 8 favorite services, 4 per horizontal page
  * 6. 1 Priority Alert — controlled by hysteresis-stabilized ResizeObserver (zero oscillation loop)
  */
 export function DashboardPage() {
@@ -107,7 +107,7 @@ export function DashboardPage() {
       ref={shellRef}
       className="no-scroll-home-shell pb-1 animate-fade-in-up"
       data-testid="no_scroll_home_viewport"
-      data-home-cap-services="4"
+      data-home-cap-services="8"
       data-home-quick-actions="5"
       data-home-fits-viewport={fitsViewport ? 'true' : 'false'}
       data-compact-scroll-mode={fitsViewport ? 'false' : 'true'}
@@ -165,8 +165,9 @@ export function DashboardPage() {
           {/* 2. Five Quick Actions Row */}
           <QuickActionsRow userRole={userRole} onNavigate={navigate} />
 
-          {/* 3. Four Favorite Curved QBank Modules + All Services Route Trigger */}
+          {/* 3. Eight Favorite QBank Modules + All Services Route Trigger */}
           <FavoriteModules
+            userRole={userRole}
             selectedServices={selectedServices}
             serviceValues={metrics.serviceValues}
             draggingIndex={draggingIndex}
