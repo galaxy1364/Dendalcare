@@ -473,6 +473,27 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       }));
       expect(rtlAndOverflow.dir).toBe('rtl');
       expect(rtlAndOverflow.noOverflow).toBe(true);
+      const stages = journeyCard.getByTestId('clinical_journey_stepper');
+      await expect(stages.locator('ol > li')).toHaveCount(9);
+      const layout = await stages.locator('ol').evaluate(el => {
+        const rects = Array.from(el.children).map(c => c.getBoundingClientRect());
+        return { rtl: rects[0].left > rects[8].left, sameRow: rects.every(r => Math.abs(r.top - rects[0].top) < 1), minWidth: Math.min(...rects.map(r => r.width)) };
+      });
+      expect(layout.rtl && layout.sameRow && layout.minWidth >= 80).toBe(true);
+      const reception = stages.getByTestId('clinical_stage_reception');
+      const before = await reception.getAttribute('data-stage-state');
+      await reception.click();
+      await expect(stages.getByText('گام ۱ از ۲: بررسی اطلاعات')).toBeVisible();
+      await expect(stages.getByTestId('clinical_stage_confirm')).toHaveCount(0);
+      await stages.getByTestId('clinical_stage_review').click();
+      await expect(stages.getByText('گام ۲ از ۲: تأیید ادامه')).toBeVisible();
+      await expect(reception).toHaveAttribute('data-stage-state', before!);
+      await stages.getByRole('button', { name: 'انصراف' }).click();
+      await expect(stages.getByTestId('clinical_stage_confirm')).toHaveCount(0);
+      await reception.click();
+      await stages.getByTestId('clinical_stage_review').click();
+      await stages.getByTestId('clinical_stage_confirm').click();
+      await expect(page.getByTestId('patient_detail_clinical_journey').getByTestId('clinical_journey_stepper')).toBeVisible();
     } finally {
       await context.close();
     }
@@ -606,7 +627,7 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       await expect(page.getByTestId('v15_allergy_status_badge')).toContainText('بررسی نشده');
 
       // 2) Switch to Odontogram Chart tab and verify ISO 3950 FDI teeth + ambiguous legacy banner
-      await page.getByRole('button', { name: 'چارت' }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'چارت', exact: true }).click();
       const odontogram = page.getByTestId('odontogram_v15_workspace');
       await expect(odontogram).toBeVisible();
       await expect(page.getByTestId('odontogram_ambiguous_reconciliation_banner')).toBeVisible();

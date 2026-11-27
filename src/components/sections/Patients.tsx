@@ -23,7 +23,8 @@ import { ContextMenuTrigger } from '@/components/ui/ContextMenu';
 import { getRuntimeAuthStatus, getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
 import { resolveEffectiveRole } from '@/services/permissions/accessControl';
 import { loadActiveUser } from '@/lib/cloudSyncEngine';
-import { computePatientClinicalJourney } from '@/features/clinical-journey/patientJourney';
+import { computePatientClinicalJourney, type ClinicalJourneyStageId } from '@/features/clinical-journey/patientJourney';
+import { ClinicalJourneyStepper } from '@/features/clinical-journey/ClinicalJourneyStepper';
 import {
   assessPatientAllergySafety,
   archiveOrDeletePatientCommand,
@@ -50,6 +51,7 @@ export function Patients() {
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [detailPatient, setDetailPatient] = useState<Patient | null>(null);
+  const [detailStage, setDetailStage] = useState<ClinicalJourneyStageId | null>(null);
   const [editing, setEditing] = useState<Patient | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -289,7 +291,7 @@ export function Patients() {
                 title={`${patient.first_name} ${patient.last_name}`}
                 testId={`patient_context_${patient.id}`}
                 items={[
-                  { id: 'open_detail', label: 'مشاهده پرونده کامل', icon: <FileText size={15} />, onSelect: () => setDetailPatient(patient) },
+                  { id: 'open_detail', label: 'مشاهده پرونده کامل', icon: <FileText size={15} />, onSelect: () => { setDetailStage(null); setDetailPatient(patient); } },
                   { id: 'edit_patient', label: 'ویرایش مشخصات بیمار', icon: <Users size={15} />, onSelect: () => { setEditing(patient); setFormOpen(true); } },
                   { id: 'patient_finance', label: 'حساب مالی و اقساط', icon: <Wallet size={15} />, onSelect: () => emitGlobalFocus({ section: 'finance', query: `${patient.first_name} ${patient.last_name}` }) },
                   { id: 'delete_patient', label: 'آرشیو / حذف حفاظت‌شده پرونده', destructive: true, icon: <Trash2 size={15} />, onSelect: () => setDeleteId(patient.id) },
@@ -297,7 +299,7 @@ export function Patients() {
               >
                 <div className="glass-card p-3.5 transition-all">
                   <div className="flex items-start justify-between gap-2.5">
-                    <div onClick={() => setDetailPatient(patient)} className="flex items-start gap-2.5 flex-1 min-w-0 cursor-pointer">
+                    <div onClick={() => { setDetailStage(null); setDetailPatient(patient); }} className="flex items-start gap-2.5 flex-1 min-w-0 cursor-pointer">
                       <div
                         className="w-11 h-11 rounded-2xl flex flex-col items-center justify-center text-white font-black text-sm shrink-0 shadow-sm"
                         style={{ background: patient.gender === 'female' ? 'linear-gradient(135deg,#EC4899,#DB2777)' : 'linear-gradient(135deg,#10B981,#059669)' }}
@@ -335,7 +337,7 @@ export function Patients() {
                         <button onClick={() => setExpandedCardId(isExpanded ? null : patient.id)} className="text-[10px] font-extrabold text-purple-600 bg-purple-50 hover:bg-purple-100 px-2 py-0.5 rounded-lg">
                           {isExpanded ? 'بستن ریز پرونده ▲' : 'ریز روند و دندان ▼'}
                         </button>
-                        <button onClick={() => setDetailPatient(patient)} className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg">
+                        <button onClick={() => { setDetailStage(null); setDetailPatient(patient); }} className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg">
                           پرونده کامل ←
                         </button>
                       </div>
@@ -344,8 +346,8 @@ export function Patients() {
 
                   <div className="mt-2.5 pt-2 border-t border-gray-100 space-y-2" data-testid={`patient_clinical_journey_${patient.id}`}>
                     <div className="flex items-center justify-between gap-2 text-[10px] flex-wrap">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg shrink-0">
+                      <div className="flex items-center flex-wrap gap-1.5 min-w-0">
+                        <span className="font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg break-words">
                           مسیر بالینی: {clinicalJourney.currentStageLabelFa} ({clinicalJourney.progressPercent.toLocaleString('fa-IR')}٪)
                         </span>
                         {clinicalJourney.longitudinalHistory.historicalCompletedTreatmentsCount > 0 && (
@@ -354,31 +356,18 @@ export function Patients() {
                           </span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => emitGlobalFocus({ section: clinicalJourney.nextActionRoute as any, query: `${patient.first_name} ${patient.last_name}`, recordId: patient.id })}
-                        className="text-[9.5px] font-extrabold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-2 py-0.5 rounded-lg shrink-0"
-                      >
-                        گام بعدی: {clinicalJourney.nextActionLabelFa} ←
-                      </button>
+                      <span className="text-xs font-bold text-sky-800 dark:text-sky-300 break-words">
+                        گام بعدی: {clinicalJourney.nextActionLabelFa}
+                      </span>
                     </div>
-
-                    <div className="grid grid-cols-9 gap-1">
-                      {clinicalJourney.stages.map((st) => {
-                        const isDone = st.state === 'completed';
-                        const isActive = st.state === 'current' || st.state === 'attention';
-                        return (
-                          <div
-                            key={st.id}
-                            onClick={() => setDetailPatient(patient)}
-                            title={`${st.labelFa} — ${st.detailFa}`}
-                            className={`cursor-pointer rounded-lg px-1 py-1 text-center transition-all border ${isActive ? 'bg-emerald-50 border-emerald-500 text-emerald-800' : isDone ? 'bg-emerald-50/50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-transparent text-slate-400'}`}
-                          >
-                            <div className="text-[8.5px] font-extrabold truncate">{st.shortLabelFa}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <ClinicalJourneyStepper journey={clinicalJourney} onContinue={(stage) => {
+                      if (['appointment', 'check_in', 'waiting'].includes(stage.id)) {
+                        emitGlobalFocus({ section: 'appointments', query: `${patient.first_name} ${patient.last_name}`, recordId: patient.id });
+                      } else {
+                        setDetailStage(stage.id);
+                        setDetailPatient(patient);
+                      }
+                    }} />
                   </div>
 
                   {isExpanded && (
@@ -424,6 +413,11 @@ export function Patients() {
         {detailPatient && (
           <PatientDetail
             patient={detailPatient}
+            initialStage={detailStage}
+            onOpenAppointments={() => {
+              emitGlobalFocus({ section: 'appointments', query: `${detailPatient.first_name} ${detailPatient.last_name}`, recordId: detailPatient.id });
+              setDetailPatient(null);
+            }}
             appointments={appointments.filter((a) => a.patient_id === detailPatient.id)}
             treatments={treatments.filter((t) => t.patient_id === detailPatient.id)}
             payments={payments.filter((p) => p.patient_id === detailPatient.id)}

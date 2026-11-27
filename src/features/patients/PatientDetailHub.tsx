@@ -10,7 +10,8 @@ import type {
 } from '@/lib/supabase';
 import { Button } from '@/components/ui/Form';
 import { PalmerChart } from '@/components/PalmerChart';
-import { computePatientClinicalJourney } from '@/features/clinical-journey/patientJourney';
+import { computePatientClinicalJourney, type ClinicalJourneyStageId } from '@/features/clinical-journey/patientJourney';
+import { ClinicalJourneyStepper } from '@/features/clinical-journey/ClinicalJourneyStepper';
 import { assessPatientAllergySafety } from '@/features/clinical-record/clinicalRecordService';
 import { computePatientFinancialLedger } from '@/features/finance/financialLedgerEngine';
 import { InfoTab, TreatmentsTab } from './PatientClinicalTabs';
@@ -31,9 +32,14 @@ export type PatientTab =
   | 'implants'
   | 'reminders';
 
+const stageTabs: Partial<Record<ClinicalJourneyStageId, PatientTab>> = {
+  reception: 'info', examination: 'chart', treatment_planning: 'treatments',
+  treatment_execution: 'treatments', billing: 'payments', follow_up: 'reminders',
+};
+
 export function PatientDetail({
   patient, appointments, treatments, payments, labOrders, implants, reminders, installments, checks, safteh,
-  onEdit, onDelete, onOpenGallery, onOpenPrint, onOpenConsent,
+  onEdit, onDelete, onOpenGallery, onOpenPrint, onOpenConsent, initialStage, onOpenAppointments,
 }: {
   patient: Patient;
   appointments: Appointment[];
@@ -45,13 +51,15 @@ export function PatientDetail({
   installments: Installment[];
   checks: CheckType[];
   safteh: Safteh[];
+  initialStage?: ClinicalJourneyStageId | null;
+  onOpenAppointments?: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onOpenGallery: () => void;
   onOpenPrint: () => void;
   onOpenConsent: () => void;
 }) {
-  const [tab, setTab] = useState<PatientTab>('info');
+  const [tab, setTab] = useState<PatientTab>(() => initialStage ? stageTabs[initialStage] ?? 'info' : 'info');
   const ledger = computePatientFinancialLedger({
     patient,
     treatments,
@@ -124,23 +132,11 @@ export function PatientDetail({
             گام بعدی: {clinicalJourney.nextActionLabelFa}
           </span>
         </div>
-        <div className="grid grid-cols-3 sm:grid-cols-9 gap-1">
-          {clinicalJourney.stages.map((st) => (
-            <div
-              key={st.id}
-              className={`rounded-xl p-1.5 text-center border ${
-                st.state === 'current' || st.state === 'attention'
-                  ? 'bg-emerald-50 border-emerald-500 text-emerald-800'
-                  : st.state === 'completed'
-                  ? 'bg-emerald-50/50 border-emerald-200 text-emerald-700'
-                  : 'bg-slate-50 border-transparent text-slate-400'
-              }`}
-            >
-              <div className="text-[9.5px] font-extrabold truncate">{st.shortLabelFa}</div>
-              <div className="text-[8px] opacity-80 truncate">{st.detailFa}</div>
-            </div>
-          ))}
-        </div>
+        <ClinicalJourneyStepper journey={clinicalJourney} onContinue={(stage) => {
+          const target = stageTabs[stage.id];
+          if (target) setTab(target);
+          else onOpenAppointments?.();
+        }} />
       </div>
 
       <div className="grid grid-cols-3 gap-2">
