@@ -153,6 +153,18 @@ export async function processOfflineQueue(client: any = supabase): Promise<{
       continue;
     }
 
+    // Historical installment progress writes may have lost their original CAS
+    // predicate when queued. Do not guess the expected month or replay by ID.
+    if (item.table === 'installments' && item.type === 'UPDATE' &&
+        ['paid_months', 'paid_amount', 'next_due_date'].some(key =>
+          Object.prototype.hasOwnProperty.call(item.payload ?? {}, key))) {
+      failed++;
+      blocked++;
+      errors.push('installments:UPDATE - MINA_INSTALLMENT_RECONCILIATION_REQUIRED');
+      remainingQueue.push({ ...item, status: 'failed', error: 'MINA_INSTALLMENT_RECONCILIATION_REQUIRED' });
+      continue;
+    }
+
     try {
       let res: any;
       if (item.table === 'clinic_settings' && item.payload && typeof item.payload === 'object') {
