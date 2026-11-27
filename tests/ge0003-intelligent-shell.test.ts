@@ -38,6 +38,16 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0021A: financial directory and record summaries use shared ledger and reject incomplete reads', () => {
+      const list = fs.readFileSync(path.join(ROOT, 'src/components/sections/Patients.tsx'), 'utf8');
+      const detail = fs.readFileSync(path.join(ROOT, 'src/features/patients/PatientDetailHub.tsx'), 'utf8');
+      assert(list.includes('computePatientFinancialLedger({ patient, treatments, payments, installments, checks, safteh })'), 'Directory must reuse ledger');
+      assert(!list.includes('balance = totalCost - totalPaid'), 'No competing raw balance arithmetic');
+      assert(list.includes("canAccessRoute(effectiveRole, 'finance')") && list.includes('!read.isStale && !read.truncated'), 'Role and freshness gates');
+      assert(list.includes('if (!financialReady) return;') && list.includes('مانده حساب نامشخص'), 'Partial or unauthorized financial export and false zero must be prevented');
+      assert(detail.includes('canViewFinance || !financialTabs.includes(t.id)') && detail.includes('!canViewFinance && financialTabs.includes(requestedTab)'), 'Denied financial tabs must not render, including selected tab after role change');
+      assert(detail.includes('canViewFinance && (financialReady ?') && detail.includes('اطلاعات مالی کامل و به‌روز در دسترس نیست.'), 'Unknown financial summary must not render as zero');
+    }),
     await runCase('GE-0020C: explicit file references and visible duplicate identity checks', () => {
       const record = { id: 'synthetic-1', first_name: 'آزمایشی', last_name: 'الف', phone: null, national_id: '۰۰۱۲۳۴۵۶۷۸', notes: '[پرونده: ۴۲۱۷]', insurance_number: '999' };
       const prepared = preparePatientFileNotes('4217', 'یادداشت');
