@@ -182,11 +182,11 @@ export function AppShell() {
             onTouchCancel={() => {
               edgeSwipeRef.current = cancelRtlEdgeBackSwipe(edgeSwipeRef.current);
             }}
-            className={`app-shell-main px-2 sm:px-3 md:px-5 xl:px-7 desktop-scroll focus:outline-none ${
+            className={`app-shell-main shell-content-gutter desktop-scroll focus:outline-none ${
               activeRoute === 'dashboard' ? 'main-no-scroll-home py-1' : 'py-2 pb-6'
             }`}
           >
-            <div className="adaptive-shell-container space-y-2 h-full">
+            <div className="adaptive-shell-container shell-content-stack min-h-full">
               <ShellStatusBanners
                 isOnline={isOnline}
                 notifOpen={notifOpen}
