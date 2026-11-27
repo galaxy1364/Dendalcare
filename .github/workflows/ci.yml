@@ -99,3 +99,67 @@ jobs:
           gradle-version: '9.3.1'
       - name: Compile native Android sources
         run: gradle :app:compileDebugKotlin --no-daemon --stacktrace
+
+  visual_preview:
+    name: Isolated Android visual QA APK (no publication)
+    if: github.event_name == 'pull_request' && github.head_ref == 'integration/ge0024-release-candidate'
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Build same commit web frontend for isolated QA
+        env:
+          MINA_RELEASE_SEQUENCE: '9000'
+          MINA_RELEASE_CHANNEL: staging
+          MINA_GIT_COMMIT: ${{ github.sha }}
+        run: |
+          npm ci
+          npm run sync:version
+          npm run build
+          node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin --verify-parity
+      - uses: actions/download-artifact@v4
+        with:
+          name: architecture-browser-screenshots
+          path: qa-browser-evidence
+      - name: Bundle frontend and real screenshots into isolated package
+        run: |
+          python3 qa/visual-preview/prepare.py dist qa-browser-evidence
+          gradle -p qa/visual-preview assembleDebug --no-daemon --stacktrace
+      - name: Verify package identity, signature and zero Internet permission
+        run: |
+          set -euo pipefail
+          APK=qa/visual-preview/build/outputs/apk/debug/visual-preview-debug.apk
+          test -f "$APK"
+          BT="$ANDROID_HOME/build-tools/36.0.0"
+          "$BT/aapt" dump badging "$APK" > /tmp/qa-badging.txt
+          grep -F "package: name='com.aistudio.auditpro.kxmfzq.visualpreview'" /tmp/qa-badging.txt
+          "$BT/aapt" dump permissions "$APK" > /tmp/qa-permissions.txt
+          if grep -E 'android.permission.INTERNET|android.permission.CAMERA|android.permission.READ_EXTERNAL_STORAGE|android.permission.WRITE_EXTERNAL_STORAGE' /tmp/qa-permissions.txt; then exit 1; fi
+          "$BT/apksigner" verify --verbose --print-certs "$APK"
+          mkdir -p qa-output
+          cp "$APK" qa-output/MinaDental-visual-QA.apk
+          cp /tmp/qa-badging.txt /tmp/qa-permissions.txt qa-output/
+          (cd qa-output && sha256sum MinaDental-visual-QA.apk > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MinaDental-visual-QA-APK
+          path: qa-output/
+          if-no-files-found: error
+          retention-days: 14
