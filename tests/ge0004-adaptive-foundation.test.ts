@@ -175,8 +175,11 @@ export async function runAllGe0004AdaptiveFoundationTests(): Promise<Ge0004TestR
       assert.equal(pubVer.releaseSequence, CURRENT_APP_BUILD);
       assert.ok(gradle.includes(`versionCode = ${CURRENT_APP_BUILD}`), `Android versionCode must be ${CURRENT_APP_BUILD}`);
       assert.ok(gradle.includes(`versionName = "${pkg.version}"`), `Android versionName must be ${pkg.version}`);
-      assert.ok(deployYml.includes(`MINA_BASE_SEQUENCE: '${CURRENT_APP_BUILD}'`), 'deploy.yml must reconcile base sequence');
-      assert.ok(releaseYml.includes(`MINA_BASE_SEQUENCE: '${CURRENT_APP_BUILD}'`), 'release.yml must reconcile base sequence');
+      // Workflow base is a floor, not the allocated release identity.
+      const deployFloor = Number(deployYml.match(/MINA_BASE_SEQUENCE:\s*['"](\d+)['"]/)?.[1]);
+      const releaseFloor = Number(releaseYml.match(/MINA_BASE_SEQUENCE:\s*['"](\d+)['"]/)?.[1]);
+      assert.ok(Number.isSafeInteger(deployFloor) && deployFloor >= 224 && deployFloor <= CURRENT_APP_BUILD, 'deploy floor must be monotonic and no higher than actual build');
+      assert.equal(releaseFloor, deployFloor, 'release and deploy must share the same floor');
     })
   );
 

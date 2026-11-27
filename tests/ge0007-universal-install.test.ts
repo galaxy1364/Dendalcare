@@ -85,7 +85,11 @@ export async function runAllGe0007UniversalInstallTests(): Promise<Ge0007TestRes
         const pubVer = JSON.parse(readWorkspaceFile('public/version.json'));
         const wf = readWorkspaceFile('.github/workflows/android-apk.yml');
         assert.ok(!wf.includes('github.run_number'), 'android-apk.yml must NEVER use github.run_number as MINA_RELEASE_SEQUENCE');
-        assert.ok(wf.includes(`MINA_BASE_SEQUENCE: '${pubVer.releaseSequence}'`), 'android-apk.yml must align MINA_BASE_SEQUENCE with deploy.yml');
+        const deploy = readWorkspaceFile('.github/workflows/deploy.yml');
+        const floor = Number(wf.match(/MINA_BASE_SEQUENCE:\s*['"](\d+)['"]/)?.[1]);
+        const deployFloor = Number(deploy.match(/MINA_BASE_SEQUENCE:\s*['"](\d+)['"]/)?.[1]);
+        assert.ok(Number.isSafeInteger(floor) && floor >= 224 && floor <= pubVer.releaseSequence, 'Android floor must be valid and no higher than allocated sequence');
+        assert.equal(floor, deployFloor, 'Android and deploy must share the same release floor');
         assert.ok(wf.includes('scripts/ci-release-gate.mjs --compute-sequence'), 'android-apk.yml must compute monotonic release sequence');
         assert.ok(wf.includes('gradle ${{ steps.sign_mode.outputs.gradle_task }}'), 'Workflow must assemble APK via Gradle');
         assert.ok(wf.includes('scripts/verify-apk-artifact.mjs'), 'Workflow must invoke automated verify-apk-artifact.mjs gate');
