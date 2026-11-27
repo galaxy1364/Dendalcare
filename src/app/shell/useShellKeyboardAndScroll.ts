@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from 'react';
 import type { AppRouteId } from '@/lib/navigationStack';
+import { hasActiveModalFocusTrap } from '@/platform/focusEngine';
 
 interface UseShellKeyboardAndScrollParams {
   activeRoute: AppRouteId;
@@ -27,13 +28,7 @@ export function useShellKeyboardAndScroll({
   getSavedScroll,
   navigate,
   openQBankMenu,
-  closeQBankMenu,
-  setNotifOpen,
   setShortcutsOpen,
-  setProjectFolderOpen,
-  setUserModalOpen,
-  setCallerIdOpen,
-  clearSmartWorkflowPopup,
 }: UseShellKeyboardAndScrollParams) {
   useEffect(() => {
     const targetTop = activeRoute === 'dashboard' ? 0 : getSavedScroll(activeRoute);
@@ -44,7 +39,7 @@ export function useShellKeyboardAndScroll({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.key === 'F5') return;
+      if (e.defaultPrevented || e.key === 'F5' || hasActiveModalFocusTrap()) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         openQBankMenu(true);
@@ -75,28 +70,14 @@ export function useShellKeyboardAndScroll({
       } else if (shortcutRoutes[e.key]) {
         e.preventDefault();
         navigate(shortcutRoutes[e.key]);
-      } else if (e.key === 'Escape') {
-        setNotifOpen(false);
-        setShortcutsOpen(false);
-        setProjectFolderOpen(false);
-        setUserModalOpen(false);
-        setCallerIdOpen(false);
-        clearSmartWorkflowPopup();
-        closeQBankMenu();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    clearSmartWorkflowPopup,
-    closeQBankMenu,
     navigate,
     openQBankMenu,
-    setCallerIdOpen,
-    setNotifOpen,
-    setProjectFolderOpen,
     setShortcutsOpen,
-    setUserModalOpen,
   ]);
 }
