@@ -809,6 +809,10 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
 
       await expect(page.getByTestId('finance_total_receivables')).toContainText('۲٬۰۰۰٬۰۰۰');
+      const aging = page.getByTestId('finance_aging_buckets');
+      await expect(aging).toBeVisible();
+      await expect(aging.getByText('بدون سررسید', { exact: true })).toBeVisible();
+      await expect(aging.getByText('بیش از ۹۰ روز', { exact: true })).toBeVisible();
       await expect(page.getByText('چک ضمانت نزد مطب (غیرنقدی):')).toBeVisible();
 
       // Open Quick Pay sheet and validate fractional input rejection
