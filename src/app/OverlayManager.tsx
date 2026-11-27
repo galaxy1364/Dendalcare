@@ -76,6 +76,7 @@ export function OverlayManager() {
     clearDeferredPrompt,
     triggerInstall,
     notifOpen,
+    qbankMenuOpen,
     setNotifOpen,
     openQBankMenu,
     projectFolderOpen,
@@ -116,7 +117,8 @@ export function OverlayManager() {
   const shortcutsTitleId = useId();
   const workflowTitleId = useId();
   useFocusTrap(shortcutsDialogRef, shortcutsOpen, { onEscape: () => setShortcutsOpen(false) });
-  useFocusTrap(workflowDialogRef, Boolean(smartWorkflowPopup), { onEscape: () => setSmartWorkflowPopup(null) });
+  const showWorkflowDialog = Boolean(smartWorkflowPopup) && ![userModalOpen, projectFolderOpen, callerIdOpen, shortcutsOpen, roadmapModalOpen, installModalOpen, notifOpen, qbankMenuOpen].some(Boolean);
+  useFocusTrap(workflowDialogRef, showWorkflowDialog, { onEscape: () => setSmartWorkflowPopup(null) });
 
   const [addingNewUser, setAddingNewUser] = useState(false);
   const [newUserForm, setNewUserForm] = useState({
@@ -991,7 +993,7 @@ export function OverlayManager() {
       />
 
       {/* Smart Cross-Role Real-Time Workflow Popup */}
-      {smartWorkflowPopup && (
+      {showWorkflowDialog && smartWorkflowPopup && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#142E43]/60 animate-fade-in"
           data-testid="smart_workflow_popup"
