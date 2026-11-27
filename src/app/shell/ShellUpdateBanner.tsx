@@ -53,7 +53,7 @@ export function ShellUpdateBanner({
               <div className="min-w-0">
                 <span className="block leading-snug">
                   {updateSnapshot.state === 'NATIVE_STORE_REQUIRED'
-                    ? `نسخه جدید v${otaUpdateInfo?.version} در فروشگاه رسمی آماده است`
+                    ? `نسخه جدید v${otaUpdateInfo?.version} (#${otaUpdateInfo?.build}) آماده دریافت است — بیلد نصب‌شده #${updateSnapshot.capabilities.nativeVersionCode ?? updateSnapshot.installed.releaseSequence}`
                     : updateSnapshot.state === 'WAITING_FOR_SAFE_POINT'
                     ? `نسخه v${otaUpdateInfo?.version} تأیید شد — در انتظار نقطه امن`
                     : updateSnapshot.state === 'READY_TO_ACTIVATE'
@@ -85,7 +85,7 @@ export function ShellUpdateBanner({
                   data-testid="top_atomic_update_install_btn"
                   className="min-h-[36px] px-3 py-1 rounded-[10px] bg-[#0369A1] text-white font-bold text-xs"
                 >
-                  فروشگاه رسمی
+                  دریافت نسخه رسمی
                 </button>
               ) : (
                 <button

@@ -936,5 +936,36 @@ html[data-text-scale-200="true"] .no-scroll-home-shell {
 
 /* GE-0019C: header wraps instead of shrinking controls at narrow widths and large text. */
 
-
-
+/* GE-0017B: independently animated SVG character parts, no whole-icon bouncing. */
+.mascot-rig [data-mascot-part] { transform-box: fill-box; transform-origin: center; }
+.mascot-rig .mascot-rig-eye { animation: mascotRigBlink 4.4s ease-in-out 1; }
+.mascot-rig .mascot-rig-eye-right { animation-delay: 90ms; }
+.mascot-rig .mascot-rig-brows { animation: mascotRigBrows 650ms ease-out both; }
+.mascot-rig .mascot-rig-mouth { animation: mascotRigMouth 450ms ease-out both; }
+.mascot-rig .mascot-rig-arm-left { transform-origin: 100% 0%; }
+.mascot-rig .mascot-rig-arm-right { transform-origin: 0% 0%; }
+[data-mascot-mood="happy"] .mascot-rig-arm-left,
+[data-mascot-mood="celebrating"] .mascot-rig-arm-left,
+.mascot-rig-reacting .mascot-rig-arm-left { animation: mascotRigWaveLeft 650ms ease-in-out 2; }
+[data-mascot-mood="celebrating"] .mascot-rig-arm-right,
+.mascot-rig-reacting .mascot-rig-arm-right { animation: mascotRigWaveRight 650ms ease-in-out 2; }
+[data-mascot-mood="concerned"] .mascot-rig-brows,
+[data-mascot-mood="sad"] .mascot-rig-brows { animation: mascotRigConcern 850ms ease-in-out 2; }
+.mascot-rig-sweat, .mascot-rig-tear { animation: mascotRigDrop 1.3s ease-in-out 2; }
+[data-mascot-mood="thinking"] .mascot-rig-eye { animation: mascotRigFocus 1.2s ease-in-out 2; }
+[data-mascot-mood="celebrating"] .mascot-rig-mouth { animation: mascotRigJoy 650ms ease-in-out 2; }
+.mascot-rig .mascot-sparkle { animation-iteration-count: 1; }
+@keyframes mascotRigBlink { 0%, 78%, 88%, 100% { transform: scaleY(1); } 83% { transform: scaleY(.12); } }
+@keyframes mascotRigBrows { from { transform: translateY(2px); } to { transform: translateY(0); } }
+@keyframes mascotRigMouth { from { transform: scale(.85); } to { transform: scale(1); } }
+@keyframes mascotRigWaveLeft { 0%,100% { transform: rotate(0); } 45% { transform: rotate(68deg); } }
+@keyframes mascotRigWaveRight { 0%,100% { transform: rotate(0); } 45% { transform: rotate(-68deg); } }
+@keyframes mascotRigConcern { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes mascotRigDrop { 0% { opacity: .25; transform: translateY(-3px); } 50% { opacity: 1; } 100% { opacity: .75; transform: translateY(3px); } }
+@keyframes mascotRigFocus { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-1.4px); } }
+@keyframes mascotRigJoy { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12,1.18); } }
+@media (prefers-reduced-motion: reduce) {
+  .mascot-rig *, .mascot-rig-reacting { animation: none !important; transition: none !important; }
+}
+html[data-reduce-motion="true"] .mascot-rig *,
+html[data-reduce-motion="true"] .mascot-rig-reacting { animation: none !important; transition: none !important; }

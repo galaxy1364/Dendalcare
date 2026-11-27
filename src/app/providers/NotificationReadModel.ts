@@ -124,6 +124,8 @@ export interface MascotTaskSignals {
   isProcessing?: boolean;
   /** True when user session/membership is verified; false maps to deterministic 'neutral' (unknown state) */
   isAuthorized?: boolean;
+  /** True only when all required scoped read models are ready, fresh and complete. */
+  isDataReady?: boolean;
   justCompleted?: boolean;
   overdueCount?: number;
   pendingCount?: number;
@@ -135,7 +137,7 @@ export interface MascotTaskSignals {
  * Priority:
  *  1. Offline -> 'offline'
  *  2. Processing / syncing -> 'thinking'
- *  3. Unknown / unauthorized state -> 'neutral'
+ *  3. Unknown / unauthorized / incomplete data -> 'neutral'
  *  4. Overdue / critical tasks -> 'sad'
  *  5. Successful completion pulse -> 'celebrating'
  *  6. Pending tasks / reminders -> 'concerned'
@@ -148,12 +150,11 @@ export function computeMascotMood(
 ): MascotMood {
   if (signals?.isOnline === false) return 'offline';
   if (signals?.isProcessing) return 'thinking';
-  if (signals?.isAuthorized === false) return 'neutral';
+  if (signals?.isAuthorized !== true || signals?.isDataReady !== true) return 'neutral';
 
   const hasOverdueOrCritical =
     (signals?.overdueCount ?? 0) > 0 ||
-    liveSmartAlerts.some((a) => a.urgency === 'critical' || a.urgency === 'today') ||
-    pendingRemindersCount > 5;
+    liveSmartAlerts.some((a) => a.urgency === 'critical');
   if (hasOverdueOrCritical) return 'sad';
 
   if (signals?.justCompleted) return 'celebrating';
