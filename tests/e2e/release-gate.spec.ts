@@ -12,6 +12,40 @@ const VIEWPORT_MATRIX = [
 ];
 
 test.describe('MinaDental V6 Release Gate E2E', () => {
+  test('GE-0019C: asymmetric physical insets, narrow RTL chrome and Material touch targets', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.goto('/#/', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+    await page.evaluate(() => {
+      const root = document.documentElement;
+      root.style.setProperty('--safe-left', '7px');
+      root.style.setProperty('--safe-right', '19px');
+      root.setAttribute('data-platform-design', 'material');
+    });
+    const shell = page.locator('.app-shell-viewport');
+    await expect(shell).toHaveCSS('padding-left', '7px');
+    await expect(shell).toHaveCSS('padding-right', '19px');
+    for (const button of ['topbar_global_search_button', 'topbar_notifications_button', 'topbar_user_avatar_button', 'topbar_project_folder_button']) {
+      const control = page.getByTestId(button);
+      await expect(control).toBeVisible();
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBeGreaterThanOrEqual(48);
+      expect(box!.height).toBeGreaterThanOrEqual(48);
+      expect(box!.x).toBeGreaterThanOrEqual(7);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(301);
+    }
+    const layout = await page.evaluate(() => ({
+      header: getComputedStyle(document.querySelector('.shell-topbar-layout')!).flexWrap,
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2,
+      headerGutter: getComputedStyle(document.querySelector('header.shell-content-gutter')!).paddingLeft,
+      mainGutter: getComputedStyle(document.querySelector('main.shell-content-gutter')!).paddingLeft,
+    }));
+    expect(layout.header).toBe('wrap');
+    expect(layout.overflow).toBe(false);
+    expect(layout.headerGutter).toBe(layout.mainGutter);
+  });
+
   test('cold & warm boot + reload reach SHELL_READY with valid window.__minaBuildId and zero 404/syntax errors', async ({ page }) => {
     const consoleErrors: Array<{ text: string; url: string }> = [];
     const pageErrors: string[] = [];
