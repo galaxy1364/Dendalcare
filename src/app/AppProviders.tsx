@@ -1033,7 +1033,9 @@ function ClinicShellProviders({
   );
 
   const mascotDataReady = [remindersRead, patientsRead, appointmentsRead, treatmentsRead, labOrdersRead, implantsRead, inventoryRead, installmentsRead, checksRead, saftehRead]
-    .every(read => (read.status === 'ready' || read.status === 'empty') && !read.loading && !read.isStale && !read.truncated);
+    .every(read => (read.status === 'ready' || read.status === 'empty') && !read.loading && !read.isStale && !read.truncated && read.serverComplete);
+
+  const overdueReminderCount = pendingReminders.filter(r => typeof r.reminder_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.reminder_date) && r.reminder_date < todayGregorian()).length;
 
   const mascotMood: MascotMood = useMemo(
     () =>
@@ -1042,9 +1044,10 @@ function ClinicShellProviders({
         isProcessing: syncPulse || flushingQueue,
         isAuthorized: verifiedSession.status === 'authenticated' && effectiveRole !== 'unauthorized',
         isDataReady: mascotDataReady,
+        overdueCount: overdueReminderCount,
         // Only a future explicit server-confirmed task completion event may trigger celebration.
       }),
-    [liveSmartAlerts, pendingReminders.length, isOnline, syncPulse, flushingQueue, effectiveRole, verifiedSession.status, mascotDataReady]
+    [liveSmartAlerts, pendingReminders.length, isOnline, syncPulse, flushingQueue, effectiveRole, verifiedSession.status, mascotDataReady, overdueReminderCount]
   );
 
   const value: ClinicShellContextValue = {
