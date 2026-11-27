@@ -186,7 +186,7 @@ jobs:
         if: steps.sign_policy.outputs.can_publish == 'true'
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.13'
+          gradle-version: '9.3.1'
 
       - name: Download exact verified Web dist bundle from Job 1 into app/src/main/assets/www
         if: steps.sign_policy.outputs.can_publish == 'true'

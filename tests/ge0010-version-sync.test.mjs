@@ -34,3 +34,15 @@ for (const sequence of [302, 9000]) {
     assert.throws(() => syncVersionAcrossPlatforms({repoRoot: root, sequenceOverride: 230}), /regress baseline/);
   }));
 }
+
+// Both Android CI entry points must match the repository's pinned Gradle distribution.
+test('GE-0012: Android CI Gradle version matches the wrapper distribution', () => {
+  const root = new URL('../', import.meta.url);
+  const wrapper = fs.readFileSync(new URL('gradle/wrapper/gradle-wrapper.properties', root), 'utf8');
+  const version = wrapper.match(/gradle-([0-9.]+)-bin\.zip/)?.[1];
+  assert.ok(version, 'wrapper distribution must specify an exact Gradle version');
+  for (const name of ['deploy.yml', 'android-apk.yml']) {
+    const workflow = fs.readFileSync(new URL('.github/workflows/' + name, root), 'utf8');
+    assert.equal(workflow.match(/gradle-version:\s*['"]([0-9.]+)['"]/)?.[1], version, name);
+  }
+});
