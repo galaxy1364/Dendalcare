@@ -23,7 +23,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "minadental-unified-release"
+  group: "minadental-production-release"
   cancel-in-progress: false
 
 jobs:
@@ -59,7 +59,7 @@ jobs:
         run: npm run sync:version:check
 
       - name: Production Dependency Security Audit
-        run: npm audit --omit=dev --audit-level=high || true
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Compute strict monotonic CI release sequence (authoritative for Web + Android)
         id: seq
@@ -84,9 +84,11 @@ jobs:
           VITE_ANDROID_PLAY_STORE_URL: ${{ vars.VITE_ANDROID_PLAY_STORE_URL }}
           VITE_IOS_APP_STORE_URL: ${{ vars.VITE_IOS_APP_STORE_URL }}
         run: |
+          npm run sync:version
           npm run build
           rm -rf dist-check-a
           cp -r dist dist-check-a
+          npm run sync:version
           npm run build
           node scripts/ci-release-gate.mjs --compare dist-check-a dist
           rm -rf dist-check-a
@@ -108,7 +110,7 @@ jobs:
         run: npm test
 
       - name: Install Playwright Browsers (Chromium & WebKit on Ubuntu 24.04)
-        run: npx playwright install --with-deps chromium webkit || true
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Mandatory Pre-Deploy Real Browser E2E Verification
         run: npm run test:e2e
@@ -138,7 +140,7 @@ jobs:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          ALLOW_DEBUG_PREVIEW: ${{ inputs.allow_debug_preview || 'true' }}
+          ALLOW_DEBUG_PREVIEW: ${{ inputs.allow_debug_preview || 'false' }}
         run: |
           if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
             echo "can_publish=true" >> "$GITHUB_OUTPUT"
@@ -177,6 +179,8 @@ jobs:
       - name: Setup Android SDK
         if: steps.sign_policy.outputs.can_publish == 'true'
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Setup Gradle
         if: steps.sign_policy.outputs.can_publish == 'true'

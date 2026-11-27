@@ -1121,6 +1121,8 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       const modal = page.getByTestId('install_app_modal');
       await expect(modal).toBeVisible();
       await expect(page.getByTestId('eligibility_criteria_panel')).toContainText('تایید واقعی (6/6');
+      // Desktop browser auto-detection selects Windows; explicitly select Android before asserting its controls.
+      await modal.getByTestId('install_tab_android').click();
       await expect(page.getByTestId('native_apk_download_card')).toBeVisible();
       await expect(page.getByTestId('modal_github_apk_release_link')).toHaveAttribute(
         'href',

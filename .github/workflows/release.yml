@@ -23,7 +23,7 @@ on:
         type: boolean
 
 concurrency:
-  group: "pages"
+  group: "minadental-production-release"
   cancel-in-progress: false
 
 permissions:
@@ -84,6 +84,7 @@ jobs:
           VITE_ANDROID_PLAY_STORE_URL: ${{ vars.VITE_ANDROID_PLAY_STORE_URL }}
           VITE_IOS_APP_STORE_URL: ${{ vars.VITE_IOS_APP_STORE_URL }}
         run: |
+          npm run sync:version
           npm run build
           rm -rf .determinism-build-1
           cp -r dist .determinism-build-1
@@ -100,6 +101,7 @@ jobs:
           VITE_ANDROID_PLAY_STORE_URL: ${{ vars.VITE_ANDROID_PLAY_STORE_URL }}
           VITE_IOS_APP_STORE_URL: ${{ vars.VITE_IOS_APP_STORE_URL }}
         run: |
+          npm run sync:version
           npm run build
           node scripts/ci-release-gate.mjs --compare .determinism-build-1 dist
           rm -rf .determinism-build-1
@@ -116,6 +118,7 @@ jobs:
           VITE_ANDROID_PLAY_STORE_URL: ${{ vars.VITE_ANDROID_PLAY_STORE_URL }}
           VITE_IOS_APP_STORE_URL: ${{ vars.VITE_IOS_APP_STORE_URL }}
         run: |
+          npm run sync:version
           npm run build
           node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin --verify-parity
           node -e '

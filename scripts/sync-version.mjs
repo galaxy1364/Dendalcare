@@ -75,6 +75,9 @@ export function syncVersionAcrossPlatforms(options = {}) {
   const publicVersionPath = path.join(repoRoot, 'public', 'version.json');
 
   const envSeqRaw = (process.env.MINA_RELEASE_SEQUENCE || '').trim();
+  if (envSeqRaw && !/^\d+$/.test(envSeqRaw)) {
+    throw new Error('MINA_RELEASE_SEQUENCE must be a positive integer');
+  }
   const parsedRequestedSeq =
     sequenceOverride !== null && sequenceOverride !== undefined
       ? Number(sequenceOverride)
@@ -82,7 +85,7 @@ export function syncVersionAcrossPlatforms(options = {}) {
       ? Number(envSeqRaw)
       : null;
 
-  if (parsedRequestedSeq !== null && (!Number.isInteger(parsedRequestedSeq) || parsedRequestedSeq < MIN_MONOTONIC_SEQUENCE)) {
+  if (parsedRequestedSeq !== null && (!Number.isSafeInteger(parsedRequestedSeq) || parsedRequestedSeq < MIN_MONOTONIC_SEQUENCE)) {
     throw new Error(
       `Requested release sequence (${parsedRequestedSeq}) must be an integer >= ${MIN_MONOTONIC_SEQUENCE}`
     );
@@ -94,6 +97,9 @@ export function syncVersionAcrossPlatforms(options = {}) {
     current.gradleVersionCode || 0,
     current.publicSequence || 0
   );
+  if (parsedRequestedSeq !== null && parsedRequestedSeq < baselineSequence) {
+    throw new Error(`Requested release sequence #${parsedRequestedSeq} would regress baseline #${baselineSequence}`);
+  }
   const targetSequence = parsedRequestedSeq ?? baselineSequence;
 
   const drifts = [];
@@ -116,11 +122,11 @@ export function syncVersionAcrossPlatforms(options = {}) {
       drifts.push(`app/build.gradle.kts versionCode (${current.gradleVersionCode}) < minimum (${MIN_MONOTONIC_SEQUENCE})`);
     }
 
-    if (parsedRequestedSeq !== null && current.gradleVersionCode !== targetSequence) {
+    if (current.gradleVersionCode !== targetSequence) {
       drifts.push(`app/build.gradle.kts versionCode (${current.gradleVersionCode}) != target sequence (${targetSequence})`);
       nextGradle = nextGradle
-        .replace(/(val\s+baseVersionCode\s*=\s*)\d+/, `$1${targetSequence}`)
-        .replace(/(versionCode\s*=\s*)\d+/, `$1${targetSequence}`);
+        .replace(/(val\s+baseVersionCode\s*=\s*)\d+/, (_, prefix) => `${prefix}${targetSequence}`)
+        .replace(/(versionCode\s*=\s*)\d+/, (_, prefix) => `${prefix}${targetSequence}`);
     }
 
     if (!checkOnly && nextGradle !== originalGradle) {
@@ -157,7 +163,7 @@ export function syncVersionAcrossPlatforms(options = {}) {
       pub.build = targetSequence;
       if (pub.androidVersionCode !== undefined) pub.androidVersionCode = targetSequence;
       dirty = true;
-    } else if (parsedRequestedSeq !== null && pubSeq !== targetSequence) {
+    } else if (pubSeq !== targetSequence || pub.releaseSequence !== targetSequence || pub.build !== targetSequence || (pub.androidVersionCode !== undefined && pub.androidVersionCode !== targetSequence)) {
       drifts.push(`public/version.json releaseSequence (${pubSeq}) != target sequence (${targetSequence})`);
       pub.releaseSequence = targetSequence;
       pub.build = targetSequence;

@@ -15,7 +15,7 @@
     "verify:apk": "node scripts/verify-apk-artifact.mjs",
     "verify:rls": "node scripts/verify-staging-rls.mjs",
     "verify:v12": "node scripts/v12-verify-remote-db.mjs",
-    "test": "node --test tests/clinic-audit.test.mjs tests/v10-sw-navigation.test.mjs && node tests/run-production-tests.mjs",
+    "test": "node --test tests/clinic-audit.test.mjs tests/v10-sw-navigation.test.mjs tests/ge0010-version-sync.test.mjs && node tests/run-production-tests.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {
