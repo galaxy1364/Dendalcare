@@ -300,6 +300,10 @@ Certificate fingerprints:
 
       const clientSrc = fs.readFileSync(path.join(ROOT, 'src/services/updates/manifestClient.ts'), 'utf8');
       assert(clientSrc.includes("u.searchParams.set('_cb'"), 'manifestClient must bypass edge CDN cache on fresh browser release-pointer fetches');
+      const metadataBranch = swSrc.slice(swSrc.indexOf('// Never cache mutable release pointers or manifests'), swSrc.indexOf('// P0-02 OTA Fix:'));
+      assert(metadataBranch.includes("if (request.cache === 'no-store') return;") && metadataBranch.indexOf("if (request.cache === 'no-store') return;") < metadataBranch.indexOf('event.respondWith('), 'Explicit no-store release checks must bypass worker forwarding');
+      assert(metadataBranch.includes("fetchWithTimeout(request, { cache: 'no-store' }"), 'Other metadata requests must still be network-only');
+      assert(clientSrc.includes("cache: 'no-store'"), 'Manifest client retains no-store requests');
     }),
   ];
 }
