@@ -123,6 +123,8 @@ export async function runAllGe0007UniversalInstallTests(): Promise<Ge0007TestRes
             'Verified using v1 scheme (JAR signing): true',
             'Verified using v2 scheme (APK Signature Scheme v2): true',
             'Verified using v3 scheme (APK Signature Scheme v3): false',
+            // Real apksigner output includes the signer count; absent counts fail closed.
+            'Number of signers: 1',
             'Signer #1 certificate DN: CN=MinaDental CI, O=MinaDental Clinic',
             'Signer #1 certificate SHA-256 digest: ' + 'a'.repeat(64),
           ].join('\n')
