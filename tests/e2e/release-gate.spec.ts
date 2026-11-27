@@ -1029,9 +1029,9 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     }
   });
 
-  test('GE-0004: 320px-1920px all-route matrix, 200% text scaling, light/dark, reduced motion, 3-way versions & Progressive Disclosure', async ({ page }) => {
+  test('GE-0004: 320px-1920px all-route matrix, 200% text scaling, light/dark, reduced motion, 3-way versions & Progressive Disclosure', async ({ page }, testInfo) => {
     test.setTimeout(120_000);
-    const evidenceDir = path.resolve(process.cwd(), 'test-results', 'ge0004-evidence');
+    const evidenceDir = testInfo.outputPath('ge0004-evidence');
     fs.mkdirSync(evidenceDir, { recursive: true });
 
     const routes = [
