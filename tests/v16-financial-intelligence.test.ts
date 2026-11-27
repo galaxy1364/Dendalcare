@@ -725,8 +725,8 @@ export async function runAllV16FinancialIntelligenceTests(): Promise<V16TestResu
     assert.equal(offlineCalls, 2, 'Changed payload must not reach RPC');
     assert.equal((await replayQueuedFinanceCommands({ ...actor, userId: 'other-actor' }, offline)).blocked, 1);
     assert.equal(offlineCalls, 2, 'Other actor must not replay');
-    assert.equal((await postPatientPaymentCommand({ ...input, idempotencyKey: 'ge0021c-inst', paymentMethod: 'installment', installmentId: 'synthetic-installment' }, offline)).resolution, 'queued');
-    assert.equal((await postPatientPaymentCommand({ ...input, idempotencyKey: 'ge0021c-note', description: 'synthetic note' }, offline)).resolution, 'queued');
+    assert.equal((await postPatientPaymentCommand({ ...input, idempotencyKey: 'ge0021c-inst', paymentMethod: 'installment', installmentId: 'synthetic-installment' }, offline)).resolution, 'unknown');
+    assert.equal((await postPatientPaymentCommand({ ...input, idempotencyKey: 'ge0021c-note', description: 'synthetic note' }, offline)).resolution, 'unknown');
     const replay = await replayQueuedFinanceCommands(actor, makeFakeRpcClient({}));
     assert.equal(replay.replayed, 1);
     assert.equal(replay.blocked, 2);
