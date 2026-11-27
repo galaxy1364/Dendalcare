@@ -32,7 +32,7 @@ import {
 import { PatientForm } from '@/features/patients/PatientClinicalTabs';
 import { LAB_STATUS, IMPLANT_STAGES } from '@/features/patients/PatientFinanceAndSpecialtyTabs';
 import { PatientDetail } from '@/features/patients/PatientDetailHub';
-import { getRecordedPatientFileNo, matchesPatientDirectoryQuery } from '@/features/patients/patientDirectorySearch';
+import { getRecordedPatientFileNo, matchesPatientDirectoryQuery, findVisiblePatientIdentityConflict, normalizePatientQuery } from '@/features/patients/patientDirectorySearch';
 
 export function Patients() {
   const { data: patients, refresh } = useRealtimeTable<Patient>('patients');
@@ -92,6 +92,18 @@ export function Patients() {
   }, [patients, treatments, labOrders, implants, installments, checks, payments, search, chipFilter]);
 
   const handleSave = async (data: Partial<Patient>): Promise<boolean> => {
+    if (saving) return false;
+    const reference = getRecordedPatientFileNo({ first_name: '', last_name: '', phone: null, national_id: null, insurance_number: null, notes: data.notes ?? null });
+    const existingReference = editing ? getRecordedPatientFileNo(editing) : null;
+    const conflict = findVisiblePatientIdentityConflict(patients, {
+      fileNo: normalizePatientQuery(reference ?? '') !== normalizePatientQuery(existingReference ?? '') ? reference : null,
+      nationalId: normalizePatientQuery(data.national_id ?? '') !== normalizePatientQuery(editing?.national_id ?? '') ? data.national_id : null,
+    }, editing?.id);
+    if (conflict) {
+      setActionError(conflict === 'file' ? 'شماره پرونده در فهرست فعلی تکراری است.' : 'کد ملی در فهرست فعلی تکراری است.');
+      HapticEngine.warning();
+      return false;
+    }
     setSaving(true);
     setActionSuccess(null);
     const result = editing
@@ -394,7 +406,7 @@ export function Patients() {
       )}
 
       <Sheet open={formOpen} onClose={() => { setFormOpen(false); setEditing(null); }} title={editing ? 'ویرایش پرونده بیمار' : 'تشکیل پرونده بیمار جدید'} icon={<Users size={20} />} color="#10B981">
-        <PatientForm patient={editing} nextFileNo={String(1001 + patients.length)} onSave={handleSave} saving={saving} />
+        <PatientForm patient={editing} onSave={handleSave} saving={saving} />
       </Sheet>
 
       <Sheet layout="workspace" open={!!detailPatient} onClose={() => setDetailPatient(null)} title={detailPatient ? `${detailPatient.first_name} ${detailPatient.last_name}` : ''} icon={<Users size={20} />} color="#10B981">
