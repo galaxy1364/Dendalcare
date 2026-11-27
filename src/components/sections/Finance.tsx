@@ -46,15 +46,28 @@ type FinanceTab =
   | 'transactions';
 
 export function Finance() {
-  const { data: transactions, refresh: rt } = useRealtimeTable<FinanceTransaction>('finance_transactions');
-  const { data: patients } = useRealtimeTable<Patient>('patients');
-  const { data: installments, refresh: ri } = useRealtimeTable<Installment>('installments');
-  const { data: checks, refresh: rc } = useRealtimeTable<Check>('checks');
-  const { data: safteh, refresh: rs } = useRealtimeTable<Safteh>('safteh');
-  const { data: treatments } = useRealtimeTable<Treatment>('treatments');
-  const { data: payments, refresh: rpay } = useRealtimeTable<Payment>('payments');
+  const transactionsRead = useRealtimeTable<FinanceTransaction>('finance_transactions');
+  const { data: transactions, refresh: rt } = transactionsRead;
+  const patientsRead = useRealtimeTable<Patient>('patients');
+  const { data: patients } = patientsRead;
+  const installmentsRead = useRealtimeTable<Installment>('installments');
+  const { data: installments, refresh: ri } = installmentsRead;
+  const checksRead = useRealtimeTable<Check>('checks');
+  const { data: checks, refresh: rc } = checksRead;
+  const saftehRead = useRealtimeTable<Safteh>('safteh');
+  const { data: safteh, refresh: rs } = saftehRead;
+  const treatmentsRead = useRealtimeTable<Treatment>('treatments');
+  const { data: treatments } = treatmentsRead;
+  const paymentsRead = useRealtimeTable<Payment>('payments');
+  const { data: payments, refresh: rpay } = paymentsRead;
   const { data: staff } = useRealtimeTable<Staff>('staff');
-  const { data: reminders, refresh: rrem } = useRealtimeTable<Reminder>('reminders');
+  const remindersRead = useRealtimeTable<Reminder>('reminders');
+  const { data: reminders, refresh: rrem } = remindersRead;
+
+  const completeRead = (read: { status: string; loading: boolean; isStale: boolean; truncated: boolean }) =>
+    (read.status === 'ready' || read.status === 'empty') && !read.loading && !read.isStale && !read.truncated;
+  const receivablesReady = [patientsRead, treatmentsRead, paymentsRead, installmentsRead, checksRead, saftehRead, transactionsRead].every(completeRead);
+  const remindersReady = receivablesReady && completeRead(remindersRead);
 
   const [tab, setTab] = useState<FinanceTab>('debtors');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -100,6 +113,8 @@ export function Finance() {
       HapticEngine.error();
       return;
     }
+    patientsRead.refresh();
+    treatmentsRead.refresh();
     rpay();
     ri();
     rc();
@@ -124,11 +139,13 @@ export function Finance() {
               if (searchOpen) setGlobalSearch('');
             }}
             data-testid="finance_search_toggle"
-            className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 transition-all haptic ${
+            className={`min-w-[48px] min-h-[48px] rounded-2xl flex items-center justify-center shrink-0 transition-all haptic ${
               searchOpen
                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/30'
                 : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
             }`}
+            aria-label="جستجوی سریع در امور مالی"
+            aria-expanded={searchOpen}
             title="جستجوی سریع در امور مالی"
           >
             {searchOpen ? <X size={16} /> : <Search size={16} />}
@@ -140,9 +157,11 @@ export function Finance() {
               return (
                 <button
                   key={c.v}
+                  type="button"
+                  aria-current={active ? 'true' : undefined}
                   onClick={() => selectTab(c.v)}
                   data-testid={`finance_tab_${c.v}`}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all haptic ${
+                  className={`min-h-[48px] flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all haptic ${
                     active
                       ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/25 scale-[1.02]'
                       : 'bg-gray-100/90 text-gray-600 hover:bg-gray-200/70'
@@ -171,6 +190,8 @@ export function Finance() {
               <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-600" />
               <Input
                 autoFocus
+                aria-label="جستجو در امور مالی"
+                type="search"
                 value={globalSearch}
                 onChange={(e) => setGlobalSearch(e.target.value)}
                 placeholder="جستجوی نام بیمار، شماره دندان، شماره چک صیادی، کد درمان..."
@@ -190,6 +211,9 @@ export function Finance() {
           checks={checks}
           safteh={safteh}
           reminders={reminders}
+          transactions={transactions}
+          receivablesReady={receivablesReady}
+          remindersReady={remindersReady}
           searchQuery={globalSearch}
           onRefreshAll={refreshAll}
         />
