@@ -9,7 +9,7 @@ import { normalizePersianDigits } from '@/design-system/primitives/FormEngine';
 import { readViewportMetrics } from '@/platform/safeArea';
 import { HOME_SERVICES_LIMIT, HOME_SERVICES_PAGE_SIZE, normalizeSelectedHomeServices, reorderSelectedHomeServices, loadSelectedHomeServices, saveSelectedHomeServices } from '@/lib/navigationStack';
 import { canAccessRoute } from '@/services/permissions/accessControl';
-import { getRecordedPatientFileNo, matchesPatientDirectoryQuery } from '@/features/patients/patientDirectorySearch';
+import { getRecordedPatientFileNo, matchesPatientDirectoryQuery, preparePatientFileNotes, findVisiblePatientIdentityConflict } from '@/features/patients/patientDirectorySearch';
 
 export interface Ge0003TestResult {
   name: string;
@@ -38,6 +38,18 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0020C: explicit file references and visible duplicate identity checks', () => {
+      const record = { id: 'synthetic-1', first_name: 'آزمایشی', last_name: 'الف', phone: null, national_id: '۰۰۱۲۳۴۵۶۷۸', notes: '[پرونده: ۴۲۱۷]', insurance_number: '999' };
+      const prepared = preparePatientFileNotes('4217', 'یادداشت');
+      assert(prepared.ok && prepared.notes === '[پرونده: 4217] یادداشت', 'Explicit reference encoded separately');
+      const blank = preparePatientFileNotes('', 'یادداشت');
+      assert(blank.ok && blank.notes === 'یادداشت', 'Blank reference does not invent identity');
+      assert(!preparePatientFileNotes('12]', '').ok && !preparePatientFileNotes('12', '[پرونده: 99]').ok, 'Reject ambiguous tags');
+      assert(findVisiblePatientIdentityConflict([record], { fileNo: '4217' }) === 'file', 'Digit-normalized duplicate file reference');
+      assert(findVisiblePatientIdentityConflict([record], { nationalId: '0012345678' }) === 'national_id', 'Digit-normalized duplicate national ID');
+      assert(findVisiblePatientIdentityConflict([record], { fileNo: '4217' }, record.id) === null, 'Exclude own record during edit');
+      assert(findVisiblePatientIdentityConflict([record], { fileNo: '999' }) === null, 'Insurance is not a file reference');
+    }),
     await runCase('GE-0020B: patient workspace is adaptive and retains keyboard navigation and identity boundaries', () => {
       const detail = fs.readFileSync(path.join(ROOT, 'src/features/patients/PatientDetailHub.tsx'), 'utf8');
       const list = fs.readFileSync(path.join(ROOT, 'src/components/sections/Patients.tsx'), 'utf8');
