@@ -38,6 +38,12 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0024D: installment compare-and-set cannot fall back to ID-only queue', () => {
+      const guard = fs.readFileSync(path.join(ROOT, 'src/lib/supabaseGuardian.ts'), 'utf8');
+      assert(guard.includes("table === 'installments' && operation === 'UPDATE' && Object.prototype.hasOwnProperty.call(eqFilters, 'paid_months')"), 'Installment expected version must be recognized');
+      assert((guard.match(/if \(requiresInstallmentReconciliation\) return reconciliationRequired\(\);/g) || []).length === 3, 'All three offline/network queue paths must fail closed for installment CAS');
+      assert(guard.includes('MINA_INSTALLMENT_RECONCILIATION_REQUIRED'), 'Ambiguous update requires reconciliation');
+    }),
     await runCase('GE-0024D: release review guards hidden workflow dialogs and incomplete finance', () => {
       const overlay = fs.readFileSync(path.join(ROOT, 'src/app/OverlayManager.tsx'), 'utf8');
       const reminders = fs.readFileSync(path.join(ROOT, 'src/components/sections/Reminders.tsx'), 'utf8');
