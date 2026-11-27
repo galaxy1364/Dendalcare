@@ -239,6 +239,10 @@ export function applyAppearanceToDocument(
   root.style.setProperty('--md-warning', palette.warning);
   root.style.setProperty('--md-success', palette.success);
   root.style.setProperty('--md-border', palette.border);
+  root.style.setProperty('--md-muted-surface', palette.mutedSurface);
+  root.style.setProperty('--md-on-primary', settings.resolvedTheme === 'dark' ? DARK_PALETTE.background : CORE_PALETTE.surface);
+  root.style.setProperty('--md-on-critical', settings.resolvedTheme === 'dark' ? DARK_PALETTE.background : CORE_PALETTE.surface);
+  root.style.setProperty('--md-on-navy', CORE_PALETTE.surface);
 
   const metaTheme = document.querySelector('meta[name="theme-color"]');
   if (metaTheme) {
