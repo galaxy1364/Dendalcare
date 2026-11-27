@@ -224,8 +224,19 @@ jobs:
           - Commit: ${{ github.sha }}
           - CI Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
+          # Preserve the prior stable APK and publish a permanent version tag before updating the alias.
+          if [ "$RELEASE_TAG" = "android-latest" ]; then
+            node scripts/archive-android-release.mjs
+          fi
+          VERSION_TITLE=$(node -e 'const m=require("./release-apk/apk-release.json"); console.log("MinaDental Android "+m.versionName+" — #"+m.releaseSequence+" ("+process.env.RELEASE_TAG+")")')
+          NOTES="${NOTES}
+
+          [Download APK / دانلود مستقیم](https://github.com/galaxy1364/Dendalcare/releases/download/${RELEASE_TAG}/MinaDental-android.apk)
+
+          [All versions / تمام نسخه‌ها](https://github.com/galaxy1364/Dendalcare/releases)"
+
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" --title "MinaDental Android APK (${RELEASE_TAG})" --notes "$NOTES"
+            gh release edit "$RELEASE_TAG" --title "$VERSION_TITLE" --notes "$NOTES"
             gh release upload "$RELEASE_TAG" \
               release-apk/MinaDental-android.apk \
               release-apk/DentalCare.apk \
@@ -240,6 +251,6 @@ jobs:
               release-apk/MinaDental-android.apk.sha256 \
               release-apk/apk-release.json \
               release-apk/apk-verification-report.json \
-              --title "MinaDental Android APK (${RELEASE_TAG})" \
+              --title "$VERSION_TITLE" \
               --notes "$NOTES"
           fi
