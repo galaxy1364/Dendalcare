@@ -5,7 +5,7 @@ import type { SectionId } from '@/lib/sections';
  *
  * - AppRouteId extends SectionId with the independent full-screen 'services' directory route.
  * - Preserves per-route vertical scroll positions so Back/Tab navigation keeps context.
- * - Persists and reorders the maximum 4 Selected Services shown on the No-Scroll Home screen.
+ * - Persists and reorders the maximum 8 Selected Services shown on the No-Scroll Home screen.
  */
 
 export type AppRouteId =
@@ -17,14 +17,22 @@ export type AppRouteId =
   | 'appointment_form'
   | 'treatment_form';
 
+export const HOME_SERVICES_LIMIT = 8;
+export const HOME_SERVICES_PAGE_SIZE = 4;
+
 export const DEFAULT_SELECTED_HOME_SERVICES: SectionId[] = [
   'patients',
   'appointments',
   'treatments',
   'finance',
+  'lab',
+  'implants',
+  'inventory',
+  'reminders',
 ];
 
-const SELECTED_HOME_SERVICES_KEY = 'minadental_home_selected_services_v2';
+const LEGACY_HOME_SERVICES_KEY = 'minadental_home_selected_services_v2';
+const SELECTED_HOME_SERVICES_KEY = 'minadental_home_selected_services_v3';
 const HOME_SERVICES_EVENT = 'minadental-home-services-updated';
 
 const VALID_SELECTABLE_SERVICES = new Set<SectionId>([
@@ -77,23 +85,21 @@ export function normalizeSelectedHomeServices(ids: readonly string[]): SectionId
     if (VALID_SELECTABLE_SERVICES.has(id) && !unique.includes(id)) {
       unique.push(id);
     }
-    if (unique.length >= 4) break;
+    if (unique.length >= HOME_SERVICES_LIMIT) break;
   }
-  for (const fallback of DEFAULT_SELECTED_HOME_SERVICES) {
-    if (unique.length >= 4) break;
-    if (!unique.includes(fallback)) unique.push(fallback);
-  }
-  return unique.slice(0, 4);
+  return unique.length ? unique : [...DEFAULT_SELECTED_HOME_SERVICES];
 }
 
 export function loadSelectedHomeServices(): SectionId[] {
   if (typeof window === 'undefined') return [...DEFAULT_SELECTED_HOME_SERVICES];
   try {
     const raw = localStorage.getItem(SELECTED_HOME_SERVICES_KEY);
-    if (!raw) return [...DEFAULT_SELECTED_HOME_SERVICES];
-    const parsed = JSON.parse(raw);
+    const legacy = raw === null;
+    const stored = raw ?? localStorage.getItem(LEGACY_HOME_SERVICES_KEY);
+    if (!stored) return [...DEFAULT_SELECTED_HOME_SERVICES];
+    const parsed = JSON.parse(stored);
     if (Array.isArray(parsed)) {
-      return normalizeSelectedHomeServices(parsed);
+      return normalizeSelectedHomeServices(legacy ? [...parsed, ...DEFAULT_SELECTED_HOME_SERVICES] : parsed);
     }
   } catch {
     // ignore storage parse failure
@@ -131,7 +137,7 @@ export function reorderSelectedHomeServices(
   const next = [...list];
   const [moved] = next.splice(fromIdx, 1);
   next.splice(toIdx, 0, moved);
-  return next.slice(0, 4);
+  return next.slice(0, HOME_SERVICES_LIMIT);
 }
 
 export function subscribeHomeServicesChange(cb: (services: SectionId[]) => void): () => void {
