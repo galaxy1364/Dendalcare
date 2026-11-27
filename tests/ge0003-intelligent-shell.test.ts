@@ -1,3 +1,4 @@
+import { deriveSmartReminderId } from '@/lib/smartReminderEngine';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -38,6 +39,18 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0024H: deterministic reminder occurrence identity is scoped and stable', async () => {
+      const id = await deriveSmartReminderId('tenant-a', 'branch-a', 'alert-1', '2026-11-27');
+      assert(/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id), 'Valid UUIDv8 required');
+      assert(id === await deriveSmartReminderId('tenant-a', 'branch-a', 'alert-1', '2026-11-27'), 'Retry identity must be stable');
+      assert(id !== await deriveSmartReminderId('tenant-a', 'branch-b', 'alert-1', '2026-11-27'), 'Branch isolation');
+      assert(id !== await deriveSmartReminderId('tenant-b', 'branch-a', 'alert-1', '2026-11-27'), 'Tenant isolation');
+      assert(id !== await deriveSmartReminderId('tenant-a', 'branch-a', 'alert-1', '2026-11-28'), 'New due date is a new occurrence');
+      const engine = fs.readFileSync(path.join(ROOT, 'src/lib/smartReminderEngine.ts'), 'utf8');
+      const queue = fs.readFileSync(path.join(ROOT, 'src/lib/offlineQueue.ts'), 'utf8');
+      assert(engine.includes("onConflict: 'id', ignoreDuplicates: true") && engine.includes("existing.data?.id !== id"), 'Do not overwrite prior reminder state; verify duplicate');
+      assert(queue.includes('MINA_REMINDER_RECONCILIATION_REQUIRED'), 'Legacy smart reminder drafts must be retained for reconciliation');
+    }),
     await runCase('GE-0024G: historical installment progress queue entries remain available for reconciliation', () => {
       const queue = fs.readFileSync(path.join(ROOT, 'src/lib/offlineQueue.ts'), 'utf8');
       const start = queue.indexOf('// Historical installment progress writes');
