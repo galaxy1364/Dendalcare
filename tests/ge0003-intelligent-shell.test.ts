@@ -38,6 +38,16 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0020B: patient workspace is adaptive and retains keyboard navigation and identity boundaries', () => {
+      const detail = fs.readFileSync(path.join(ROOT, 'src/features/patients/PatientDetailHub.tsx'), 'utf8');
+      const list = fs.readFileSync(path.join(ROOT, 'src/components/sections/Patients.tsx'), 'utf8');
+      const sheet = fs.readFileSync(path.join(ROOT, 'src/components/ui/Sheet.tsx'), 'utf8');
+      assert(sheet.includes("layout = 'form'") && sheet.includes("layout === 'workspace' ? 'max-w-7xl' : 'max-w-2xl'"), 'Wide workspace must be opt-in, ordinary forms unchanged');
+      assert(list.includes('<Sheet layout="workspace" open={!!detailPatient}') && list.includes('key={detailPatient.id}'), 'Patient selection must remount workspace for the selected identity');
+      assert(detail.includes('patient_record_adaptive_layout') && detail.includes('lg:flex-col') && detail.includes('minmax(0,1fr)'), 'Wide record must have navigation and flexible content panes');
+      assert(detail.includes('aria-current={tab === t.id') && detail.includes('min-h-[48px]'), 'Record navigation must expose current section and touch targets');
+      assert(list.includes('aria-expanded={isExpanded}') && list.includes("e.key === 'Enter'"), 'Patient cards must support keyboard and expansion semantics');
+    }),
     await runCase('GE-0020A: patient search normalizes Persian/Arabic scripts without fabricating file IDs', () => {
       const patient = { first_name: 'علي', last_name: 'كريمي', phone: '۰۹۱۲-۱۲۳۴۵۶۷', national_id: '۰۰۱۲۳۴۵۶۷۸', notes: '[پرونده: ۴۲۱۷] synthetic', insurance_number: '555999' };
       assert(getRecordedPatientFileNo(patient) === '۴۲۱۷', 'Recorded file number remains unchanged');
