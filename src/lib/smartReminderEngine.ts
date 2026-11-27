@@ -492,7 +492,7 @@ export async function syncLiveAlertsToDatabaseReminders(
       status: 'pending',
     });
 
-    if (getMutationOutcome(result) === 'confirmed' && result.serverConfirmed === true) insertedCount++;
+    if (getMutationOutcome(result) === 'confirmed' && 'serverConfirmed' in result && result.serverConfirmed === true) insertedCount++;
     else unconfirmedCount++;
   }
 
