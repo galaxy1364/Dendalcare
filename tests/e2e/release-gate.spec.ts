@@ -74,6 +74,30 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     await page.screenshot({ path: testInfo.outputPath('ge0024a-dark-focus.png'), animations: 'disabled' });
   });
 
+  test('GE-0024B: keyboard help dialog traps focus and Escape restores trigger', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/#/', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+    const trigger = page.getByTestId('topbar_global_search_button');
+    await trigger.focus();
+    await page.keyboard.press('F1');
+    const dialog = page.getByRole('dialog', { name: 'کلیدهای میانبر سریع کلینیک' });
+    await expect(dialog).toBeVisible();
+    const close = dialog.getByRole('button', { name: 'بستن راهنمای کلیدها' });
+    const exportButton = dialog.getByRole('button', { name: 'خروجی یادآوری‌ها و پیام‌ها (JSON)' });
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(exportButton).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Control+k');
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await page.screenshot({ path: testInfo.outputPath('viewport-ge0024b-dialog.png'), animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+  });
+
   test('cold & warm boot + reload reach SHELL_READY with valid window.__minaBuildId and zero 404/syntax errors', async ({ page }) => {
     const consoleErrors: Array<{ text: string; url: string }> = [];
     const pageErrors: string[] = [];
