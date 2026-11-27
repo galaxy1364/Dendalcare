@@ -151,15 +151,15 @@ fun DentalCareWebView(
                         javaScriptEnabled = true
                         domStorageEnabled = true
                         databaseEnabled = true
-                        allowFileAccess = true
+                        allowFileAccess = false
                         allowContentAccess = true
-                        allowFileAccessFromFileURLs = true
-                        allowUniversalAccessFromFileURLs = true
+                        allowFileAccessFromFileURLs = false
+                        allowUniversalAccessFromFileURLs = false
                         loadWithOverviewMode = true
                         useWideViewPort = true
                         setSupportZoom(false)
                         cacheMode = WebSettings.LOAD_NO_CACHE
-                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     }
                     clearCache(true)
 
