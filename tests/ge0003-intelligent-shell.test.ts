@@ -38,6 +38,18 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0024E: offline and incomplete reads cannot become confirmed financial totals', () => {
+      const hook = fs.readFileSync(path.join(ROOT, 'src/lib/useRealtimeTable.ts'), 'utf8');
+      const finance = fs.readFileSync(path.join(ROOT, 'src/components/sections/Finance.tsx'), 'utf8');
+      const patients = fs.readFileSync(path.join(ROOT, 'src/components/sections/Patients.tsx'), 'utf8');
+      const provider = fs.readFileSync(path.join(ROOT, 'src/app/AppProviders.tsx'), 'utf8');
+      assert(hook.includes("setServerComplete(!execRes.truncated && (reconciled.status === 'ready' || reconciled.status === 'empty'))"), 'Only complete server reads establish provenance');
+      assert(!hook.includes("setStatus(vaultRes.rows.length > 0 ? 'offline' : 'empty')"), 'Missing offline mirror cannot be confirmed empty');
+      assert(!hook.includes("setStatus('ready');"), 'Incremental insert must not promote incomplete read');
+      assert(finance.includes('read.serverComplete') && patients.includes('read.serverComplete') && provider.includes('read.serverComplete'), 'Financial truth and mascot readiness require provenance');
+      assert(finance.split('fetchAllPages: true').length - 1 === 8 && patients.split('fetchAllPages: true').length - 1 === 6, 'All financial read inputs must use bounded pagination');
+      assert(provider.includes('overdueCount: overdueReminderCount') && provider.includes('r.reminder_date < todayGregorian()'), 'Past-date reminder evidence, not pending count, drives overdue mood');
+    }),
     await runCase('GE-0024D: installment compare-and-set cannot fall back to ID-only queue', () => {
       const guard = fs.readFileSync(path.join(ROOT, 'src/lib/supabaseGuardian.ts'), 'utf8');
       assert(guard.includes("table === 'installments' && operation === 'UPDATE' && Object.prototype.hasOwnProperty.call(eqFilters, 'paid_months')"), 'Installment expected version must be recognized');
