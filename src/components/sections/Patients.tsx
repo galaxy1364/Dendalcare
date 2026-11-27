@@ -286,8 +286,8 @@ export function Patients() {
                 ]}
               >
                 <div className="glass-card p-3.5 transition-all">
-                  <div className="flex items-start justify-between gap-2.5">
-                    <div onClick={() => { setDetailStage(null); setDetailPatient(patient); }} className="flex items-start gap-2.5 flex-1 min-w-0 cursor-pointer">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-2.5">
+                    <div role="button" tabIndex={0} aria-label={`باز کردن پرونده ${patient.first_name} ${patient.last_name}`} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailStage(null); setDetailPatient(patient); } }} onClick={() => { setDetailStage(null); setDetailPatient(patient); }} className="flex items-start gap-2.5 flex-1 min-w-0 cursor-pointer rounded-xl focus-visible:ring-2 focus-visible:ring-teal-600">
                       <div
                         className="w-11 h-11 rounded-2xl flex flex-col items-center justify-center text-white font-black text-sm shrink-0 shadow-sm"
                         style={{ background: patient.gender === 'female' ? 'linear-gradient(135deg,#EC4899,#DB2777)' : 'linear-gradient(135deg,#10B981,#059669)' }}
@@ -315,17 +315,17 @@ export function Patients() {
                       </div>
                     </div>
 
-                    <div className="text-left shrink-0 flex flex-col items-end">
+                    <div className="w-full sm:w-auto text-left flex flex-wrap sm:flex-col items-end gap-1 min-w-0">
                       {balance > 0 ? (
                         <span className="px-2.5 py-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-[11px] font-black">مانده: {balance.toLocaleString('fa-IR')} ت</span>
                       ) : (
                         <span className="px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-black">تسویه کامل</span>
                       )}
                       <div className="flex items-center gap-1.5 mt-1.5">
-                        <button onClick={() => setExpandedCardId(isExpanded ? null : patient.id)} className="text-[10px] font-extrabold text-purple-600 bg-purple-50 hover:bg-purple-100 px-2 py-0.5 rounded-lg">
+                        <button aria-expanded={isExpanded} onClick={() => setExpandedCardId(isExpanded ? null : patient.id)} className="min-h-[44px] text-xs font-extrabold text-purple-600 bg-purple-50 hover:bg-purple-100 px-2 py-0.5 rounded-lg">
                           {isExpanded ? 'بستن ریز پرونده ▲' : 'ریز روند و دندان ▼'}
                         </button>
-                        <button onClick={() => { setDetailStage(null); setDetailPatient(patient); }} className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg">
+                        <button onClick={() => { setDetailStage(null); setDetailPatient(patient); }} className="min-h-[44px] text-xs font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg">
                           پرونده کامل ←
                         </button>
                       </div>
@@ -397,9 +397,10 @@ export function Patients() {
         <PatientForm patient={editing} nextFileNo={String(1001 + patients.length)} onSave={handleSave} saving={saving} />
       </Sheet>
 
-      <Sheet open={!!detailPatient} onClose={() => setDetailPatient(null)} title={detailPatient ? `${detailPatient.first_name} ${detailPatient.last_name}` : ''} icon={<Users size={20} />} color="#10B981">
+      <Sheet layout="workspace" open={!!detailPatient} onClose={() => setDetailPatient(null)} title={detailPatient ? `${detailPatient.first_name} ${detailPatient.last_name}` : ''} icon={<Users size={20} />} color="#10B981">
         {detailPatient && (
           <PatientDetail
+            key={detailPatient.id}
             patient={detailPatient}
             initialStage={detailStage}
             onOpenAppointments={() => {
