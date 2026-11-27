@@ -181,6 +181,7 @@ export const MascotTooth: React.FC<MascotToothProps> = ({
     >
       {/* Purely Transparent Frameless 3D Sculpted Crystal Tooth SVG */}
       <svg
+        key={canonicalMood}
         viewBox="0 0 112 118"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
