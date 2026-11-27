@@ -38,6 +38,27 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0021B: both installment collection surfaces require confirmed receipt before advancing schedule', () => {
+      for (const [file, action] of [
+        ['src/features/finance/FinanceInstallmentsTab.tsx', 'recordPayment'],
+        ['src/features/patients/PatientFinanceAndSpecialtyTabs.tsx', 'payInstallment'],
+      ]) {
+        const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
+        const start = source.indexOf('const ' + action + ' = async');
+        const end = source.indexOf('const del =', start);
+        assert(start >= 0 && end > start, 'Installment action must exist');
+        const body = source.slice(start, end);
+        const lock = body.indexOf('collectionLock.current = true');
+        const rpc = body.indexOf('await postPatientPaymentCommand');
+        const guard = body.indexOf("if (!payRes.ok || payRes.resolution !== 'confirmed')");
+        const write = body.indexOf("await supabase.from('installments').update");
+        assert(lock >= 0 && lock < rpc && rpc < guard && guard < write, 'Lock and confirmed receipt gate must precede schedule write');
+        assert(body.slice(guard, write).includes('return;'), 'Unconfirmed receipt must exit before schedule write');
+        assert(body.includes(".eq('paid_months', inst.paid_months)"), 'Follow-up write must compare prior schedule version');
+        assert(body.includes("getMutationOutcome(updated) !== 'confirmed'") && body.includes('وجه را دوباره ثبت نکنید'), 'Partial result requires reconciliation rather than success');
+        assert(body.includes('finally') && body.includes('collectionLock.current = false'), 'Lock must be released even on failure');
+      }
+    }),
     await runCase('GE-0021A: financial directory and record summaries use shared ledger and reject incomplete reads', () => {
       const list = fs.readFileSync(path.join(ROOT, 'src/components/sections/Patients.tsx'), 'utf8');
       const detail = fs.readFileSync(path.join(ROOT, 'src/features/patients/PatientDetailHub.tsx'), 'utf8');
