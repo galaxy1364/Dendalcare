@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { computeMascotMood } from '@/app/providers/NotificationReadModel';
+import { loadZeroLossLedger, reconcileZeroLossAlerts, acknowledgeZeroLossAlert, snoozeZeroLossAlert, sendRealDeviceNotification } from '@/lib/deviceNotifications';
 import {
   isDebugCertificateDn,
   parseKeytoolPrintCertOutput,
@@ -35,6 +36,63 @@ const ROOT = process.cwd();
 
 export async function runAllGe0008EdgeMascotReleaseTests(): Promise<Ge0008TestResult[]> {
   return [
+    await runCase('GE-0016: legacy ledger redaction, acknowledgement and snooze preservation, OS text privacy', async () => {
+      const key = 'minadental_zero_loss_notif_ledger_v1';
+      const entries = new Map<string, string>();
+      const captured: Array<{ title: string; body?: string }> = [];
+      const mockStorage = {
+        getItem: (k: string) => entries.get(k) ?? null,
+        setItem: (k: string, v: string) => { entries.set(k, v); },
+      };
+      const mockGlobals = {
+        // Browser feature detection checks both window.Notification and the global binding.
+        window: { Notification: { permission: 'granted' } },
+        localStorage: mockStorage,
+        Notification: { permission: 'granted' },
+        navigator: { serviceWorker: { getRegistration: async () => ({
+          showNotification: async (title: string, options: NotificationOptions) => {
+            captured.push({ title, body: options.body });
+          },
+        }) } },
+      };
+      const previous = Object.keys(mockGlobals).map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)] as const);
+      try {
+        for (const [k, v] of Object.entries(mockGlobals)) {
+          Object.defineProperty(globalThis, k, { configurable: true, writable: true, value: v });
+        }
+        const now = new Date().toISOString();
+        const day = now.slice(0, 10);
+        const legacyKey = 'synthetic-legacy_' + day;
+        const legacy = {
+          alertId: 'synthetic-legacy', title: 'PRIVATE_TITLE', subtitle: 'PRIVATE_NOTE',
+          patientName: 'PRIVATE_NAME', patientPhone: 'PRIVATE_PHONE', amount: 12345678,
+          domain: 'finance', urgency: 'critical', targetSection: 'finance',
+          firstSeenAt: now, lastSurfacedAt: now, status: 'snoozed',
+          snoozeUntil: Date.now() + 600000, osDispatched: true,
+        };
+        entries.set(key, JSON.stringify({ [legacyKey]: legacy }));
+        const migrated = loadZeroLossLedger()[legacyKey];
+        assert(migrated.status === 'snoozed' && migrated.snoozeUntil === legacy.snoozeUntil && migrated.osDispatched, 'Migration must preserve tracking metadata');
+        const fresh = { id: 'synthetic-new', title: 'PRIVATE_TITLE', subtitle: 'PRIVATE_NOTE',
+          domain: 'finance', urgency: 'critical' as const, targetSection: 'finance',
+          patientName: 'PRIVATE_NAME', patientPhone: 'PRIVATE_PHONE', amount: 12345678 };
+        assert(reconcileZeroLossAlerts([fresh]).length === 1, 'New alert must be visible');
+        snoozeZeroLossAlert(fresh.id, 15);
+        assert(reconcileZeroLossAlerts([fresh]).length === 0, 'Snooze must still work');
+        acknowledgeZeroLossAlert(fresh.id);
+        assert(reconcileZeroLossAlerts([fresh]).length === 0, 'Acknowledgement must still work');
+        const raw = entries.get(key) ?? '';
+        assert(!raw.includes('PRIVATE_') && !raw.includes('12345678'), 'No private alert text or financial amount in ledger');
+        assert(!raw.includes('patientName') && !raw.includes('patientPhone') && !raw.includes('"amount"'), 'No sensitive ledger fields');
+        assert(await sendRealDeviceNotification({ title: 'PRIVATE_TITLE', body: 'PRIVATE_NOTE', urgent: true }), 'OS dispatch should succeed');
+        assert(captured.length === 1 && !JSON.stringify(captured).includes('PRIVATE_'), 'OS notification must not display private text');
+      } finally {
+        for (const [k, d] of previous) {
+          if (d) Object.defineProperty(globalThis, k, d);
+          else Reflect.deleteProperty(globalThis, k);
+        }
+      }
+    }),
     await runCase('GE-0008 #1: scripts/sync-version.mjs verifies parity and repairs drifted Gradle/version.json without touching signingConfigs', () => {
       const scriptPath = path.join(ROOT, 'scripts/sync-version.mjs');
       assert(fs.existsSync(scriptPath), 'scripts/sync-version.mjs must exist');
