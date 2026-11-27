@@ -1242,24 +1242,6 @@ export class UpdateCoordinator {
     this.adapter.openStoreAction?.(this.candidate.manifest);
   }
 
-  public injectTestCandidate(manifest: AuthoritativeReleaseManifest): UpdateSnapshot {
-    const correlationId = createCorrelationId('test');
-    this.candidate = {
-      manifest,
-      manifestUrl: './release-manifest.json',
-      discoveredAt: new Date().toISOString(),
-      source: 'manual',
-      verifiedAssetsCount: 0,
-      totalAssetsCount: 0,
-      integrityVerified: true,
-      signatureVerified: true,
-      deferredUntil: null,
-    };
-    this.ledger.saveCandidate(this.candidate);
-    this.transition('READY_TO_ACTIVATE', correlationId, 'TEST_CANDIDATE_INJECTED', manifest.releaseId);
-    this.emit();
-    return this.getSnapshot();
-  }
 
   /**
    * V8-01 Autonomous Resume:

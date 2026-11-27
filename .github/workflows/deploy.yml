@@ -64,7 +64,7 @@ jobs:
       - name: Compute strict monotonic CI release sequence (authoritative for Web + Android)
         id: seq
         env:
-          MINA_BASE_SEQUENCE: '224'
+          MINA_BASE_SEQUENCE: '230'
           MINA_BOOTSTRAP_FIRST_RELEASE: ${{ inputs.bootstrap_first_release || 'false' }}
         run: |
           node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --require-remote-pointer --allow-legacy-root-migration
@@ -111,7 +111,7 @@ jobs:
         run: npx playwright install --with-deps chromium webkit || true
 
       - name: Mandatory Pre-Deploy Real Browser E2E Verification
-        run: npm run test:e2e || true
+        run: npm run test:e2e
 
       - name: Upload verified Web PWA dist bundle for synchronized deployment
         uses: actions/upload-artifact@v4

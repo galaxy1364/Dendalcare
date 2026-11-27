@@ -36,7 +36,6 @@ import {
   getInstalledReleaseInfo,
   applyAppUpdateAtomically,
   updateCoordinator,
-  injectTestUpdateCandidate,
   type AtomicUpdateProgress,
   type InstalledReleaseInfo,
   type UpdateSnapshot,
@@ -325,36 +324,6 @@ function ClinicSettingsTab({
     }
   };
 
-  const handleSimulateNewUpdate = async () => {
-    setCheckingUpdates(true);
-    setUpdateMessage(null);
-    try {
-      injectTestUpdateCandidate(installedRelease.build + 1, '4.18.1');
-      const nextSnap = await applyAppUpdateAtomically({
-        reloadPage: true,
-        onProgress: (p) => setAtomicProgress(p),
-      });
-      if (nextSnap.state === 'FAILED' || nextSnap.state === 'CHECK_FAILED') {
-        setUpdateMessage({
-          type: 'error',
-          text: nextSnap.error?.messageFa || 'خطا در نصب نسخه تستی شبیه‌سازی‌شده',
-        });
-      } else {
-        setUpdateMessage({
-          type: 'success',
-          text: 'نسخه آزمایشی شبیه‌سازی‌شده با موفقیت نصب شد و برنامه در حال بازنشانی است.',
-        });
-      }
-    } catch (err: any) {
-      setUpdateMessage({
-        type: 'error',
-        text: err?.message || 'خطا در شبیه‌سازی به‌روزرسانی',
-      });
-    } finally {
-      setCheckingUpdates(false);
-      setTimeout(() => setAtomicProgress(null), 2000);
-    }
-  };
 
   useEffect(() => {
     const map: Record<string, string> = {};
@@ -1091,18 +1060,6 @@ function ClinicSettingsTab({
           )}
         </div>
 
-        {effectiveRole === 'manager' && (
-          <button
-            type="button"
-            onClick={handleSimulateNewUpdate}
-            disabled={checkingUpdates}
-            data-testid="simulate_force_update_btn"
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-extrabold shadow-sm active:scale-95 transition-all disabled:opacity-50 mt-2"
-          >
-            <Zap size={14} className="text-amber-300" />
-            شبیه‌سازی و نصب فوری نسخه جدید (تست به‌روزرسانی اتمیک)
-          </button>
-        )}
 
         {/* Distinct Typed Error State Box */}
         {updateSnap.error && (
