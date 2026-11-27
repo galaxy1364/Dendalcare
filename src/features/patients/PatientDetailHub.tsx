@@ -39,9 +39,11 @@ const stageTabs: Partial<Record<ClinicalJourneyStageId, PatientTab>> = {
 
 export function PatientDetail({
   patient, appointments, treatments, payments, labOrders, implants, reminders, installments, checks, safteh,
-  onEdit, onDelete, onOpenGallery, onOpenPrint, onOpenConsent, initialStage, onOpenAppointments,
+  onEdit, onDelete, onOpenGallery, onOpenPrint, onOpenConsent, initialStage, onOpenAppointments, canViewFinance, financialReady,
 }: {
   patient: Patient;
+  canViewFinance: boolean;
+  financialReady: boolean;
   appointments: Appointment[];
   treatments: Treatment[];
   payments: Payment[];
@@ -59,7 +61,9 @@ export function PatientDetail({
   onOpenPrint: () => void;
   onOpenConsent: () => void;
 }) {
-  const [tab, setTab] = useState<PatientTab>(() => initialStage ? stageTabs[initialStage] ?? 'info' : 'info');
+  const [requestedTab, setTab] = useState<PatientTab>(() => initialStage ? stageTabs[initialStage] ?? 'info' : 'info');
+  const financialTabs: PatientTab[] = ['payments', 'installments', 'checks', 'safteh'];
+  const tab = !canViewFinance && financialTabs.includes(requestedTab) ? 'info' : requestedTab;
   const ledger = computePatientFinancialLedger({
     patient,
     treatments,
@@ -115,9 +119,9 @@ export function PatientDetail({
         <button onClick={onOpenGallery} className="min-h-[48px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white text-[11px] font-bold shadow-md">
           <Camera size={14} /> گالری و OPG
         </button>
-        <button onClick={onOpenPrint} className="min-h-[48px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-md">
+        {canViewFinance && <button onClick={onOpenPrint} className="min-h-[48px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-md">
           <Printer size={14} /> فاکتور بیمه
-        </button>
+        </button>}
         <button onClick={onOpenConsent} className="min-h-[48px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-md">
           <FileSignature size={14} /> رضایت‌نامه A4
         </button>
@@ -134,12 +138,12 @@ export function PatientDetail({
         </div>
         <ClinicalJourneyStepper journey={clinicalJourney} onContinue={(stage) => {
           const target = stageTabs[stage.id];
-          if (target) setTab(target);
+          if (target && (canViewFinance || !financialTabs.includes(target))) setTab(target);
           else onOpenAppointments?.();
         }} />
       </div>
 
-      <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2" aria-label="خلاصه مالی پرونده">
+      {canViewFinance && (financialReady ? <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2" aria-label="خلاصه مالی پرونده">
         <div className="glass-card p-3 text-center">
           <p className="text-[10px] text-gray-400">هزینه کل</p>
           <p className="text-sm font-bold text-gray-700">{totalCost.toLocaleString('fa-IR')}</p>
@@ -152,11 +156,11 @@ export function PatientDetail({
           <p className="text-[10px] text-gray-400">باقی‌مانده</p>
           <p className={`text-sm font-bold ${balance > 0 ? 'text-red-500' : 'text-green-500'}`}>{balance.toLocaleString('fa-IR')}</p>
         </div>
-      </div>
+      </div> : <p role="status" className="text-sm text-[var(--md-secondary)]">اطلاعات مالی کامل و به‌روز در دسترس نیست.</p>)}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(160px,220px)_minmax(0,1fr)] gap-3 items-start" data-testid="patient_record_adaptive_layout">
       <nav aria-label="بخش‌های پرونده بیمار" className="flex gap-1 p-1 rounded-xl bg-[var(--md-bg)] overflow-x-auto lg:overflow-visible lg:flex-col min-w-0" data-testid="patient_record_navigation">
-        {tabs.map((t) => {
+        {tabs.filter(t => canViewFinance || !financialTabs.includes(t.id)).map((t) => {
           const Icon = t.icon;
           return (
             <button
