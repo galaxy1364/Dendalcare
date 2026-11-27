@@ -58,7 +58,7 @@ export function ClinicalJourneyStepper({ journey, onContinue }: Props) {
                   <span aria-hidden="true" className={'w-9 h-9 rounded-full border-2 flex items-center justify-center shrink-0 ' + styles[stage.state]}>
                     <Icon size={17} />
                   </span>
-                  <span className="text-xs font-bold leading-5 text-center text-slate-800 dark:text-slate-100 break-words whitespace-normal">{stage.shortLabelFa}</span>
+                  <span className="text-xs font-bold leading-5 text-center text-slate-800 dark:text-slate-100 break-words whitespace-normal">{stage.labelFa}</span>
                   <span className="text-[11px] leading-4 text-center text-slate-600 dark:text-slate-300">
                     {stage.state === 'completed' ? 'تکمیل' : stage.state === 'current' ? 'جاری' : stage.state === 'attention' ? 'بررسی' : 'انتظار'}
                   </span>

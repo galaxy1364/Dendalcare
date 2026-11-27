@@ -627,7 +627,7 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       await expect(page.getByTestId('v15_allergy_status_badge')).toContainText('بررسی نشده');
 
       // 2) Switch to Odontogram Chart tab and verify ISO 3950 FDI teeth + ambiguous legacy banner
-      await page.getByRole('button', { name: 'چارت' }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'چارت', exact: true }).click();
       const odontogram = page.getByTestId('odontogram_v15_workspace');
       await expect(odontogram).toBeVisible();
       await expect(page.getByTestId('odontogram_ambiguous_reconciliation_banner')).toBeVisible();

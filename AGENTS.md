@@ -16,3 +16,6 @@ Database: Supabase project npzcweiphmyhtzxxnlov (development).
 7. After handoff, release the writer role in the coordination record. This is a human/agent protocol, not a server-enforced lock. GitHub branch protection should enforce merge gates where supported.
 
 Project scope: preserve working Persian RTL mobile QBank layout, dynamic Aurora, clinical and financial truth, security, recovery and platform capabilities. No real patient data in development. Keep future schema changes versioned and reversible where possible.
+
+## Protected engineering baseline
+Read [docs/engineering/MASTER_PROTOCOL.md](docs/engineering/MASTER_PROTOCOL.md) before any task. Its release, clinical safety, RTL and regression requirements are mandatory. CI evidence and the latest coordination record override historical snapshots. Never claim a document enforces repository permissions.
