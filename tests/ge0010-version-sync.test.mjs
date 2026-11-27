@@ -46,3 +46,29 @@ test('GE-0012: Android CI Gradle version matches the wrapper distribution', () =
     assert.equal(workflow.match(/gradle-version:\s*['"]([0-9.]+)['"]/)?.[1], version, name);
   }
 });
+
+import { parseApksignerOutput } from '../scripts/verify-apk-artifact.mjs';
+
+const cert = 'a'.repeat(64);
+const pub = 'b'.repeat(64);
+const header = 'Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nNumber of signers: 1\n';
+const newSigner = 'V2 Signer: certificate DN: CN=MinaDental, O=MinaDental, C=LU\nV2 Signer: certificate SHA-256 digest: ' + cert + '\nV2 Signer: public key SHA-256 digest: ' + pub + '\n';
+test('GE-0013: parse real modern v2 signer format, not public key digest', () => {
+  const p = parseApksignerOutput(header + newSigner);
+  assert.equal(p.verified, true);
+  assert.equal(p.signerCertSha256, cert);
+  assert.equal(p.isDebugCertificate, false);
+});
+test('GE-0013: legacy signer format remains supported', () => {
+  const p = parseApksignerOutput(header + newSigner.replaceAll('V2 Signer: ', 'Signer #1 '));
+  assert.equal(p.signerCertSha256, cert);
+});
+test('GE-0013: reject missing or ambiguous certificates and multiple signers', () => {
+  for (const output of [header + 'V2 Signer: public key SHA-256 digest: ' + pub, header + newSigner + newSigner.replace(cert, pub), (header + newSigner).replace('Number of signers: 1', 'Number of signers: 2'), (header + newSigner).replace('Number of signers: 1\n', '')]) {
+    assert.equal(parseApksignerOutput(output).signerCertSha256, null);
+  }
+});
+test('GE-0013: debug and unverified signatures remain distinguishable', () => {
+  assert.equal(parseApksignerOutput(header + newSigner.replace('CN=MinaDental, O=MinaDental, C=LU', 'CN=Android Debug, O=Android, C=US')).isDebugCertificate, true);
+  assert.equal(parseApksignerOutput(header.replace('Verifies', 'DOES NOT VERIFY') + newSigner).verified, false);
+});

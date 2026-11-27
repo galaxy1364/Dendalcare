@@ -135,15 +135,23 @@ export function parseApksignerOutput(outputText) {
   while ((m = schemeRegex.exec(outputText)) !== null) {
     schemes[m[1].toLowerCase()] = m[2].toLowerCase() === 'true';
   }
-  const sha256Match = outputText.match(/Signer #1 certificate SHA-256 digest:\s*([0-9a-fA-F]{64})/i);
-  const dnMatch = outputText.match(/Signer #1 certificate DN:\s*(.+)/i);
-  const signerDn = dnMatch ? dnMatch[1].trim() : null;
+  // Older build-tools print "Signer #1 certificate ..."; newer releases
+  // print scheme-specific "V2 Signer: certificate ...". Ignore public-key
+  // digests and SourceStamp certificates; reject ambiguous signer identities.
+  const fingerprints = [...outputText.matchAll(/^(?:Signer #1\s+|V[1234](?:\.\d+)? Signer:\s*)certificate SHA-256 digest:\s*([0-9a-f]{64})\s*$/gim)].map(m => m[1].toLowerCase());
+  const dns = [...outputText.matchAll(/^(?:Signer #1\s+|V[1234](?:\.\d+)? Signer:\s*)certificate DN:\s*(.+)$/gim)].map(m => m[1].trim());
+  const counts = [...outputText.matchAll(/^Number of signers:\s*(\d+)\s*$/gim)];
+  const singleSigner = counts.length === 1 && counts[0][1] === '1';
+  const uniqueDigests = [...new Set(fingerprints)];
+  const uniqueDns = [...new Set(dns)];
+  const unambiguous = singleSigner && uniqueDigests.length === 1 && uniqueDns.length === 1;
+  const signerDn = unambiguous ? uniqueDns[0] : null;
   return {
-    verified: outputText.includes('Verifies') && Object.values(schemes).some(Boolean),
+    verified: /^Verifies\s*$/m.test(outputText) && Object.values(schemes).some(Boolean),
     schemes,
-    signerCertSha256: sha256Match ? sha256Match[1].toLowerCase() : null,
+    signerCertSha256: unambiguous ? uniqueDigests[0] : null,
     signerDn,
-    isDebugCertificate: isDebugCertificateDn(signerDn),
+    isDebugCertificate: dns.some(isDebugCertificateDn),
   };
 }
 
@@ -470,6 +478,12 @@ export function verifyApkArtifact(options) {
   const signature = verifyApkSignatureWithApksigner(resolvedApk, { requireApksigner });
   const keytool = inspectApkCertificateWithKeytool(resolvedApk, { requireKeytool });
 
+  // keytool -jarfile can inspect v1 JAR signatures, but not v2-only APKs.
+  // Do not accept an absent keytool certificate when apksigner reports v1.
+  if (requireKeytool && !signature.skipped && signature.schemes.v1 &&
+      (!keytool.inspected || !keytool.certSha256)) {
+    throw new Error('keytool failed to inspect the verified v1 certificate');
+  }
   // Cross-check apksigner SHA-256 vs keytool SHA-256 when both inspected the signer certificate
   if (signature.signerCertSha256 && keytool.certSha256 && signature.signerCertSha256 !== keytool.certSha256) {
     throw new Error(
