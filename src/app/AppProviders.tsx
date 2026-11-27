@@ -458,50 +458,60 @@ function ClinicShellProviders({
   }, [verifyAndApplySession]);
 
   // V10 P1 Data-Minimized realtime shell tables (strictly excluding clinical PHI/PII columns)
-  const { data: reminders } = useRealtimeTable<Reminder>(
+  const remindersRead = useRealtimeTable<Reminder>(
     'reminders',
     NOTIFICATION_READ_MODEL_PROJECTIONS.reminders
   );
+  const reminders = remindersRead.data;
   const { data: messages } = useRealtimeTable<Message>(
     'messages',
     NOTIFICATION_READ_MODEL_PROJECTIONS.messages
   );
-  const { data: patients } = useRealtimeTable<Patient>(
+  const patientsRead = useRealtimeTable<Patient>(
     'patients',
     NOTIFICATION_READ_MODEL_PROJECTIONS.patients
   );
-  const { data: appointments } = useRealtimeTable<Appointment>(
+  const patients = patientsRead.data;
+  const appointmentsRead = useRealtimeTable<Appointment>(
     'appointments',
     NOTIFICATION_READ_MODEL_PROJECTIONS.appointments
   );
-  const { data: treatments } = useRealtimeTable<Treatment>(
+  const appointments = appointmentsRead.data;
+  const treatmentsRead = useRealtimeTable<Treatment>(
     'treatments',
     NOTIFICATION_READ_MODEL_PROJECTIONS.treatments
   );
-  const { data: labOrders } = useRealtimeTable<LabOrder>(
+  const treatments = treatmentsRead.data;
+  const labOrdersRead = useRealtimeTable<LabOrder>(
     'lab_orders',
     NOTIFICATION_READ_MODEL_PROJECTIONS.lab_orders
   );
-  const { data: implants } = useRealtimeTable<Implant>(
+  const labOrders = labOrdersRead.data;
+  const implantsRead = useRealtimeTable<Implant>(
     'implants',
     NOTIFICATION_READ_MODEL_PROJECTIONS.implants
   );
-  const { data: inventory } = useRealtimeTable<InventoryItem>(
+  const implants = implantsRead.data;
+  const inventoryRead = useRealtimeTable<InventoryItem>(
     'inventory',
     NOTIFICATION_READ_MODEL_PROJECTIONS.inventory
   );
-  const { data: installments } = useRealtimeTable<Installment>(
+  const inventory = inventoryRead.data;
+  const installmentsRead = useRealtimeTable<Installment>(
     'installments',
     NOTIFICATION_READ_MODEL_PROJECTIONS.installments
   );
-  const { data: checks } = useRealtimeTable<Check>(
+  const installments = installmentsRead.data;
+  const checksRead = useRealtimeTable<Check>(
     'checks',
     NOTIFICATION_READ_MODEL_PROJECTIONS.checks
   );
-  const { data: safteh } = useRealtimeTable<Safteh>(
+  const checks = checksRead.data;
+  const saftehRead = useRealtimeTable<Safteh>(
     'safteh',
     NOTIFICATION_READ_MODEL_PROJECTIONS.safteh
   );
+  const safteh = saftehRead.data;
 
   const liveSmartAlerts = useMemo(() => {
     const rules = loadSmartReminderRules();
@@ -1022,15 +1032,22 @@ function ClinicShellProviders({
     [verifiedSession.serverVerifiedRole, verifiedSession.status, currentUser.role]
   );
 
+  const mascotDataReady = [remindersRead, patientsRead, appointmentsRead, treatmentsRead, labOrdersRead, implantsRead, inventoryRead, installmentsRead, checksRead, saftehRead]
+    .every(read => (read.status === 'ready' || read.status === 'empty') && !read.loading && !read.isStale && !read.truncated && read.serverComplete);
+
+  const overdueReminderCount = pendingReminders.filter(r => typeof r.reminder_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.reminder_date) && r.reminder_date < todayGregorian()).length;
+
   const mascotMood: MascotMood = useMemo(
     () =>
       computeMascotMood(liveSmartAlerts, pendingReminders.length, {
         isOnline,
         isProcessing: syncPulse || flushingQueue,
-        isAuthorized: effectiveRole !== 'unauthorized',
-        justCompleted: Boolean(liveSyncToast) && !syncPulse && !flushingQueue,
+        isAuthorized: verifiedSession.status === 'authenticated' && effectiveRole !== 'unauthorized',
+        isDataReady: mascotDataReady,
+        overdueCount: overdueReminderCount,
+        // Only a future explicit server-confirmed task completion event may trigger celebration.
       }),
-    [liveSmartAlerts, pendingReminders.length, isOnline, syncPulse, flushingQueue, effectiveRole, liveSyncToast]
+    [liveSmartAlerts, pendingReminders.length, isOnline, syncPulse, flushingQueue, effectiveRole, verifiedSession.status, mascotDataReady, overdueReminderCount]
   );
 
   const value: ClinicShellContextValue = {

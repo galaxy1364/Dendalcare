@@ -27,6 +27,8 @@ export interface QBankTileProps {
   selected?: boolean;
   /** Compact mode (96px) vs standard (108px) */
   compact?: boolean;
+  /** Small icon-first home shortcut; ordinary directory cards retain their original geometry. */
+  homeDense?: boolean;
   /** Optional test ID */
   testId?: string;
   onClick: () => void;
@@ -103,6 +105,7 @@ export function QBankTile({
   badge,
   selected,
   compact = false,
+  homeDense = false,
   testId,
   onClick,
 }: QBankTileProps) {
@@ -140,6 +143,25 @@ export function QBankTile({
     playTactileFeedback('tap');
     onClick();
   };
+
+  if (homeDense) {
+    return (
+      <button
+        type="button"
+        data-testid={testId}
+        data-home-dense="true"
+        aria-label={value === undefined ? label : `${label}، ${typeof value === 'number' ? value.toLocaleString('fa-IR') : value}`}
+        onClick={handleClick}
+        className="w-full min-w-0 min-h-[88px] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#162738] px-1 py-2 flex flex-col items-center justify-center gap-1 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#087C76] active:scale-[.98] motion-reduce:transform-none"
+      >
+        <span data-testid={testId ? `${testId}_icon` : undefined} aria-hidden="true" className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 dark:bg-[#1E3348]" style={{ backgroundColor: surfaceBg }}>
+          {icon}
+        </span>
+        <span className="text-xs font-bold leading-snug break-words w-full text-[#14283B] dark:text-[#F1F5F9]">{label}</span>
+        {value !== undefined && <span className="text-[11px] leading-snug break-words w-full tabular-nums text-[#526779] dark:text-[#CBD5E1]">{typeof value === 'number' ? value.toLocaleString('fa-IR') : value}</span>}
+      </button>
+    );
+  }
 
   return (
     <div

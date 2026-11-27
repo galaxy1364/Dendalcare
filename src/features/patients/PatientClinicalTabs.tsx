@@ -21,6 +21,7 @@ import {
   type StructuredAllergyReview,
 } from '@/features/clinical-record/clinicalRecordService';
 import { ClinicalNotesPanel } from './ClinicalNotesPanel';
+import { getRecordedPatientFileNo, preparePatientFileNotes } from './patientDirectorySearch';
 
 export const GENDER_OPTIONS = [
   { value: 'male', label: 'مرد' },
@@ -88,11 +89,11 @@ export function DeleteBtn({ onClick }: { onClick: () => void }) {
 }
 
 export function PatientForm({
-  patient, nextFileNo, onSave, saving,
+  patient, onSave, saving,
 }: {
-  patient: Patient | null; nextFileNo: string; onSave: (d: Partial<Patient>) => Promise<boolean>; saving: boolean;
+  patient: Patient | null; onSave: (d: Partial<Patient>) => Promise<boolean>; saving: boolean;
 }) {
-  const existingFileNo = patient?.notes?.match(/\[پرونده:\s*([^\]]+)\]/)?.[1] || patient?.insurance_number || nextFileNo;
+  const existingFileNo = patient ? getRecordedPatientFileNo(patient) ?? '' : '';
   const cleanNotes = (patient?.notes || '').replace(/\[پرونده:\s*[^\]]+\]\s*/g, '');
 
   const [formError, setFormError] = useState<string | null>(null);
@@ -115,7 +116,9 @@ export function PatientForm({
       return;
     }
     setFormError(null);
-    const taggedNotes = `[پرونده: ${fileNo.trim() || nextFileNo}] ${form.notes.trim()}`.trim();
+    if (existingFileNo && !fileNo.trim()) { setFormError('شماره پرونده ثبت‌شده را خالی نکنید.'); return; }
+    const prepared = preparePatientFileNotes(fileNo, form.notes);
+    if (!prepared.ok) { setFormError(prepared.message); return; }
     const ok = await onSave({
       ...form,
       first_name: form.first_name.trim(),
@@ -128,8 +131,8 @@ export function PatientForm({
       medical_history: optional(form.medical_history),
       medications: optional(form.medications),
       insurance_provider: optional(form.insurance_provider),
-      insurance_number: optional(form.insurance_number) || fileNo.trim() || nextFileNo,
-      notes: taggedNotes,
+      insurance_number: optional(form.insurance_number),
+      notes: prepared.notes,
       birth_date: form.birth_date || null,
       blood_type: form.blood_type || null,
     });
@@ -139,7 +142,7 @@ export function PatientForm({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-2.5">
-        <Field label="شماره پرونده (دستی/اتوماتیک)">
+        <Field label="شماره پرونده (دستی)">
           <Input value={fileNo} onChange={(e) => setFileNo(e.target.value)} placeholder="مثلاً 1001" className="font-mono font-bold text-emerald-700 bg-emerald-50/50" />
         </Field>
         <Field label="نام"><Input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} placeholder="نام" /></Field>

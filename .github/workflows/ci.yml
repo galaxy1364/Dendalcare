@@ -63,3 +63,144 @@ jobs:
 
       - name: Run release gate E2E (Chromium + WebKit)
         run: npm run test:e2e
+
+      - name: Preserve architecture visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-browser-screenshots
+          path: |
+            test-results/**/ge0024a-dark-focus.png
+            test-results/**/viewport-*.png
+            test-results/**/ge0004-evidence/dashboard-*.png
+            test-results/**/ge0004-evidence/settings-*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+  android_compile:
+    name: Android native compile (no signing or publication)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Compile native Android sources
+        run: gradle :app:compileDebugKotlin --no-daemon --stacktrace
+
+  visual_preview:
+    name: Isolated Android visual QA APK (no publication)
+    if: github.event_name == 'pull_request' && github.head_ref == 'integration/ge0024-release-candidate'
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Build same commit web frontend for isolated QA
+        env:
+          MINA_RELEASE_SEQUENCE: '9000'
+          MINA_RELEASE_CHANNEL: staging
+          MINA_GIT_COMMIT: ${{ github.sha }}
+        run: |
+          npm ci
+          npm run sync:version
+          npm run build
+          node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin --verify-parity
+      - uses: actions/download-artifact@v4
+        with:
+          name: architecture-browser-screenshots
+          path: qa-browser-evidence
+      - name: Bundle frontend and real screenshots into isolated package
+        run: |
+          python3 qa/visual-preview/prepare.py dist qa-browser-evidence
+          gradle -p qa/visual-preview assembleDebug --no-daemon --stacktrace
+      - name: Verify package identity, signature and zero Internet permission
+        run: |
+          set -euo pipefail
+          mapfile -t APKS < <(find qa/visual-preview/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk')
+          test "${#APKS[@]}" -eq 1
+          APK="${APKS[0]}"
+          test -f "$APK"
+          BT="$ANDROID_HOME/build-tools/36.0.0"
+          "$BT/aapt" dump badging "$APK" > /tmp/qa-badging.txt
+          grep -F "package: name='com.aistudio.auditpro.kxmfzq.visualpreview'" /tmp/qa-badging.txt
+          "$BT/aapt" dump permissions "$APK" > /tmp/qa-permissions.txt
+          if grep -E 'android.permission.INTERNET|android.permission.CAMERA|android.permission.READ_EXTERNAL_STORAGE|android.permission.WRITE_EXTERNAL_STORAGE' /tmp/qa-permissions.txt; then exit 1; fi
+          "$BT/apksigner" verify --verbose --print-certs "$APK"
+          mkdir -p qa-output
+          cp "$APK" qa-output/MinaDental-visual-QA.apk
+          cp /tmp/qa-badging.txt /tmp/qa-permissions.txt qa-output/
+          (cd qa-output && sha256sum MinaDental-visual-QA.apk > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MinaDental-visual-QA-APK
+          path: qa-output/
+          if-no-files-found: error
+          retention-days: 14
+
+  database_contract:
+    name: Disposable PostgreSQL V12-to-V16 payment contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-disposable-only
+          POSTGRES_DB: minadental_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d minadental_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: ci-disposable-only
+      PGDATABASE: minadental_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Apply exact baseline and staged V16 in disposable database
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f tests/db/isolated-auth-bootstrap.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/baselines/v12_empty_clinic_foundation.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/baselines/v12_advisor_hardening.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/baselines/v12_rpc_grants.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261201000000_v16_financial_intelligence_ledger_and_reconciliation.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/scripts/verify_v16_release_contract.sql
+      - name: Execute synthetic payment, replay, authorization and ledger assertions
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v16-payment-contract.sql

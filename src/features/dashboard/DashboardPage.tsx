@@ -15,7 +15,7 @@ const HYSTERESIS_PX = 14;
  * 2. Optional Status Banner (only on non-ready/stale/partial/locked_offline/migration_required)
  * 3. Bright Colorful Smart Clinic Overview Card (includes Jalali date, 1-tap refresh, & compact urgent pill fallback)
  * 4. 5 Quick Actions Row
- * 5. 4 Curved QBankTile Favorite Cards
+ * 5. 8 favorite services, 4 per horizontal page
  * 6. 1 Priority Alert — controlled by hysteresis-stabilized ResizeObserver (zero oscillation loop)
  */
 export function DashboardPage() {
@@ -38,6 +38,8 @@ export function DashboardPage() {
   const [fitsViewport, setFitsViewport] = useState(true);
 
   const hasStatusBanner = status.overall !== 'ready' || status.isStale;
+  // Urgent actions must never disappear just to fit a fixed-height viewport.
+  const priorityVisible = metrics.priorityAction.urgent || showPriorityAlert;
 
   useEffect(() => {
     const el = shellRef.current;
@@ -105,11 +107,11 @@ export function DashboardPage() {
       ref={shellRef}
       className="no-scroll-home-shell pb-1 animate-fade-in-up"
       data-testid="no_scroll_home_viewport"
-      data-home-cap-services="4"
+      data-home-cap-services="8"
       data-home-quick-actions="5"
       data-home-fits-viewport={fitsViewport ? 'true' : 'false'}
       data-compact-scroll-mode={fitsViewport ? 'false' : 'true'}
-      data-priority-visible={showPriorityAlert ? 'true' : 'false'}
+      data-priority-visible={priorityVisible ? 'true' : 'false'}
       data-data-source-mode={metrics.dataSourceMode}
     >
       <div className="sr-only" data-testid="global_benchmark_dashboard" />
@@ -132,7 +134,7 @@ export function DashboardPage() {
         data-testid="dashboard_adaptive_bento_grid"
       >
         <div className="flex flex-col gap-2 lg:col-span-5 xl:col-span-5 min-w-0">
-          {/* 1. Bright Colorful Smart Clinic Overview (with concise date, refresh control, & compact urgent fallback) */}
+          {/* 1. Clinic overview; urgent action is kept in its full standalone slot below. */}
           <SmartBrief
             brief={metrics.smartBrief}
             todayIso={metrics.todayIso}
@@ -143,16 +145,13 @@ export function DashboardPage() {
             monthLabel={metrics.monthLabel}
             financialDataComplete={status.financialDataComplete}
             isLoading={status.isLoading}
-            hiddenUrgentAction={
-              !showPriorityAlert && metrics.priorityAction.urgent ? metrics.priorityAction : null
-            }
             onRefresh={refreshAll}
             onNavigate={navigate}
           />
 
-          {/* 4. One Important Alert — Shown on desktop Bento column or on mobile when viewport fits */}
-          {showPriorityAlert && (
-            <div className="hidden lg:block">
+          {/* Urgent action precedes shortcuts on mobile; nonurgent desktop placement is unchanged. */}
+          {priorityVisible && (
+            <div className={metrics.priorityAction.urgent ? 'block' : 'hidden lg:block'}>
               <PriorityAction
                 action={metrics.priorityAction}
                 revenue={metrics.revenue}
@@ -166,8 +165,9 @@ export function DashboardPage() {
           {/* 2. Five Quick Actions Row */}
           <QuickActionsRow userRole={userRole} onNavigate={navigate} />
 
-          {/* 3. Four Favorite Curved QBank Modules + All Services Route Trigger */}
+          {/* 3. Eight Favorite QBank Modules + All Services Route Trigger */}
           <FavoriteModules
+            userRole={userRole}
             selectedServices={selectedServices}
             serviceValues={metrics.serviceValues}
             draggingIndex={draggingIndex}
@@ -179,8 +179,8 @@ export function DashboardPage() {
             onNavigate={navigate}
           />
 
-          {/* Mobile Priority Alert Slot */}
-          {showPriorityAlert && (
+          {/* Nonurgent mobile alert may be omitted in compact viewport mode. */}
+          {priorityVisible && !metrics.priorityAction.urgent && (
             <div className="lg:hidden">
               <PriorityAction
                 action={metrics.priorityAction}

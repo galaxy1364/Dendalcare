@@ -13,6 +13,7 @@ import { useClinicShell } from '@/app/AppProviders';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui/Form';
 import { JalaliDatePicker } from '@/components/ui/JalaliDatePicker';
 import { useUpdateSafePointGuard } from '@/services/updates';
+import { preparePatientFileNotes, findVisiblePatientIdentityConflict } from '@/features/patients/patientDirectorySearch';
 
 /**
  * Shared inline confirmation bar preventing accidental loss of unsaved clinical drafts.
@@ -79,6 +80,7 @@ function UnsavedDraftConfirmBar({
 export function PatientFormPage() {
   const { goBack, navigate } = useNavigation();
   const { showSyncToast, currentUser } = useClinicShell();
+  const { data: visiblePatients } = useRealtimeTable<Patient>('patients');
   const draft = getRouteDraft<Record<string, string>>('patient_form');
   const [firstName, setFirstName] = useState(draft?.firstName ?? '');
   const [lastName, setLastName] = useState(draft?.lastName ?? '');
@@ -118,6 +120,15 @@ export function PatientFormPage() {
       HapticEngine.warning();
       return;
     }
+    if (saving) return;
+    const prepared = preparePatientFileNotes(fileNo, notes);
+    if (!prepared.ok) { setErrorMsg(prepared.message); return; }
+    const conflict = findVisiblePatientIdentityConflict(visiblePatients, { fileNo, nationalId });
+    if (conflict) {
+      setErrorMsg(conflict === 'file' ? 'شماره پرونده در فهرست فعلی تکراری است.' : 'کد ملی در فهرست فعلی تکراری است.');
+      HapticEngine.warning();
+      return;
+    }
     setSaving(true);
     setErrorMsg(null);
     const res = await supabase.from('patients').insert({
@@ -127,8 +138,7 @@ export function PatientFormPage() {
       last_name: lastName.trim(),
       phone: phone.trim() || null,
       national_id: nationalId.trim() || null,
-      insurance_number: fileNo.trim() || null,
-      notes: notes.trim() || null,
+      notes: prepared.notes,
       status: 'active',
     });
     setSaving(false);

@@ -8,6 +8,7 @@ import { useClinicShell } from '@/app/AppProviders';
 import { useNavigation } from '@/navigation/NavigationStack';
 import { HapticEngine } from '@/platform/haptics';
 import {
+  HOME_SERVICES_LIMIT,
   loadSelectedHomeServices,
   reorderSelectedHomeServices,
   saveSelectedHomeServices,
@@ -16,7 +17,7 @@ import {
 
 /**
  * FIX 05 — Dedicated Full-Screen Home Favorite Services Customizer Route ('customize_services')
- * Allows choosing and drag-and-drop reordering the 4 curved QBank tiles shown on the Home screen.
+ * Allows choosing and drag-and-drop reordering up to 8 home shortcuts shown on the Home screen.
  */
 export function CustomizeServicesPage() {
   const { effectiveRole } = useClinicShell();
@@ -30,14 +31,18 @@ export function CustomizeServicesPage() {
     (s) => s.id !== 'dashboard' && canAccessRoute(effectiveRole, s.id)
   );
 
+  const visibleSelected = selectedHome.map((id, idx) => ({ id, idx })).filter(({ id }) => canAccessRoute(effectiveRole, id));
+
   const toggleHomeFavorite = (secId: SectionId) => {
+    if (!canAccessRoute(effectiveRole, secId)) return;
     HapticEngine.selection();
     let next: SectionId[];
     if (selectedHome.includes(secId)) {
-      if (selectedHome.length <= 1) return;
+      if (visibleSelected.length <= 1) return;
       next = selectedHome.filter((id) => id !== secId);
     } else {
-      next = [secId, ...selectedHome].slice(0, 4);
+      if (selectedHome.length >= HOME_SERVICES_LIMIT) return;
+      next = [...selectedHome, secId];
     }
     setSelectedHome(saveSelectedHomeServices(next));
   };
@@ -50,10 +55,10 @@ export function CustomizeServicesPage() {
             <Star size={17} className="text-amber-500 shrink-0" />
             <div>
               <h2 className="text-sm font-black text-[#14283B] dark:text-[#F1F5F9]">
-                تنظیم ۴ خدمت منتخب صفحه خانه
+                تنظیم ۸ خدمت منتخب صفحه خانه
               </h2>
               <p className="text-[11px] font-semibold text-[#526779] dark:text-[#9FB1C1]">
-                با کشیدن و رها کردن (Drag & Drop) ترتیب ۴ کاشی صفحه اصلی را تغییر دهید
+                ترتیب خدمات را با دکمه انتقال به ابتدا یا کشیدن و رها کردن تغییر دهید.
               </p>
             </div>
           </div>
@@ -68,9 +73,9 @@ export function CustomizeServicesPage() {
           </button>
         </div>
 
-        {/* Active 4 Selected Slots */}
+        {/* Authorized selected slots */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" data-testid="services_home_customizer">
-          {selectedHome.map((id, idx) => {
+          {visibleSelected.map(({ id, idx }) => {
             const sec = SECTIONS.find((item) => item.id === id) ?? SECTIONS[1];
             const tok = getModuleToken(sec.id);
             return (
@@ -99,9 +104,7 @@ export function CustomizeServicesPage() {
                     {sec.label}
                   </span>
                 </div>
-                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#EEF3F7] dark:bg-[#0D1B2A] text-[#14283B] dark:text-[#F1F5F9]">
-                  {(idx + 1).toLocaleString('fa-IR')}
-                </span>
+                <button type="button" className="min-h-[44px] min-w-[44px] rounded-lg text-xs font-bold focus-visible:ring-2 focus-visible:ring-teal-600" aria-label={`انتقال ${sec.label} به ابتدا`} onClick={() => setSelectedHome(saveSelectedHomeServices(reorderSelectedHomeServices(selectedHome, idx, 0)))}>{(idx + 1).toLocaleString('fa-IR')} ↥</button>
               </div>
             );
           })}
@@ -111,7 +114,7 @@ export function CustomizeServicesPage() {
       {/* All Authorized Services Picker */}
       <div className="rounded-[22px] p-4 bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] shadow-sm space-y-2.5">
         <p className="text-xs font-black text-[#14283B] dark:text-[#F1F5F9]">
-          انتخاب خدمات مجاز برای نمایش در صفحه اصلی (حداکثر ۴ مورد)
+          انتخاب خدمات مجاز برای نمایش در صفحه اصلی (حداکثر ۸ مورد)
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {availableSections.map((sec) => {
@@ -122,8 +125,10 @@ export function CustomizeServicesPage() {
                 key={sec.id}
                 type="button"
                 data-testid={`customize_toggle_${sec.id}`}
+                aria-pressed={isPinned}
+                disabled={!isPinned && selectedHome.length >= HOME_SERVICES_LIMIT}
                 onClick={() => toggleHomeFavorite(sec.id)}
-                className={`min-h-[56px] px-3 py-2 rounded-[16px] border flex items-center justify-between gap-2 text-right transition-all active:scale-97 ${
+                className={`min-h-[56px] px-3 py-2 rounded-[16px] border flex items-center justify-between gap-2 text-right transition-all active:scale-97 disabled:opacity-50 ${
                   isPinned
                     ? 'bg-[#F0FDFA] dark:bg-[#153133] border-[#087C76]'
                     : 'bg-[#F4F7F9] dark:bg-[#162738] border-[#D8E2EA] dark:border-[#25394D]'

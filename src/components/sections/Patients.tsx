@@ -21,7 +21,9 @@ import { getMutationOutcome } from '@/lib/supabaseGuardian';
 import { HapticEngine } from '@/lib/hapticsAudio';
 import { ContextMenuTrigger } from '@/components/ui/ContextMenu';
 import { getRuntimeAuthStatus, getRuntimeServerVerifiedRole } from '@/services/authentication/authService';
-import { resolveEffectiveRole } from '@/services/permissions/accessControl';
+import { useClinicShell } from '@/app/AppProviders';
+import { computePatientFinancialLedger } from '@/features/finance/financialLedgerEngine';
+import { resolveEffectiveRole, canAccessRoute } from '@/services/permissions/accessControl';
 import { loadActiveUser } from '@/lib/cloudSyncEngine';
 import { computePatientClinicalJourney, type ClinicalJourneyStageId } from '@/features/clinical-journey/patientJourney';
 import { ClinicalJourneyStepper } from '@/features/clinical-journey/ClinicalJourneyStepper';
@@ -32,18 +34,35 @@ import {
 import { PatientForm } from '@/features/patients/PatientClinicalTabs';
 import { LAB_STATUS, IMPLANT_STAGES } from '@/features/patients/PatientFinanceAndSpecialtyTabs';
 import { PatientDetail } from '@/features/patients/PatientDetailHub';
+import { getRecordedPatientFileNo, matchesPatientDirectoryQuery, findVisiblePatientIdentityConflict, normalizePatientQuery } from '@/features/patients/patientDirectorySearch';
 
 export function Patients() {
-  const { data: patients, refresh } = useRealtimeTable<Patient>('patients');
+  const { effectiveRole } = useClinicShell();
+  const canViewFinance = canAccessRoute(effectiveRole, 'finance');
+  const patientsRead = useRealtimeTable<Patient>('patients', undefined, null, { fetchAllPages: true });
+  const { data: patients, refresh } = patientsRead;
   const { data: appointments } = useRealtimeTable<Appointment>('appointments');
-  const { data: treatments } = useRealtimeTable<Treatment>('treatments');
-  const { data: payments } = useRealtimeTable<Payment>('payments');
+  const treatmentsRead = useRealtimeTable<Treatment>('treatments', undefined, null, { fetchAllPages: true });
+  const { data: treatments } = treatmentsRead;
+  const paymentsRead = useRealtimeTable<Payment>('payments', undefined, null, { fetchAllPages: true });
+  const { data: payments } = paymentsRead;
   const { data: labOrders } = useRealtimeTable<LabOrder>('lab_orders');
   const { data: implants } = useRealtimeTable<Implant>('implants');
   const { data: reminders } = useRealtimeTable<Reminder>('reminders');
-  const { data: installments } = useRealtimeTable<Installment>('installments');
-  const { data: checks } = useRealtimeTable<CheckType>('checks');
-  const { data: safteh } = useRealtimeTable<Safteh>('safteh');
+  const installmentsRead = useRealtimeTable<Installment>('installments', undefined, null, { fetchAllPages: true });
+  const { data: installments } = installmentsRead;
+  const checksRead = useRealtimeTable<CheckType>('checks', undefined, null, { fetchAllPages: true });
+  const { data: checks } = checksRead;
+  const saftehRead = useRealtimeTable<Safteh>('safteh', undefined, null, { fetchAllPages: true });
+  const { data: safteh } = saftehRead;
+
+  const financialReady = canViewFinance && [patientsRead, treatmentsRead, paymentsRead, installmentsRead, checksRead, saftehRead].every(read =>
+    (read.status === 'ready' || read.status === 'empty') && !read.loading && !read.isStale && !read.truncated && read.serverComplete
+  );
+  const ledgers = useMemo(() => financialReady ? new Map(patients.map(patient => [
+    patient.id, computePatientFinancialLedger({ patient, treatments, payments, installments, checks, safteh }),
+  ] as const)) : new Map<string, ReturnType<typeof computePatientFinancialLedger>>(),
+  [financialReady, patients, treatments, payments, installments, checks, safteh]);
 
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -61,13 +80,6 @@ export function Patients() {
   const [printOpen, setPrintOpen] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
 
-  const getPatientFileNo = (p: Patient, idx?: number) => {
-    const match = p.notes?.match(/\[پرونده:\s*([^\]]+)\]/);
-    if (match?.[1]) return match[1].trim();
-    if (p.insurance_number?.trim()) return p.insurance_number.trim();
-    if (p.national_id?.trim()) return `P-${p.national_id.slice(-4)}`;
-    return `${1001 + (idx ?? 0)}`;
-  };
 
   useEffect(() => {
     return subscribeGlobalFocus('patients', (payload) => {
@@ -85,26 +97,27 @@ export function Patients() {
       list = list.filter((p) => labOrders.some((l) => l.patient_id === p.id));
     } else if (chipFilter === 'implant') {
       list = list.filter((p) => implants.some((im) => im.patient_id === p.id));
-    } else if (chipFilter === 'checks_inst') {
+    } else if (chipFilter === 'checks_inst' && financialReady) {
       list = list.filter((p) => installments.some((i) => i.patient_id === p.id && i.status === 'active') || checks.some((c) => c.patient_id === p.id && c.status === 'pending'));
-    } else if (chipFilter === 'debtors') {
-      list = list.filter((p) => {
-        const cost = treatments.filter((t) => t.patient_id === p.id).reduce((s, t) => s + Number(t.total_cost), 0);
-        const paid = payments.filter((pay) => pay.patient_id === p.id).reduce((s, pay) => s + Number(pay.amount), 0);
-        return cost - paid > 0;
-      });
+    } else if (chipFilter === 'debtors' && financialReady) {
+      list = list.filter(p => (ledgers.get(p.id)?.totalRemainingDebt ?? 0) > 0);
     }
-    const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((p, idx) =>
-      `${p.first_name} ${p.last_name}`.toLowerCase().includes(q) ||
-      p.phone?.includes(q) ||
-      p.national_id?.includes(q) ||
-      getPatientFileNo(p, idx).toLowerCase().includes(q)
-    );
-  }, [patients, treatments, labOrders, implants, installments, checks, payments, search, chipFilter]);
+    return list.filter(patient => matchesPatientDirectoryQuery(patient, search));
+  }, [patients, treatments, labOrders, implants, installments, checks, search, chipFilter, financialReady, ledgers]);
 
   const handleSave = async (data: Partial<Patient>): Promise<boolean> => {
+    if (saving) return false;
+    const reference = getRecordedPatientFileNo({ first_name: '', last_name: '', phone: null, national_id: null, insurance_number: null, notes: data.notes ?? null });
+    const existingReference = editing ? getRecordedPatientFileNo(editing) : null;
+    const conflict = findVisiblePatientIdentityConflict(patients, {
+      fileNo: normalizePatientQuery(reference ?? '') !== normalizePatientQuery(existingReference ?? '') ? reference : null,
+      nationalId: normalizePatientQuery(data.national_id ?? '') !== normalizePatientQuery(editing?.national_id ?? '') ? data.national_id : null,
+    }, editing?.id);
+    if (conflict) {
+      setActionError(conflict === 'file' ? 'شماره پرونده در فهرست فعلی تکراری است.' : 'کد ملی در فهرست فعلی تکراری است.');
+      HapticEngine.warning();
+      return false;
+    }
     setSaving(true);
     setActionSuccess(null);
     const result = editing
@@ -157,22 +170,20 @@ export function Patients() {
   };
 
   const handleExportCsv = () => {
-    const rows = patients.map((p, idx) => {
-      const pTreatments = treatments.filter((t) => t.patient_id === p.id);
-      const pPayments = payments.filter((pay) => pay.patient_id === p.id);
-      const totalPaid = pPayments.reduce((s, pay) => s + Number(pay.amount), 0);
-      const totalCost = pTreatments.reduce((s, t) => s + Number(t.total_cost), 0);
+    if (!financialReady) return;
+    const rows = patients.map((p) => {
+      const ledger = ledgers.get(p.id)!;
       return {
-        file_no: getPatientFileNo(p, idx),
+        file_no: getRecordedPatientFileNo(p) ?? '',
         first_name: p.first_name,
         last_name: p.last_name,
         national_id: p.national_id || '',
         phone: p.phone || '',
         gender: p.gender === 'female' ? 'زن' : p.gender === 'male' ? 'مرد' : 'نامشخص',
         insurance: p.insurance_provider || 'آزاد',
-        total_cost: totalCost,
-        total_paid: totalPaid,
-        balance: totalCost - totalPaid,
+        total_cost: ledger.postedChargesTotal,
+        total_paid: ledger.netPaidTotal,
+        balance: ledger.totalRemainingDebt,
         status: p.status === 'active' ? 'فعال' : 'آرشیوشده',
       };
     });
@@ -197,9 +208,10 @@ export function Patients() {
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setSearchOpen(!searchOpen)}
-            className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 transition-all haptic ${searchOpen || search ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+            className={`min-w-[44px] min-h-[44px] rounded-2xl flex items-center justify-center shrink-0 transition-all haptic ${searchOpen || search ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
             title="جستجوی سریع بیمار، موبایل یا شماره پرونده"
             aria-label="جستجوی بیمار"
+            aria-expanded={searchOpen}
           >
             <Search size={17} />
           </button>
@@ -211,8 +223,8 @@ export function Patients() {
               { id: 'lab' as const, label: 'دارای لابراتوار', count: patients.filter((p) => labOrders.some((l) => l.patient_id === p.id)).length, color: '#DB2777' },
               { id: 'implant' as const, label: 'دارای ایمپلنت', count: patients.filter((p) => implants.some((im) => im.patient_id === p.id)).length, color: '#0891B2' },
               { id: 'checks_inst' as const, label: 'چک و اقساط', count: patients.filter((p) => installments.some((i) => i.patient_id === p.id && i.status === 'active') || checks.some((c) => c.patient_id === p.id && c.status === 'pending')).length, color: '#D97706' },
-              { id: 'debtors' as const, label: 'بدهکاران', count: patients.filter((p) => { const c = treatments.filter((t) => t.patient_id === p.id).reduce((s, t) => s + Number(t.total_cost), 0); const pd = payments.filter((pay) => pay.patient_id === p.id).reduce((s, pay) => s + Number(pay.amount), 0); return c - pd > 0; }).length, color: '#E11D48' },
-            ].map((ch) => {
+              { id: 'debtors' as const, label: 'بدهکاران', count: patients.filter(p => (ledgers.get(p.id)?.totalRemainingDebt ?? 0) > 0).length, color: '#E11D48' },
+            ].filter(ch => financialReady || !['debtors', 'checks_inst'].includes(ch.id)).map((ch) => {
               const active = chipFilter === ch.id;
               return (
                 <button
@@ -228,7 +240,7 @@ export function Patients() {
                 </button>
               );
             })}
-            <button onClick={handleExportCsv} className="px-2.5 py-1.5 rounded-2xl bg-sky-50 text-sky-700 border border-sky-200 text-[11px] font-extrabold whitespace-nowrap flex items-center gap-1 shrink-0 haptic" title="خروجی اکسل پرونده‌ها">
+            <button disabled={!financialReady} onClick={handleExportCsv} className="px-2.5 py-1.5 rounded-2xl bg-sky-50 text-sky-700 border border-sky-200 text-[11px] font-extrabold whitespace-nowrap flex items-center gap-1 shrink-0 haptic" title="خروجی اکسل پرونده‌ها">
               <FileSpreadsheet size={13} /><span>اکسل</span>
             </button>
           </div>
@@ -246,7 +258,7 @@ export function Patients() {
           <div className="mt-2 pt-2 border-t border-gray-100 animate-slide-down">
             <div className="relative">
               <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-600" />
-              <Input autoFocus placeholder="جستجو با نام، شماره پرونده، موبایل یا کد ملی..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9 text-xs" />
+              <Input autoFocus aria-label="جستجو با نام، شماره پرونده، موبایل یا کد ملی" type="search" placeholder="جستجو با نام، شماره پرونده، موبایل یا کد ملی..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9 text-xs" />
             </div>
           </div>
         )}
@@ -256,23 +268,24 @@ export function Patients() {
       {actionSuccess && <p className="text-xs text-emerald-700 bg-emerald-50 rounded-xl p-2.5 border border-emerald-200">{actionSuccess}</p>}
 
       {filtered.length === 0 ? (
-        <EmptyState icon={<Users size={28} />} title="پرونده‌ای یافت نشد" subtitle="برای تشکیل پرونده جدید روی دکمه + بزنید" color="#10B981" />
+        <EmptyState icon={<Users size={28} />} title="پرونده‌ای یافت نشد" subtitle={search.trim() || chipFilter !== 'all' ? 'عبارت جستجو یا فیلتر را تغییر دهید.' : 'برای تشکیل پرونده جدید روی دکمه + بزنید'} color="#10B981" />
       ) : (
         <div className="space-y-2.5 stagger">
-          {filtered.map((patient, idx) => {
+          {filtered.map((patient) => {
             const pAppointments = appointments.filter((a) => a.patient_id === patient.id);
             const pTreatments = treatments.filter((t) => t.patient_id === patient.id);
             const pPayments = payments.filter((p) => p.patient_id === patient.id);
             const pLabs = labOrders.filter((l) => l.patient_id === patient.id);
             const pImplants = implants.filter((im) => im.patient_id === patient.id);
             const pReminders = reminders.filter((r) => r.patient_id === patient.id);
-            const totalPaid = pPayments.reduce((s, p) => s + Number(p.amount), 0);
-            const totalCost = pTreatments.reduce((s, t) => s + Number(t.total_cost), 0);
-            const balance = totalCost - totalPaid;
+            const ledger = ledgers.get(patient.id);
+            const totalPaid = ledger?.netPaidTotal ?? 0;
+            const totalCost = ledger?.postedChargesTotal ?? 0;
+            const balance = ledger?.totalRemainingDebt ?? 0;
             const pInstallments = installments.filter((i) => i.patient_id === patient.id && i.status === 'active');
             const pChecks = checks.filter((c) => c.patient_id === patient.id && c.status === 'pending');
             const allergySafety = assessPatientAllergySafety(patient);
-            const fileNo = getPatientFileNo(patient, idx);
+            const fileNo = getRecordedPatientFileNo(patient);
             const isExpanded = expandedCardId === patient.id;
 
             const clinicalJourney = computePatientClinicalJourney({
@@ -293,13 +306,13 @@ export function Patients() {
                 items={[
                   { id: 'open_detail', label: 'مشاهده پرونده کامل', icon: <FileText size={15} />, onSelect: () => { setDetailStage(null); setDetailPatient(patient); } },
                   { id: 'edit_patient', label: 'ویرایش مشخصات بیمار', icon: <Users size={15} />, onSelect: () => { setEditing(patient); setFormOpen(true); } },
-                  { id: 'patient_finance', label: 'حساب مالی و اقساط', icon: <Wallet size={15} />, onSelect: () => emitGlobalFocus({ section: 'finance', query: `${patient.first_name} ${patient.last_name}` }) },
+                  ...(canViewFinance ? [{ id: 'patient_finance', label: 'حساب مالی و اقساط', icon: <Wallet size={15} />, onSelect: () => emitGlobalFocus({ section: 'finance', query: `${patient.first_name} ${patient.last_name}` }) }] : []),
                   { id: 'delete_patient', label: 'آرشیو / حذف حفاظت‌شده پرونده', destructive: true, icon: <Trash2 size={15} />, onSelect: () => setDeleteId(patient.id) },
                 ]}
               >
                 <div className="glass-card p-3.5 transition-all">
-                  <div className="flex items-start justify-between gap-2.5">
-                    <div onClick={() => { setDetailStage(null); setDetailPatient(patient); }} className="flex items-start gap-2.5 flex-1 min-w-0 cursor-pointer">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-2.5">
+                    <div role="button" tabIndex={0} aria-label={`باز کردن پرونده ${patient.first_name} ${patient.last_name}`} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailStage(null); setDetailPatient(patient); } }} onClick={() => { setDetailStage(null); setDetailPatient(patient); }} className="flex items-start gap-2.5 flex-1 min-w-0 cursor-pointer rounded-xl focus-visible:ring-2 focus-visible:ring-teal-600">
                       <div
                         className="w-11 h-11 rounded-2xl flex flex-col items-center justify-center text-white font-black text-sm shrink-0 shadow-sm"
                         style={{ background: patient.gender === 'female' ? 'linear-gradient(135deg,#EC4899,#DB2777)' : 'linear-gradient(135deg,#10B981,#059669)' }}
@@ -310,7 +323,7 @@ export function Patients() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center flex-wrap gap-1.5">
                           <h3 className="text-sm font-black text-slate-800 truncate">{patient.first_name} {patient.last_name}</h3>
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">پرونده #{fileNo}</span>
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">{fileNo ? `پرونده #${fileNo}` : 'شماره پرونده ثبت نشده'}</span>
                           {patient.status === 'inactive' && <span className="text-[9.5px] font-extrabold px-1.5 py-0.5 rounded-lg bg-slate-200 text-slate-700">آرشیوشده</span>}
                           {allergySafety.assistiveFreeTextAlerts.length > 0 && (
                             <span className="flex items-center gap-0.5 text-[9.5px] font-extrabold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-lg shrink-0">
@@ -321,23 +334,23 @@ export function Patients() {
 
                         <div className="flex items-center flex-wrap gap-2.5 mt-1 text-[11px] text-gray-500">
                           {patient.phone && <span className="flex items-center gap-1 font-semibold" dir="ltr"><Phone size={11} className="text-emerald-600" />{patient.phone}</span>}
-                          {pInstallments.length > 0 && <span className="flex items-center gap-0.5 text-blue-600 font-bold"><CreditCard size={11} /> {pInstallments.length.toLocaleString('fa-IR')} قسط</span>}
-                          {pChecks.length > 0 && <span className="flex items-center gap-0.5 text-amber-600 font-bold"><ScrollText size={11} /> {pChecks.length.toLocaleString('fa-IR')} چک</span>}
+                          {financialReady && pInstallments.length > 0 && <span className="flex items-center gap-0.5 text-blue-600 font-bold"><CreditCard size={11} /> {pInstallments.length.toLocaleString('fa-IR')} قسط</span>}
+                          {financialReady && pChecks.length > 0 && <span className="flex items-center gap-0.5 text-amber-600 font-bold"><ScrollText size={11} /> {pChecks.length.toLocaleString('fa-IR')} چک</span>}
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-left shrink-0 flex flex-col items-end">
-                      {balance > 0 ? (
+                    <div className="w-full sm:w-auto text-left flex flex-wrap sm:flex-col items-end gap-1 min-w-0">
+                      {!canViewFinance ? null : !ledger ? <span className="text-xs text-[var(--md-secondary)]">مانده حساب نامشخص</span> : balance > 0 ? (
                         <span className="px-2.5 py-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-[11px] font-black">مانده: {balance.toLocaleString('fa-IR')} ت</span>
                       ) : (
-                        <span className="px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-black">تسویه کامل</span>
+                        <span className="px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-black">مانده ثبت‌شده: صفر</span>
                       )}
                       <div className="flex items-center gap-1.5 mt-1.5">
-                        <button onClick={() => setExpandedCardId(isExpanded ? null : patient.id)} className="text-[10px] font-extrabold text-purple-600 bg-purple-50 hover:bg-purple-100 px-2 py-0.5 rounded-lg">
+                        <button aria-expanded={isExpanded} onClick={() => setExpandedCardId(isExpanded ? null : patient.id)} className="min-h-[44px] text-xs font-extrabold text-purple-600 bg-purple-50 hover:bg-purple-100 px-2 py-0.5 rounded-lg">
                           {isExpanded ? 'بستن ریز پرونده ▲' : 'ریز روند و دندان ▼'}
                         </button>
-                        <button onClick={() => { setDetailStage(null); setDetailPatient(patient); }} className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg">
+                        <button onClick={() => { setDetailStage(null); setDetailPatient(patient); }} className="min-h-[44px] text-xs font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg">
                           پرونده کامل ←
                         </button>
                       </div>
@@ -372,11 +385,11 @@ export function Patients() {
 
                   {isExpanded && (
                     <div className="mt-2.5 pt-2.5 border-t border-dashed border-gray-200 space-y-2 animate-fade-in">
-                      <div className="grid grid-cols-3 gap-1.5 text-center">
+                      {ledger && <div className="grid grid-cols-3 gap-1.5 text-center">
                         <div className="rounded-xl bg-slate-50 p-1.5"><p className="text-[9px] text-gray-400">جمع کل درمان</p><p className="text-xs font-black text-slate-700">{totalCost.toLocaleString('fa-IR')} ت</p></div>
                         <div className="rounded-xl bg-emerald-50/70 p-1.5"><p className="text-[9px] text-emerald-600">پرداختی بیمار</p><p className="text-xs font-black text-emerald-700">{totalPaid.toLocaleString('fa-IR')} ت</p></div>
                         <div className="rounded-xl bg-rose-50/70 p-1.5"><p className="text-[9px] text-rose-500">مانده بدهی</p><p className="text-xs font-black text-rose-600">{balance.toLocaleString('fa-IR')} ت</p></div>
-                      </div>
+                      </div>}
                       {pTreatments.length > 0 && (
                         <div className="space-y-1">
                           {pTreatments.slice(0, 3).map((t) => (
@@ -406,14 +419,17 @@ export function Patients() {
       )}
 
       <Sheet open={formOpen} onClose={() => { setFormOpen(false); setEditing(null); }} title={editing ? 'ویرایش پرونده بیمار' : 'تشکیل پرونده بیمار جدید'} icon={<Users size={20} />} color="#10B981">
-        <PatientForm patient={editing} nextFileNo={String(1001 + patients.length)} onSave={handleSave} saving={saving} />
+        <PatientForm patient={editing} onSave={handleSave} saving={saving} />
       </Sheet>
 
-      <Sheet open={!!detailPatient} onClose={() => setDetailPatient(null)} title={detailPatient ? `${detailPatient.first_name} ${detailPatient.last_name}` : ''} icon={<Users size={20} />} color="#10B981">
+      <Sheet layout="workspace" open={!!detailPatient} onClose={() => setDetailPatient(null)} title={detailPatient ? `${detailPatient.first_name} ${detailPatient.last_name}` : ''} icon={<Users size={20} />} color="#10B981">
         {detailPatient && (
           <PatientDetail
+            key={detailPatient.id}
             patient={detailPatient}
             initialStage={detailStage}
+            canViewFinance={canViewFinance}
+            financialReady={financialReady}
             onOpenAppointments={() => {
               emitGlobalFocus({ section: 'appointments', query: `${detailPatient.first_name} ${detailPatient.last_name}`, recordId: detailPatient.id });
               setDetailPatient(null);
@@ -430,14 +446,14 @@ export function Patients() {
             onEdit={() => { setEditing(detailPatient); setDetailPatient(null); setFormOpen(true); }}
             onDelete={() => { setDeleteId(detailPatient.id); setDetailPatient(null); }}
             onOpenGallery={() => setGalleryOpen(true)}
-            onOpenPrint={() => setPrintOpen(true)}
+            onOpenPrint={() => { if (financialReady) setPrintOpen(true); }}
             onOpenConsent={() => setConsentOpen(true)}
           />
         )}
       </Sheet>
 
       <PatientGalleryModal open={galleryOpen} onClose={() => setGalleryOpen(false)} patient={detailPatient} />
-      <PrintInvoiceModal open={printOpen} onClose={() => setPrintOpen(false)} patient={detailPatient} treatments={treatments.filter((t) => t.patient_id === detailPatient?.id)} />
+      <PrintInvoiceModal open={printOpen && canViewFinance && financialReady} onClose={() => setPrintOpen(false)} patient={detailPatient} treatments={treatments.filter((t) => t.patient_id === detailPatient?.id)} />
       <ConsentModal open={consentOpen} onClose={() => setConsentOpen(false)} patient={detailPatient} />
 
       <ConfirmDialog

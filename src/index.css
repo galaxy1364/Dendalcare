@@ -44,6 +44,10 @@
   --md-warning: #92510C;
   --md-success: #176B52;
   --md-border: #D8E2EA;
+  --md-muted-surface: #EEF3F7;
+  --md-on-primary: #FFFFFF;
+  --md-on-critical: #FFFFFF;
+  --md-on-navy: #FFFFFF;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-press: cubic-bezier(0.32, 0.72, 0, 1);
@@ -64,6 +68,9 @@
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --keyboard-inset-bottom: 0px;
+  --shell-gutter: 8px;
+  --shell-section-gap: var(--md-density-section-gap, 12px);
+  --shell-touch-target: 44px;
 
   /* GE-0004 Semantic Layered Surface Defaults (Apple Liquid Glass / M3 Adaptive / Fluent 2) */
   --surface-glass-bg: rgba(255, 255, 255, 0.88);
@@ -116,8 +123,9 @@ body {
   overflow: hidden;
   padding-top: var(--safe-top);
   padding-bottom: var(--safe-bottom);
-  padding-inline-start: var(--safe-left);
-  padding-inline-end: var(--safe-right);
+  /* Safe area env values are physical, not logical; RTL must not swap them. */
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
 }
 
 .app-shell-main {
@@ -547,7 +555,7 @@ html[data-reduce-motion="true"] .aurora-mesh-blob {
 }
 
 input, textarea, select { font-family: inherit; }
-input:focus, textarea:focus, select:focus { outline: none; }
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--md-primary); outline-offset: 2px; }
 
 .badge {
   display: inline-flex;
@@ -729,7 +737,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #087C76;
+  outline: 2px solid var(--md-primary);
   outline-offset: 2px;
 }
 
@@ -848,6 +856,26 @@ html[data-density="spacious"] .glass-card {
   box-shadow: var(--surface-shadow, 0 2px 10px rgba(20, 46, 67, 0.05)), var(--surface-specular, none);
 }
 
+/* Shared chrome/content rhythm; physical safe area is owned by the root shell. */
+.shell-content-gutter { padding-inline: var(--shell-gutter); }
+.shell-content-stack { display: flex; flex-direction: column; gap: var(--shell-section-gap); }
+.shell-content-stack > * { min-width: 0; }
+@media (min-width: 768px) { :root { --shell-gutter: 16px; } }
+@media (min-width: 1024px) { :root { --shell-gutter: 20px; } }
+@media (min-width: 1440px) { :root { --shell-gutter: 24px; } }
+html[data-platform-design="material"] { --shell-touch-target: 48px; }
+.shell-topbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.shell-topbar-actions .topbar-btn,
+.shell-topbar-back { width: var(--shell-touch-target); height: var(--shell-touch-target); min-width: var(--shell-touch-target); min-height: var(--shell-touch-target); flex-shrink: 0; }
+@media (max-width: 359px) {
+  .shell-topbar-layout { flex-wrap: wrap; }
+  .shell-topbar-identity { flex-basis: 100%; }
+  .shell-topbar-actions { width: 100%; justify-content: flex-end; }
+}
+html[data-large-text="true"] .shell-topbar-layout { flex-wrap: wrap; }
+html[data-large-text="true"] .shell-topbar-identity { flex-basis: 100%; }
+html[data-large-text="true"] .shell-topbar-actions { width: 100%; justify-content: flex-end; }
+html[data-large-text="true"] .shell-topbar-title { white-space: normal; overflow-wrap: anywhere; }
 .adaptive-shell-container {
   width: 100%;
   max-width: 100%;
@@ -906,21 +934,38 @@ html[data-text-scale-200="true"] .no-scroll-home-shell {
   gap: 0.5rem;
 }
 
-html[data-text-scale-200="true"] .topbar-btn {
-  min-width: 40px;
-  min-height: 40px;
-  width: 40px;
-  height: 40px;
+/* GE-0019C: header wraps instead of shrinking controls at narrow widths and large text. */
+
+/* GE-0017B: independently animated SVG character parts, no whole-icon bouncing. */
+.mascot-rig [data-mascot-part] { transform-box: fill-box; transform-origin: center; }
+.mascot-rig .mascot-rig-eye { animation: mascotRigBlink 4.4s ease-in-out 1; }
+.mascot-rig .mascot-rig-eye-right { animation-delay: 90ms; }
+.mascot-rig .mascot-rig-brows { animation: mascotRigBrows 650ms ease-out both; }
+.mascot-rig .mascot-rig-mouth { animation: mascotRigMouth 450ms ease-out both; }
+.mascot-rig .mascot-rig-arm-left { transform-origin: 100% 0%; }
+.mascot-rig .mascot-rig-arm-right { transform-origin: 0% 0%; }
+[data-mascot-mood="happy"] .mascot-rig-arm-left,
+[data-mascot-mood="celebrating"] .mascot-rig-arm-left,
+.mascot-rig-reacting .mascot-rig-arm-left { animation: mascotRigWaveLeft 650ms ease-in-out 2; }
+[data-mascot-mood="celebrating"] .mascot-rig-arm-right,
+.mascot-rig-reacting .mascot-rig-arm-right { animation: mascotRigWaveRight 650ms ease-in-out 2; }
+[data-mascot-mood="concerned"] .mascot-rig-brows,
+[data-mascot-mood="sad"] .mascot-rig-brows { animation: mascotRigConcern 850ms ease-in-out 2; }
+.mascot-rig-sweat, .mascot-rig-tear { animation: mascotRigDrop 1.3s ease-in-out 2; }
+[data-mascot-mood="thinking"] .mascot-rig-eye { animation: mascotRigFocus 1.2s ease-in-out 2; }
+[data-mascot-mood="celebrating"] .mascot-rig-mouth { animation: mascotRigJoy 650ms ease-in-out 2; }
+.mascot-rig .mascot-sparkle { animation-iteration-count: 1; }
+@keyframes mascotRigBlink { 0%, 78%, 88%, 100% { transform: scaleY(1); } 83% { transform: scaleY(.12); } }
+@keyframes mascotRigBrows { from { transform: translateY(2px); } to { transform: translateY(0); } }
+@keyframes mascotRigMouth { from { transform: scale(.85); } to { transform: scale(1); } }
+@keyframes mascotRigWaveLeft { 0%,100% { transform: rotate(0); } 45% { transform: rotate(68deg); } }
+@keyframes mascotRigWaveRight { 0%,100% { transform: rotate(0); } 45% { transform: rotate(-68deg); } }
+@keyframes mascotRigConcern { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes mascotRigDrop { 0% { opacity: .25; transform: translateY(-3px); } 50% { opacity: 1; } 100% { opacity: .75; transform: translateY(3px); } }
+@keyframes mascotRigFocus { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-1.4px); } }
+@keyframes mascotRigJoy { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12,1.18); } }
+@media (prefers-reduced-motion: reduce) {
+  .mascot-rig *, .mascot-rig-reacting { animation: none !important; transition: none !important; }
 }
-
-@media (max-width: 359px) {
-  .topbar-btn {
-    min-width: 40px;
-    min-height: 40px;
-    width: 40px;
-    height: 40px;
-  }
-}
-
-
-
+html[data-reduce-motion="true"] .mascot-rig *,
+html[data-reduce-motion="true"] .mascot-rig-reacting { animation: none !important; transition: none !important; }

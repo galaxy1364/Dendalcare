@@ -12,6 +12,8 @@ import {
   type Safteh,
 } from '@/lib/supabase';
 import { toJalaliStr, todayGregorian } from '@/lib/jalali';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
+import { getActiveTenantId, getActiveBranchId } from '@/services/authentication/authService';
 
 export interface SmartReminderRules {
   checkLeadDays: number;
@@ -434,15 +436,34 @@ export function buildReminderReferenceTag(alertId: string): string {
   return `[REF:${alertId}]`;
 }
 
+// Deterministic UUIDv8 derived from a scoped, versioned alert occurrence.
+// Never generate a random fallback: uncertainty must fail closed.
+export async function deriveSmartReminderId(tenantId: string, branchId: string, alertId: string, dueDate: string): Promise<string> {
+  if (!tenantId.trim() || !branchId.trim() || !alertId.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new Error('REMINDER_IDENTITY_INVALID');
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(['minadental-smart-reminder-v1', tenantId, branchId, alertId, dueDate])));
+  const bytes = new Uint8Array(digest).slice(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x80;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
+}
+
 export async function syncLiveAlertsToDatabaseReminders(
   liveAlerts: LiveSmartAlert[],
   existingReminders: Reminder[]
 ): Promise<number> {
   const today = todayGregorian();
   let insertedCount = 0;
+  let unconfirmedCount = 0;
+  const attempted = new Set<string>();
+  const tenantId = getActiveTenantId();
+  const branchId = getActiveBranchId();
+  if (!tenantId.trim() || !branchId.trim()) throw new Error('REMINDER_SCOPE_INVALID');
 
   for (const alert of liveAlerts) {
     const refTag = buildReminderReferenceTag(alert.id);
+    if (attempted.has(refTag)) continue;
+    attempted.add(refTag);
     const exists = existingReminders.some((r) => {
       if (r.status !== 'pending') return false;
       if (r.description && r.description.includes(refTag)) return true;
@@ -476,7 +497,12 @@ export async function syncLiveAlertsToDatabaseReminders(
 
     const targetDate = alert.dueDate < today ? today : alert.dueDate;
 
-    const { error } = await supabase.from('reminders').insert({
+    const id = await deriveSmartReminderId(tenantId, branchId, alert.id, alert.dueDate);
+    if (getActiveTenantId() !== tenantId || getActiveBranchId() !== branchId) throw new Error('REMINDER_SCOPE_CHANGED');
+    // UPSERT with ignoreDuplicates does not overwrite a previously acknowledged
+    // occurrence and does not enter the generic INSERT/UPDATE offline queue.
+    const result = await supabase.from('reminders').upsert({
+      id, tenant_id: tenantId, branch_id: branchId,
       patient_id: alert.patientId,
       title: alert.title,
       description: `${alert.subtitle} ${refTag}`,
@@ -485,10 +511,18 @@ export async function syncLiveAlertsToDatabaseReminders(
       category: categoryMap[alert.domain] || 'other',
       priority: priorityMap[alert.urgency] || 'high',
       status: 'pending',
-    });
+    }, { onConflict: 'id', ignoreDuplicates: true });
 
-    if (!error) insertedCount++;
+    if (getMutationOutcome(result) === 'confirmed' && 'serverConfirmed' in result && result.serverConfirmed === true) {
+      insertedCount++;
+    } else {
+      // A conflict or lost response may mean another client committed the same
+      // occurrence. Confirm the scoped row, without resetting its status.
+      const existing = await supabase.from('reminders').select('id,description').eq('tenant_id', tenantId).eq('branch_id', branchId).eq('id', id).maybeSingle();
+      if (existing.error || existing.data?.id !== id || !existing.data.description?.includes(refTag)) unconfirmedCount++;
+    }
   }
 
+  if (unconfirmedCount > 0) throw new Error('REMINDER_SYNC_UNCONFIRMED');
   return insertedCount;
 }

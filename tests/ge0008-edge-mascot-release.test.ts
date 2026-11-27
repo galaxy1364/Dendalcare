@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { computeMascotMood } from '@/app/providers/NotificationReadModel';
+import { loadZeroLossLedger, reconcileZeroLossAlerts, acknowledgeZeroLossAlert, snoozeZeroLossAlert, sendRealDeviceNotification } from '@/lib/deviceNotifications';
 import {
   isDebugCertificateDn,
   parseKeytoolPrintCertOutput,
@@ -35,6 +36,63 @@ const ROOT = process.cwd();
 
 export async function runAllGe0008EdgeMascotReleaseTests(): Promise<Ge0008TestResult[]> {
   return [
+    await runCase('GE-0016: legacy ledger redaction, acknowledgement and snooze preservation, OS text privacy', async () => {
+      const key = 'minadental_zero_loss_notif_ledger_v1';
+      const entries = new Map<string, string>();
+      const captured: Array<{ title: string; body?: string }> = [];
+      const mockStorage = {
+        getItem: (k: string) => entries.get(k) ?? null,
+        setItem: (k: string, v: string) => { entries.set(k, v); },
+      };
+      const mockGlobals = {
+        // Browser feature detection checks both window.Notification and the global binding.
+        window: { Notification: { permission: 'granted' } },
+        localStorage: mockStorage,
+        Notification: { permission: 'granted' },
+        navigator: { serviceWorker: { getRegistration: async () => ({
+          showNotification: async (title: string, options: NotificationOptions) => {
+            captured.push({ title, body: options.body });
+          },
+        }) } },
+      };
+      const previous = Object.keys(mockGlobals).map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)] as const);
+      try {
+        for (const [k, v] of Object.entries(mockGlobals)) {
+          Object.defineProperty(globalThis, k, { configurable: true, writable: true, value: v });
+        }
+        const now = new Date().toISOString();
+        const day = now.slice(0, 10);
+        const legacyKey = 'synthetic-legacy_' + day;
+        const legacy = {
+          alertId: 'synthetic-legacy', title: 'PRIVATE_TITLE', subtitle: 'PRIVATE_NOTE',
+          patientName: 'PRIVATE_NAME', patientPhone: 'PRIVATE_PHONE', amount: 12345678,
+          domain: 'finance', urgency: 'critical', targetSection: 'finance',
+          firstSeenAt: now, lastSurfacedAt: now, status: 'snoozed',
+          snoozeUntil: Date.now() + 600000, osDispatched: true,
+        };
+        entries.set(key, JSON.stringify({ [legacyKey]: legacy }));
+        const migrated = loadZeroLossLedger()[legacyKey];
+        assert(migrated.status === 'snoozed' && migrated.snoozeUntil === legacy.snoozeUntil && migrated.osDispatched, 'Migration must preserve tracking metadata');
+        const fresh = { id: 'synthetic-new', title: 'PRIVATE_TITLE', subtitle: 'PRIVATE_NOTE',
+          domain: 'finance', urgency: 'critical' as const, targetSection: 'finance',
+          patientName: 'PRIVATE_NAME', patientPhone: 'PRIVATE_PHONE', amount: 12345678 };
+        assert(reconcileZeroLossAlerts([fresh]).length === 1, 'New alert must be visible');
+        snoozeZeroLossAlert(fresh.id, 15);
+        assert(reconcileZeroLossAlerts([fresh]).length === 0, 'Snooze must still work');
+        acknowledgeZeroLossAlert(fresh.id);
+        assert(reconcileZeroLossAlerts([fresh]).length === 0, 'Acknowledgement must still work');
+        const raw = entries.get(key) ?? '';
+        assert(!raw.includes('PRIVATE_') && !raw.includes('12345678'), 'No private alert text or financial amount in ledger');
+        assert(!raw.includes('patientName') && !raw.includes('patientPhone') && !raw.includes('"amount"'), 'No sensitive ledger fields');
+        assert(await sendRealDeviceNotification({ title: 'PRIVATE_TITLE', body: 'PRIVATE_NOTE', urgent: true }), 'OS dispatch should succeed');
+        assert(captured.length === 1 && !JSON.stringify(captured).includes('PRIVATE_'), 'OS notification must not display private text');
+      } finally {
+        for (const [k, d] of previous) {
+          if (d) Object.defineProperty(globalThis, k, d);
+          else Reflect.deleteProperty(globalThis, k);
+        }
+      }
+    }),
     await runCase('GE-0008 #1: scripts/sync-version.mjs verifies parity and repairs drifted Gradle/version.json without touching signingConfigs', () => {
       const scriptPath = path.join(ROOT, 'scripts/sync-version.mjs');
       assert(fs.existsSync(scriptPath), 'scripts/sync-version.mjs must exist');
@@ -147,7 +205,18 @@ Certificate fingerprints:
     await runCase('GE-0008 #4: Emotional 3D Mascot is frameless everywhere in-app (44-56px), has 7 deterministic states & zero patient PHI', () => {
       const mascotSrc = fs.readFileSync(path.join(ROOT, 'src/components/ui/MascotTooth.tsx'), 'utf8');
       assert(mascotSrc.includes('data-mascot-frameless="true"'), 'MascotTooth must render frameless transparent 3D mascot');
-      assert(mascotSrc.includes('role="img"'), 'MascotTooth must expose accessible role="img"');
+      assert(mascotSrc.includes("role={interactive || onClick ? 'button' : 'img'}"), 'Mascot must expose image semantics or interactive button semantics as appropriate');
+      assert(mascotSrc.includes('onKeyDown=') && mascotSrc.includes('tabIndex='), 'Interactive mascot must support keyboard activation');
+      for (const part of ['body', 'left-eye', 'right-eye', 'brows', 'mouth', 'left-arm', 'right-arm', 'sweat', 'tear']) {
+        assert(mascotSrc.includes('data-mascot-part="' + part + '"'), 'Independent SVG rig missing ' + part);
+      }
+      assert(!mascotSrc.includes('overflow-visible mascot-breathe'), 'Mascot must not animate by bouncing the entire icon');
+      const rigCss = fs.readFileSync(path.join(ROOT, 'src/index.css'), 'utf8');
+      for (const motion of ['mascotRigBlink', 'mascotRigWaveLeft', 'mascotRigWaveRight', 'mascotRigConcern', 'mascotRigDrop', 'mascotRigFocus', 'mascotRigJoy']) {
+        assert(rigCss.includes('@keyframes ' + motion), 'Missing expressive motion ' + motion);
+      }
+      assert(rigCss.includes('.mascot-rig *, .mascot-rig-reacting { animation: none !important;'), 'Rig must respect OS reduced motion');
+      assert(rigCss.includes('html[data-reduce-motion="true"] .mascot-rig *'), 'Rig must respect app reduced motion');
       assert(mascotSrc.includes('aria-label='), 'MascotTooth must expose accessible Persian aria-label');
       assert(
         !mascotSrc.includes('patientName') && !mascotSrc.includes('nationalCode') && !mascotSrc.includes('phoneNumber'),
@@ -162,7 +231,7 @@ Certificate fingerprints:
         computeMascotMood(
           [{ id: 'a1', domain: 'finance', targetSection: 'finance', patientName: 'بیمار', title: 'چک سررسید گذشته', subtitle: '', dueDate: '2026-11-20', urgency: 'critical' }],
           1,
-          { isOnline: true, isAuthorized: true }
+          { isOnline: true, isAuthorized: true, isDataReady: true }
         ) === 'sad',
         'Overdue/critical alert -> sad'
       );
@@ -170,15 +239,22 @@ Certificate fingerprints:
         computeMascotMood(
           [{ id: 'a2', domain: 'appointment', targetSection: 'appointments', patientName: 'بیمار', title: 'یادآوری پیش‌رو', subtitle: '', dueDate: '2026-11-28', urgency: 'upcoming' }],
           1,
-          { isOnline: true, isAuthorized: true }
+          { isOnline: true, isAuthorized: true, isDataReady: true }
         ) === 'concerned',
         'Pending upcoming alert -> concerned'
       );
       assert(
-        computeMascotMood([], 0, { isOnline: true, isAuthorized: true, justCompleted: true }) === 'celebrating',
+        computeMascotMood([], 0, { isOnline: true, isAuthorized: true, isDataReady: true, justCompleted: true }) === 'celebrating',
         'Completed task with zero overdue -> celebrating'
       );
-      assert(computeMascotMood([], 0, { isOnline: true, isAuthorized: true }) === 'happy', 'Clear clinic state -> happy');
+      assert(computeMascotMood([], 0, { isOnline: true, isAuthorized: true, isDataReady: true }) === 'happy', 'Clear clinic state -> happy');
+
+      assert(computeMascotMood([], 0) === 'neutral', 'Unknown authorization must not show success');
+      assert(computeMascotMood([], 0, { isAuthorized: true }) === 'neutral', 'Unknown data readiness must not show success');
+      assert(computeMascotMood([], 0, { isAuthorized: true, isDataReady: false, justCompleted: true }) === 'neutral', 'Incomplete data must not show celebration');
+      assert(computeMascotMood([], 12, { isAuthorized: true, isDataReady: true }) === 'concerned', 'Pending count alone is not overdue');
+      assert(computeMascotMood([], 1, { isAuthorized: true, isDataReady: true, overdueCount: 1 }) === 'sad', 'Explicit overdue evidence triggers attention');
+      assert(computeMascotMood([{ id: 'today', domain: 'appointment', targetSection: 'appointments', patientName: 'آزمایشی', title: 'امروز', subtitle: '', dueDate: '2026-11-27', urgency: 'today' }], 1, { isAuthorized: true, isDataReady: true }) === 'concerned', 'Today alone is not overdue');
 
       // Ensure NO in-app consumer passes framed={true} or oversized/tiny dimensions
       const consumers = [
@@ -207,7 +283,9 @@ Certificate fingerprints:
       assert(css.includes('height: 100vh;') && css.includes('height: 100dvh;'), 'index.css must include 100vh fallback before 100dvh for legacy WebViews');
       assert(css.includes('--safe-left: env(safe-area-inset-left, 0px);'), 'index.css must define horizontal safe-area-inset-left');
       assert(css.includes('--safe-right: env(safe-area-inset-right, 0px);'), 'index.css must define horizontal safe-area-inset-right');
-      assert(css.includes('padding-inline-start: var(--safe-left);'), 'app-shell-viewport must use logical RTL horizontal safe areas');
+      const rootInsets = css.match(/\.app-shell-viewport\s*\{([^}]+)\}/)?.[1] ?? '';
+      assert(rootInsets.includes('padding-left: var(--safe-left);') && rootInsets.includes('padding-right: var(--safe-right);'), 'Physical left/right insets must remain correct in RTL');
+      assert(!rootInsets.includes('padding-inline-start: var(--safe-left)') && !rootInsets.includes('padding-inline-end: var(--safe-right)'), 'Physical insets must never swap with RTL direction');
       assert(css.includes('@supports not ((backdrop-filter: blur(1px))'), 'index.css must include legacy WebView backdrop-filter fallback');
       assert(css.includes('@keyframes mascotTouchPop'), 'index.css must define mascot touch reaction animation');
     }),
@@ -222,6 +300,10 @@ Certificate fingerprints:
 
       const clientSrc = fs.readFileSync(path.join(ROOT, 'src/services/updates/manifestClient.ts'), 'utf8');
       assert(clientSrc.includes("u.searchParams.set('_cb'"), 'manifestClient must bypass edge CDN cache on fresh browser release-pointer fetches');
+      const metadataBranch = swSrc.slice(swSrc.indexOf('// Never cache mutable release pointers or manifests'), swSrc.indexOf('// P0-02 OTA Fix:'));
+      assert(metadataBranch.includes("if (request.cache === 'no-store') return;") && metadataBranch.indexOf("if (request.cache === 'no-store') return;") < metadataBranch.indexOf('event.respondWith('), 'Explicit no-store release checks must bypass worker forwarding');
+      assert(metadataBranch.includes("fetchWithTimeout(request, { cache: 'no-store' }"), 'Other metadata requests must still be network-only');
+      assert(clientSrc.includes("cache: 'no-store'"), 'Manifest client retains no-store requests');
     }),
   ];
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Wallet, CreditCard, ScrollText, ArrowUpCircle, CalendarClock,
 } from 'lucide-react';
@@ -52,6 +52,9 @@ export const INSTALLMENT_STATUS: Record<string, { label: string; color: string; 
 export function PaymentsTab({ patientId, payments, treatments }: { patientId: string; payments: Payment[]; treatments: Treatment[] }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const requestKey = useRef<string | null>(null);
+  const [requiresReconciliation, setRequiresReconciliation] = useState(false);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<'cash' | 'card' | 'transfer' | 'insurance' | 'installment'>('cash');
   const [desc, setDesc] = useState('');
@@ -59,15 +62,20 @@ export function PaymentsTab({ patientId, payments, treatments }: { patientId: st
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const save = async () => {
+    if (saveLock.current || requiresReconciliation) return;
     setErrorMsg(null);
     const parsed = parseExactTomanAmount(amount, { allowZero: false });
     if (!parsed.ok) {
       setErrorMsg(parsed.messageFa);
       return;
     }
+    saveLock.current = true;
     setSaving(true);
+    try {
+    requestKey.current ??= globalThis.crypto.randomUUID();
     const selectedTreat = treatmentId ? treatments.filter((t) => t.id === treatmentId) : treatments;
     const res = await postPatientPaymentCommand({
+      idempotencyKey: requestKey.current,
       patientId,
       amountInput: parsed.amount,
       paymentMethod: method,
@@ -75,22 +83,32 @@ export function PaymentsTab({ patientId, payments, treatments }: { patientId: st
       description: desc || undefined,
       treatmentsForDeterministicAllocation: selectedTreat,
     });
-    setSaving(false);
     if (!res.ok && res.resolution !== 'queued') {
       setErrorMsg(res.messageFa);
+      if (res.resolution === 'unknown') setRequiresReconciliation(true);
+      else requestKey.current = null;
       return;
     }
+    requestKey.current = null;
     setShowForm(false);
     setAmount('');
     setDesc('');
     setTreatmentId('');
+    } catch {
+      setRequiresReconciliation(true);
+      setErrorMsg('نتیجه پرداخت نامشخص است؛ پیش از ثبت مجدد، دفتر کل را بررسی کنید.');
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
+    }
   };
 
   return (
     <div className="space-y-3 animate-fade-in">
       <SectionHeader title="پرداخت‌ها" count={payments.length} onAdd={() => setShowForm(true)} color="#22C55E" icon={<Wallet size={16} />} />
-      <Sheet open={showForm} onClose={() => setShowForm(false)} title="ثبت دریافت پرداخت از بیمار" icon={<Wallet size={20} />} color="#22C55E">
+      <Sheet open={showForm} onClose={() => { if (!saveLock.current) setShowForm(false); }} title="ثبت دریافت پرداخت از بیمار" icon={<Wallet size={20} />} color="#22C55E">
         <div className="space-y-4">
+          <fieldset disabled={saving || requiresReconciliation} className="space-y-4">
           <Field label="مبلغ (تومان)"><Input type="text" inputMode="numeric" value={amount} onChange={e => { setAmount(e.target.value); setErrorMsg(null); }} placeholder="مبلغ پرداخت به تومان" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="روش پرداخت"><Select value={method} onChange={e => setMethod(e.target.value as any)} options={PAYMENT_METHODS} /></Field>
@@ -99,8 +117,9 @@ export function PaymentsTab({ patientId, payments, treatments }: { patientId: st
             </Field>
           </div>
           <Field label="شرح"><Input value={desc} onChange={e => setDesc(e.target.value)} placeholder="شرح پرداخت..." /></Field>
-          {errorMsg && <p className="text-xs font-bold text-rose-600">{errorMsg}</p>}
-          <Button color="#22C55E" disabled={saving || !amount} className="w-full" onClick={save}>{saving ? 'در حال ثبت اتمیک...' : 'ثبت پرداخت'}</Button>
+          </fieldset>
+          {errorMsg && <p role="alert" className="text-sm font-bold text-rose-600">{errorMsg}</p>}
+          <Button color="#22C55E" disabled={saving || requiresReconciliation || !amount} className="w-full" onClick={save}>{saving ? 'در حال ثبت اتمیک...' : 'ثبت پرداخت'}</Button>
         </div>
       </Sheet>
       {payments.length === 0 ? <EmptyHint text="پرداختی ثبت نشده — روی + پرداخت جدید ثبت کنید" /> : payments.map(p => (
@@ -125,6 +144,9 @@ export function PaymentsTab({ patientId, payments, treatments }: { patientId: st
 export function InstallmentsTab({ patientId, installments }: { patientId: string; installments: Installment[] }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const collectionLock = useRef(false);
+  const [collecting, setCollecting] = useState(false);
+  const [collectionMessage, setCollectionMessage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [form, setForm] = useState({ total_amount: '', monthly_amount: '', total_months: '1', start_date: todayGregorian(), notes: '' });
 
@@ -160,30 +182,55 @@ export function InstallmentsTab({ patientId, installments }: { patientId: string
   };
 
   const payInstallment = async (inst: Installment) => {
-    const payRes = await postPatientPaymentCommand({
-      patientId,
-      amountInput: Number(inst.monthly_amount),
-      paymentMethod: 'installment',
-      businessDate: todayGregorian(),
-      description: `قسط ${inst.paid_months + 1}/${inst.total_months}`,
-      installmentId: inst.id,
-      idempotencyKey: `patient_inst_${inst.id}_${inst.paid_months + 1}`,
-    });
-    if (!payRes.ok && payRes.resolution !== 'queued') return;
-    const newPaid = Number(inst.paid_amount) + Number(inst.monthly_amount);
-    const newMonths = inst.paid_months + 1;
-    const nextDue = new Date(inst.next_due_date ?? new Date()); nextDue.setMonth(nextDue.getMonth() + 1);
-    const status = newMonths >= inst.total_months ? 'completed' : 'active';
-    await supabase.from('installments').update({
-      paid_amount: newPaid, paid_months: newMonths,
-      next_due_date: status === 'completed' ? null : nextDue.toISOString().slice(0, 10), status,
-    }).eq('id', inst.id);
+    if (collectionLock.current || inst.status !== 'active') return;
+    collectionLock.current = true;
+    setCollecting(true);
+    setCollectionMessage(null);
+    try {
+      const payRes = await postPatientPaymentCommand({
+        patientId: patientId,
+        amountInput: Number(inst.monthly_amount),
+        paymentMethod: 'installment',
+        businessDate: todayGregorian(),
+        description: `قسط ${inst.paid_months + 1}/${inst.total_months}`,
+        installmentId: inst.id,
+        idempotencyKey: `patient_inst_${inst.id}_${inst.paid_months + 1}`,
+      });
+      // Queued/unknown/rejected requests are not confirmed receipts.
+      if (!payRes.ok || payRes.resolution !== 'confirmed') {
+        setCollectionMessage(payRes.messageFa + ' وضعیت قسط تغییر نکرد؛ پیش از تلاش مجدد دریافت وجه را بررسی کنید.');
+        return;
+      }
+      const newPaid = Number(inst.paid_amount) + Number(inst.monthly_amount);
+      const newMonths = inst.paid_months + 1;
+      const nextDue = new Date(inst.next_due_date ?? new Date()); nextDue.setMonth(nextDue.getMonth() + 1);
+      const status = newMonths >= inst.total_months ? 'completed' : 'active';
+      // This remains a separate write; never describe partial completion as atomic.
+      const updated = await supabase.from('installments').update({
+        paid_amount: newPaid, paid_months: newMonths,
+        next_due_date: status === 'completed' ? null : nextDue.toISOString().slice(0, 10),
+        status: status,
+      }).eq('id', inst.id).eq('paid_months', inst.paid_months);
+      if (getMutationOutcome(updated) !== 'confirmed') {
+        setCollectionMessage('دریافت وجه تأیید شد، اما وضعیت قسط نیازمند تطبیق است. وجه را دوباره ثبت نکنید.');
+        
+        return;
+      }
+      
+      setCollectionMessage('دریافت وجه و به‌روزرسانی وضعیت قسط تأیید شد.');
+    } catch {
+      setCollectionMessage('نتیجه عملیات نامشخص است؛ پیش از ثبت مجدد، دفتر کل و وضعیت قسط را بررسی کنید.');
+    } finally {
+      collectionLock.current = false;
+      setCollecting(false);
+    }
   };
 
   const del = async (id: string) => { await supabase.from('installments').delete().eq('id', id); };
 
   return (
     <div className="space-y-3 animate-fade-in">
+      {collectionMessage && <p role="status" className="text-sm text-slate-700 dark:text-slate-200 p-2">{collectionMessage}</p>}
       <SectionHeader title="اقساط" count={installments.length} onAdd={() => setShowForm(true)} color="#3B82F6" icon={<CreditCard size={16} />} />
       <Sheet open={showForm} onClose={() => setShowForm(false)} title="تعریف پلن اقساطی جدید" icon={<CreditCard size={20} />} color="#3B82F6">
         <div className="space-y-4">
@@ -228,7 +275,7 @@ export function InstallmentsTab({ patientId, installments }: { patientId: string
               </div>
             )}
             {inst.status === 'active' && (
-              <Button color="#3B82F6" className="w-full" onClick={() => payInstallment(inst)}>ثبت پرداخت اتمیک قسط ({Number(inst.monthly_amount).toLocaleString('fa-IR')} ت)</Button>
+              <Button disabled={collecting} color="#3B82F6" className="w-full" onClick={() => payInstallment(inst)}>ثبت پرداخت قسط ({Number(inst.monthly_amount).toLocaleString('fa-IR')} ت)</Button>
             )}
           </div>
         );

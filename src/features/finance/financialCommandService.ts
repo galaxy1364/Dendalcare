@@ -60,6 +60,12 @@ export function computeDeterministicTreatmentAllocations(
   return { allocations, unappliedCreditToman: remaining };
 }
 
+function sameQueuedPaymentScope(draft: QueuedFinanceCommandDraft, scope: { tenantId: string; branchId: string; idempotencyKey: string }): boolean {
+  return draft.projectRef === SUPABASE_PROJECT_REF &&
+    draft.tenantId === scope.tenantId && draft.branchId === scope.branchId &&
+    draft.commandName === 'post_patient_payment_v16' && draft.idempotencyKey === scope.idempotencyKey;
+}
+
 function queuePaymentDraft(params: {
   tenantId: string;
   branchId: string;
@@ -70,8 +76,10 @@ function queuePaymentDraft(params: {
   paymentMethod: string;
   businessDate: string;
   allocations: ChargeAllocationInput[];
+  replaySafe: boolean;
 }) {
   const drafts = getQueuedFinanceDrafts();
+  if (drafts.some(d => sameQueuedPaymentScope(d, params))) return;
   drafts.push({
     id: `fin_draft_${Date.now()}`,
     projectRef: SUPABASE_PROJECT_REF,
@@ -86,6 +94,7 @@ function queuePaymentDraft(params: {
       paymentMethod: params.paymentMethod,
       businessDate: params.businessDate,
       allocations: params.allocations,
+      replaySafe: params.replaySafe,
     },
     createdAt: new Date().toISOString(),
   });
@@ -198,6 +207,17 @@ export async function postPatientPaymentCommand(
     return { ...existing.response, idempotentReplay: true };
   }
 
+  const replaySafe = !input.description && !input.providerStaffId && !input.installmentId && input.paymentMethod !== 'installment';
+  const pending = getQueuedFinanceDrafts().find(d => sameQueuedPaymentScope(d, { ...actor, idempotencyKey }));
+  if (pending) {
+    const expectedPayload = { patientId: input.patientId, amountToman: parsedAmount.amount, paymentMethod: input.paymentMethod, businessDate, allocations, replaySafe };
+    if (pending.actorId !== actor.actorId || !replaySafe || pending.payload.replaySafe !== true || JSON.stringify(pending.payload) !== JSON.stringify(expectedPayload)) {
+      return {
+        resolution: 'unknown', ok: false, errorCode: 'PENDING_PAYMENT_RECONCILIATION_REQUIRED',
+        messageFa: 'درخواست قبلی نیازمند تطبیق حساب است؛ پیش از ارسال مجدد، وضعیت وصول را بررسی کنید.',
+      };
+    }
+  }
   inFlightCommandLocks.add(scopedKey);
   const unappliedCreditToman = parsedAmount.amount - allocTotal;
 
@@ -231,12 +251,13 @@ export async function postPatientPaymentCommand(
           paymentMethod: input.paymentMethod,
           businessDate,
           allocations,
+          replaySafe,
         });
         return {
-          resolution: 'queued',
+          resolution: replaySafe ? 'queued' : 'unknown',
           ok: false,
-          errorCode: 'OFFLINE_QUEUED_UNCONFIRMED',
-          messageFa: 'اتصال اینترنت برقرار نیست؛ پیش‌نویس پرداخت در صف آفلاین ذخیره شد و تا همگام‌سازی جزء وصول تاییدشده نیست.',
+          errorCode: replaySafe ? 'OFFLINE_QUEUED_UNCONFIRMED' : 'PENDING_PAYMENT_RECONCILIATION_REQUIRED',
+          messageFa: replaySafe ? 'اتصال اینترنت برقرار نیست؛ پیش‌نویس پرداخت در صف آفلاین ذخیره شد و تا همگام‌سازی جزء وصول تاییدشده نیست.' : 'وضعیت پرداخت تأیید نشده است؛ درخواست برای تطبیق نگهداری شد و خودکار ارسال مجدد نمی‌شود.',
           data: {
             amountToman: parsedAmount.amount,
             allocatedAmountToman: allocTotal,
@@ -304,12 +325,13 @@ export async function postPatientPaymentCommand(
         paymentMethod: input.paymentMethod,
         businessDate,
         allocations,
+        replaySafe,
       });
       return {
-        resolution: 'queued',
+        resolution: replaySafe ? 'queued' : 'unknown',
         ok: false,
-        errorCode: 'OFFLINE_QUEUED_UNCONFIRMED',
-        messageFa: 'دستگاه آفلاین است؛ پیش‌نویس در صف همگام‌سازی ذخیره شد (تایید نشده).',
+        errorCode: replaySafe ? 'OFFLINE_QUEUED_UNCONFIRMED' : 'PENDING_PAYMENT_RECONCILIATION_REQUIRED',
+        messageFa: replaySafe ? 'دستگاه آفلاین است؛ پیش‌نویس در صف همگام‌سازی ذخیره شد (تایید نشده).' : 'وضعیت پرداخت تأیید نشده است؛ درخواست برای تطبیق نگهداری شد و خودکار ارسال مجدد نمی‌شود.',
       };
     }
     return {
@@ -435,15 +457,18 @@ export async function replayQueuedFinanceCommands(
 
   let replayed = 0;
   let blocked = 0;
-  const keep: QueuedFinanceCommandDraft[] = [];
-
   for (const d of drafts) {
-    if (d.projectRef !== SUPABASE_PROJECT_REF || d.tenantId !== actor.tenantId || d.branchId !== actor.branchId) {
+    if (d.projectRef !== SUPABASE_PROJECT_REF || d.tenantId !== actor.tenantId || d.branchId !== actor.branchId || d.actorId !== actor.actorId) {
       blocked += 1;
-      keep.push(d);
       continue;
     }
     if (d.commandName === 'post_patient_payment_v16') {
+      // Legacy drafts lack replay provenance. Installment schedule and payment
+      // are not atomic; do not replay a receipt alone.
+      if (d.payload.replaySafe !== true || d.payload.paymentMethod === 'installment') {
+        blocked += 1;
+        continue;
+      }
       const r = await postPatientPaymentCommand(
         {
           patientId: String(d.payload.patientId || ''),
@@ -456,13 +481,15 @@ export async function replayQueuedFinanceCommands(
         },
         client
       );
-      if (r.resolution === 'confirmed') replayed += 1;
-      else keep.push(d);
-    } else {
-      keep.push(d);
+      if (r.resolution === 'confirmed' && r.ok) {
+        replayed += 1;
+        saveQueuedFinanceDrafts(getQueuedFinanceDrafts().filter(current =>
+          !(sameQueuedPaymentScope(current, d) && current.actorId === d.actorId &&
+            JSON.stringify(current.payload) === JSON.stringify(d.payload))
+        ));
+      }
     }
   }
 
-  saveQueuedFinanceDrafts(keep);
-  return { replayed, blocked, remaining: keep.length };
+  return { replayed, blocked, remaining: getQueuedFinanceDrafts().length };
 }

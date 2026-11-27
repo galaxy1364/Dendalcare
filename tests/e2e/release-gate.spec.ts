@@ -12,6 +12,92 @@ const VIEWPORT_MATRIX = [
 ];
 
 test.describe('MinaDental V6 Release Gate E2E', () => {
+  test('GE-0019C: asymmetric physical insets, narrow RTL chrome and Material touch targets', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.addInitScript(() => localStorage.setItem('minadental_appearance_platform_design_v1', 'material'));
+    await page.goto('/#/', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+    await page.evaluate(() => {
+      const root = document.documentElement;
+      root.style.setProperty('--safe-left', '7px');
+      root.style.setProperty('--safe-right', '19px');
+      root.style.setProperty('--safe-bottom', '23px');
+    });
+    await expect(page.locator('html')).toHaveAttribute('data-platform-design', 'material');
+    const shell = page.locator('.app-shell-viewport');
+    await expect(shell).toHaveCSS('padding-left', '7px');
+    await expect(shell).toHaveCSS('padding-right', '19px');
+    await expect(shell).toHaveCSS('padding-bottom', '23px');
+    const dock = page.getByTestId('floating_bottom_dock');
+    await expect(dock).toBeVisible();
+    const dockBox = await dock.boundingBox();
+    const shellBox = await shell.boundingBox();
+    expect(dockBox).not.toBeNull();
+    expect(shellBox).not.toBeNull();
+    expect(dockBox!.y + dockBox!.height).toBeLessThanOrEqual(shellBox!.y + shellBox!.height - 23 + 1);
+    for (const button of ['topbar_global_search_button', 'topbar_notifications_button', 'topbar_user_avatar_button', 'topbar_project_folder_button']) {
+      const control = page.getByTestId(button);
+      await expect(control).toBeVisible();
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBeGreaterThanOrEqual(48);
+      expect(box!.height).toBeGreaterThanOrEqual(48);
+      expect(box!.x).toBeGreaterThanOrEqual(7);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(301);
+    }
+    const layout = await page.evaluate(() => ({
+      header: getComputedStyle(document.querySelector('.shell-topbar-layout')!).flexWrap,
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2,
+      headerGutter: getComputedStyle(document.querySelector('header.shell-content-gutter')!).paddingLeft,
+      mainGutter: getComputedStyle(document.querySelector('main.shell-content-gutter')!).paddingLeft,
+    }));
+    expect(layout.header).toBe('wrap');
+    expect(layout.overflow).toBe(false);
+    expect(layout.headerGutter).toBe(layout.mainGutter);
+  });
+
+  test('GE-0024A: theme focus and browser refresh contract with visual evidence', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => localStorage.setItem('minadental_appearance_theme_v2', 'dark'));
+    await page.goto('/#/', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    const control = page.getByTestId('topbar_global_search_button');
+    await expect(control).toBeVisible();
+    await page.keyboard.press('Tab');
+    await control.focus();
+    await expect(control).toHaveCSS('outline-color', 'rgb(45, 212, 191)');
+    const refreshNotIntercepted = await page.evaluate(() =>
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F5', cancelable: true, bubbles: true }))
+    );
+    expect(refreshNotIntercepted).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('ge0024a-dark-focus.png'), animations: 'disabled' });
+  });
+
+  test('GE-0024B: keyboard help dialog traps focus and Escape restores trigger', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/#/', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+    const trigger = page.getByTestId('topbar_global_search_button');
+    await trigger.focus();
+    await page.keyboard.press('F1');
+    const dialog = page.getByRole('dialog', { name: 'کلیدهای میانبر سریع کلینیک' });
+    await expect(dialog).toBeVisible();
+    const close = dialog.getByRole('button', { name: 'بستن راهنمای کلیدها' });
+    const exportButton = dialog.getByRole('button', { name: 'خروجی یادآوری‌ها و پیام‌ها (JSON)' });
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(exportButton).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Control+k');
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await page.screenshot({ path: testInfo.outputPath('viewport-ge0024b-dialog.png'), animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+  });
+
   test('cold & warm boot + reload reach SHELL_READY with valid window.__minaBuildId and zero 404/syntax errors', async ({ page }) => {
     const consoleErrors: Array<{ text: string; url: string }> = [];
     const pageErrors: string[] = [];
@@ -766,6 +852,10 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
 
       await expect(page.getByTestId('finance_total_receivables')).toContainText('۲٬۰۰۰٬۰۰۰');
+      const aging = page.getByTestId('finance_aging_buckets');
+      await expect(aging).toBeVisible();
+      await expect(aging.getByText('بدون سررسید', { exact: true })).toBeVisible();
+      await expect(aging.getByText('بیش از ۹۰ روز', { exact: true })).toBeVisible();
       await expect(page.getByText('چک ضمانت نزد مطب (غیرنقدی):')).toBeVisible();
 
       // Open Quick Pay sheet and validate fractional input rejection
@@ -939,9 +1029,9 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     }
   });
 
-  test('GE-0004: 320px-1920px all-route matrix, 200% text scaling, light/dark, reduced motion, 3-way versions & Progressive Disclosure', async ({ page }) => {
+  test('GE-0004: 320px-1920px all-route matrix, 200% text scaling, light/dark, reduced motion, 3-way versions & Progressive Disclosure', async ({ page }, testInfo) => {
     test.setTimeout(120_000);
-    const evidenceDir = path.resolve(process.cwd(), 'test-results', 'ge0004-evidence');
+    const evidenceDir = testInfo.outputPath('ge0004-evidence');
     fs.mkdirSync(evidenceDir, { recursive: true });
 
     const routes = [

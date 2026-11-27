@@ -1,5 +1,12 @@
 # Dendalcare — mandatory development coordination
 
+## Mandatory owner gate — Architecture First (2026-11-27)
+- Before any new module feature or detail work, complete and obtain explicit owner approval of the shared UI/UX architecture: coherent design tokens, reusable primitives, adaptive phone/tablet/desktop shell, RTL navigation, layout, typography, spacing, color/contrast, accessibility, interactions, motion and living-tooth states.
+- Preserve existing clinical and financial improvements. Until this gate is signed off, only architecture foundation work and necessary safety/security/regression repairs are permitted. Do not resume module-by-module feature expansion merely because CI is green.
+- Acceptance requires documented visual and functional evidence across the target viewport/device matrix, light/dark, RTL, keyboard, reduced motion, safe areas, text scaling and error/loading/empty/offline states, plus passing relevant CI. Clearly separate real device evidence from browser simulation; no unsupported native-platform claims.
+- Record the owner-approved acceptance in Issue #4 and the roadmap before lifting this gate. This instruction applies across sessions and to every engineering agent. It is a documented engineering rule, not an automatically enforced branch protection.
+
+
 Owner directive: ChatGPT and Google AI Studio/Gemini must work on one shared project, never independently overwrite each other's changes.
 
 Canonical coordination record: https://github.com/galaxy1364/Dendalcare/issues/4

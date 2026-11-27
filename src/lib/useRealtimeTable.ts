@@ -469,6 +469,8 @@ export function useRealtimeTable<T extends { id: string }>(
   const [error, setError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState<boolean>(false);
   const [truncated, setTruncated] = useState<boolean>(false);
+  // Only a completed, untruncated server read may establish completeness.
+  const [serverComplete, setServerComplete] = useState(false);
   const [lockedOfflineCount, setLockedOfflineCount] = useState<number>(0);
 
   const parentAbortRef = useRef<AbortController | null>(null);
@@ -505,6 +507,7 @@ export function useRealtimeTable<T extends { id: string }>(
     const requestScopeKey = currentScope.scopeKey;
     activeScopeKeyRef.current = requestScopeKey;
     const reqSeq = ++requestSeqRef.current;
+    setServerComplete(false);
 
     const isActiveGeneration = () =>
       shouldAcceptTableResponse({
@@ -557,8 +560,8 @@ export function useRealtimeTable<T extends { id: string }>(
           }
           setLockedOfflineCount(0);
           setData(vaultRes.rows);
-          setStatus(vaultRes.rows.length > 0 ? 'offline' : 'empty');
-          setIsStale(vaultRes.rows.length > 0);
+          setStatus('offline');
+          setIsStale(true);
           setTruncated(false);
           return;
         } catch {
@@ -594,7 +597,7 @@ export function useRealtimeTable<T extends { id: string }>(
           if (typeof (query as any).abortSignal === 'function') {
             query = (query as any).abortSignal(signal);
           }
-          let ordered = query.order('created_at', { ascending: false });
+          let ordered = query.order('created_at', { ascending: false }).order('id', { ascending: true });
           if (typeof (ordered as any).range === 'function') {
             ordered = (ordered as any).range(from, to);
           } else if (typeof (ordered as any).limit === 'function') {
@@ -630,6 +633,7 @@ export function useRealtimeTable<T extends { id: string }>(
       if (reconciled.rows !== null) {
         setLockedOfflineCount(0);
         setTruncated(execRes.truncated);
+        setServerComplete(!execRes.truncated && (reconciled.status === 'ready' || reconciled.status === 'empty'));
         setData(reconciled.rows);
         setError(
           reconciled.status === 'migration_required'
@@ -733,6 +737,7 @@ export function useRealtimeTable<T extends { id: string }>(
       const nextScope = resolveCurrentScope(table, filter);
       activeScopeKeyRef.current = nextScope.scopeKey;
       setData([]);
+      setServerComplete(false);
       setError(null);
       setIsStale(false);
       setTruncated(false);
@@ -742,6 +747,9 @@ export function useRealtimeTable<T extends { id: string }>(
       setScopeVersion((v) => v + 1);
     };
 
+    const handleConnectionChange = () => { setServerComplete(false); void fetchData(); };
+    window.addEventListener('online', handleConnectionChange);
+    window.addEventListener('offline', handleConnectionChange);
     window.addEventListener('minadental-sync-event', handleSyncEvent);
     window.addEventListener('minadental-user-changed', handleScopeSwitch);
     window.addEventListener('minadental-branch-changed', handleScopeSwitch);
@@ -757,18 +765,21 @@ export function useRealtimeTable<T extends { id: string }>(
       onInsert: (newRow) => {
         const currentScope = resolveCurrentScope(table, filter);
         if (currentScope.scopeKey !== activeScopeKeyRef.current) return;
+        // Full-read consumers must re-establish completeness after incremental events.
+        if (fetchAllPages) { setServerComplete(false); void fetchData(); return; }
         setData((prev) => {
           if (prev.some((item) => item.id === newRow.id)) return prev;
           const updated = [newRow, ...prev];
           persistLocalMirror(updated, currentScope);
-          setStatus('ready');
-          setIsStale(false);
+          setStatus(prevStatus => prevStatus === 'empty' ? 'ready' : prevStatus);
           return updated;
         });
       },
       onUpdate: (updatedRow) => {
         const currentScope = resolveCurrentScope(table, filter);
         if (currentScope.scopeKey !== activeScopeKeyRef.current) return;
+        // Full-read consumers must re-establish completeness after incremental events.
+        if (fetchAllPages) { setServerComplete(false); void fetchData(); return; }
         setData((prev) => {
           const updated = prev.map((item) => (item.id === updatedRow.id ? updatedRow : item));
           persistLocalMirror(updated, currentScope);
@@ -778,21 +789,26 @@ export function useRealtimeTable<T extends { id: string }>(
       onDelete: (oldRow) => {
         const currentScope = resolveCurrentScope(table, filter);
         if (currentScope.scopeKey !== activeScopeKeyRef.current) return;
+        // Full-read consumers must re-establish completeness after incremental events.
         setData((prev) => {
           const fullRecord = prev.find((item) => item.id === oldRow.id) ?? (oldRow as Record<string, unknown>);
           const actor = getActiveClinicUser().fullName;
           archiveDeletedRecord(table, fullRecord, actor, 'بایگانی خودکار ضدحذف هنگام حذف از جدول').catch(() => {});
+          if (fetchAllPages) return prev;
           const updated = prev.filter((item) => item.id !== oldRow.id);
           persistLocalMirror(updated, currentScope);
-          setStatus(updated.length === 0 ? 'empty' : 'ready');
+          setStatus(prevStatus => prevStatus === 'ready' || prevStatus === 'empty' ? (updated.length === 0 ? 'empty' : 'ready') : prevStatus);
           return updated;
         });
+        if (fetchAllPages) { setServerComplete(false); void fetchData(); }
       },
     });
 
     return () => {
       mountedRef.current = false;
       parentAbortRef.current?.abort();
+      window.removeEventListener('online', handleConnectionChange);
+      window.removeEventListener('offline', handleConnectionChange);
       window.removeEventListener('minadental-sync-event', handleSyncEvent);
       window.removeEventListener('minadental-user-changed', handleScopeSwitch);
       window.removeEventListener('minadental-branch-changed', handleScopeSwitch);
@@ -807,6 +823,7 @@ export function useRealtimeTable<T extends { id: string }>(
     status,
     isStale,
     truncated,
+    serverComplete,
     lockedOfflineCount,
     error,
     refresh: refreshAndBroadcast,

@@ -712,6 +712,29 @@ export async function runAllV16FinancialIntelligenceTests(): Promise<V16TestResu
     assert.equal(getQueuedFinanceDrafts().length, 0);
   });
 
+  await runCase(results, 'GE-0021C: retry queue deduplication, actor isolation and conservative replay', async () => {
+    resetFinanceCommandRuntimeForTest();
+    const actor = { userId: 'synthetic-actor', serverVerifiedRole: 'secretary', sessionStatus: 'authenticated' as const };
+    const input = { patientId: 'pat-1', amountInput: '300000', paymentMethod: 'cash' as const, businessDate: '2026-11-27', idempotencyKey: 'ge0021c-cash', actorContext: actor };
+    let offlineCalls = 0;
+    const offline = makeFakeRpcClient({ rpc: async () => { offlineCalls++; return { data: null, error: { message: 'Failed to fetch' } }; } });
+    assert.equal((await postPatientPaymentCommand(input, offline)).resolution, 'queued');
+    assert.equal((await postPatientPaymentCommand(input, offline)).resolution, 'queued');
+    assert.equal(getQueuedFinanceDrafts().length, 1, 'Same key must not append duplicate drafts');
+    assert.equal((await postPatientPaymentCommand({ ...input, amountInput: '400000' }, offline)).resolution, 'unknown');
+    assert.equal(offlineCalls, 2, 'Changed payload must not reach RPC');
+    assert.equal((await replayQueuedFinanceCommands({ ...actor, userId: 'other-actor' }, offline)).blocked, 1);
+    assert.equal(offlineCalls, 2, 'Other actor must not replay');
+    assert.equal((await postPatientPaymentCommand({ ...input, idempotencyKey: 'ge0021c-inst', paymentMethod: 'installment', installmentId: 'synthetic-installment' }, offline)).resolution, 'unknown');
+    assert.equal((await postPatientPaymentCommand({ ...input, idempotencyKey: 'ge0021c-note', description: 'synthetic note' }, offline)).resolution, 'unknown');
+    const replay = await replayQueuedFinanceCommands(actor, makeFakeRpcClient({}));
+    assert.equal(replay.replayed, 1);
+    assert.equal(replay.blocked, 2);
+    assert.equal(getQueuedFinanceDrafts().length, 2, 'Unsafe replay drafts must be preserved');
+    assert.equal(JSON.stringify(getQueuedFinanceDrafts()).includes('synthetic note'), false, 'Do not add free-text notes to persistent queue');
+    resetFinanceCommandRuntimeForTest();
+  });
+
   // FIN-21: Financial Reminder Loop & Privacy Check
   await runCase(results, 'FIN-21: Deterministic stable sourceKey prevents duplicate reminders and omits PHI/debt from lock screen', () => {
     const pat = makePatient('pat-21');
