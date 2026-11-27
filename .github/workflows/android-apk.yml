@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: "android-apk-release"
+  group: "minadental-production-release"
   cancel-in-progress: false
 
 jobs:
@@ -41,6 +41,8 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -58,7 +60,7 @@ jobs:
         env:
           MINA_BASE_SEQUENCE: '230'
         run: |
-          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --allow-legacy-root-migration
+          node scripts/ci-release-gate.mjs --compute-sequence --remote-pointer https://galaxy1364.github.io/Dendalcare/release-pointer.json --require-remote-pointer --allow-legacy-root-migration
 
       - name: Build bundled WebView assets & verify release parity
         env:
@@ -66,6 +68,7 @@ jobs:
           MINA_RELEASE_CHANNEL: 'stable'
           MINA_GIT_COMMIT: ${{ github.sha }}
         run: |
+          npm run sync:version
           npm run build
           node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin --verify-parity
           npm run verify:assets

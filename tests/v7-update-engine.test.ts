@@ -901,7 +901,7 @@ export async function runAllV7UpdateEngineTests(): Promise<V7TestResult[]> {
         });
 
         const snap = await coord.checkForUpdates('manual');
-        assert.equal(snap.state, 'NATIVE_STORE_REQUIRED', `${nativePlatform} must transition to NATIVE_STORE_REQUIRED`);
+        assert.equal(snap.state, 'NATIVE_STORE_REQUIRED', `${nativePlatform} must transition to NATIVE_STORE_REQUIRED (error: ${JSON.stringify(snap.error)})`);
         const stageSnap = await coord.downloadAndVerifyCandidate();
         assert.equal(stageSnap.state, 'NATIVE_STORE_REQUIRED');
         assert.notEqual(stageSnap.state, 'INSTALLED');

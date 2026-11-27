@@ -48,6 +48,7 @@ jobs:
           MINA_RELEASE_CHANNEL: 'staging'
           MINA_GIT_COMMIT: ${{ github.sha }}
         run: |
+          npm run sync:version
           npm run build
           node scripts/ci-release-gate.mjs --verify-local dist --require-ci-origin --verify-parity
 
