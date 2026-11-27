@@ -207,7 +207,9 @@ Certificate fingerprints:
       assert(css.includes('height: 100vh;') && css.includes('height: 100dvh;'), 'index.css must include 100vh fallback before 100dvh for legacy WebViews');
       assert(css.includes('--safe-left: env(safe-area-inset-left, 0px);'), 'index.css must define horizontal safe-area-inset-left');
       assert(css.includes('--safe-right: env(safe-area-inset-right, 0px);'), 'index.css must define horizontal safe-area-inset-right');
-      assert(css.includes('padding-inline-start: var(--safe-left);'), 'app-shell-viewport must use logical RTL horizontal safe areas');
+      const rootInsets = css.match(/\.app-shell-viewport\s*\{([^}]+)\}/)?.[1] ?? '';
+      assert(rootInsets.includes('padding-left: var(--safe-left);') && rootInsets.includes('padding-right: var(--safe-right);'), 'Physical left/right insets must remain correct in RTL');
+      assert(!rootInsets.includes('padding-inline-start: var(--safe-left)') && !rootInsets.includes('padding-inline-end: var(--safe-right)'), 'Physical insets must never swap with RTL direction');
       assert(css.includes('@supports not ((backdrop-filter: blur(1px))'), 'index.css must include legacy WebView backdrop-filter fallback');
       assert(css.includes('@keyframes mascotTouchPop'), 'index.css must define mascot touch reaction animation');
     }),
