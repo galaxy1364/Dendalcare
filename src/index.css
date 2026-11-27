@@ -555,7 +555,7 @@ html[data-reduce-motion="true"] .aurora-mesh-blob {
 }
 
 input, textarea, select { font-family: inherit; }
-input:focus, textarea:focus, select:focus { outline: none; }
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--md-primary); outline-offset: 2px; }
 
 .badge {
   display: inline-flex;
@@ -737,7 +737,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #087C76;
+  outline: 2px solid var(--md-primary);
   outline-offset: 2px;
 }
 
