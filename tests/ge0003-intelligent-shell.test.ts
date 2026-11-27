@@ -9,6 +9,7 @@ import { normalizePersianDigits } from '@/design-system/primitives/FormEngine';
 import { readViewportMetrics } from '@/platform/safeArea';
 import { HOME_SERVICES_LIMIT, HOME_SERVICES_PAGE_SIZE, normalizeSelectedHomeServices, reorderSelectedHomeServices, loadSelectedHomeServices, saveSelectedHomeServices } from '@/lib/navigationStack';
 import { canAccessRoute } from '@/services/permissions/accessControl';
+import { getRecordedPatientFileNo, matchesPatientDirectoryQuery } from '@/features/patients/patientDirectorySearch';
 
 export interface Ge0003TestResult {
   name: string;
@@ -37,6 +38,18 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0020A: patient search normalizes Persian/Arabic scripts without fabricating file IDs', () => {
+      const patient = { first_name: 'علي', last_name: 'كريمي', phone: '۰۹۱۲-۱۲۳۴۵۶۷', national_id: '۰۰۱۲۳۴۵۶۷۸', notes: '[پرونده: ۴۲۱۷] synthetic', insurance_number: '555999' };
+      assert(getRecordedPatientFileNo(patient) === '۴۲۱۷', 'Recorded file number remains unchanged');
+      for (const query of ['علی کریمی', 'کریمی علی', '09121234567', '٠٩١٢١٢٣٤٥٦٧', '4217', '۰۰۱۲۳۴۵۶۷۸']) {
+        assert(matchesPatientDirectoryQuery(patient, query), 'Normalized search must match: ' + query);
+      }
+      const unnumbered = { ...patient, notes: null };
+      assert(getRecordedPatientFileNo(unnumbered) === null, 'Missing reference must remain missing');
+      assert(!matchesPatientDirectoryQuery(unnumbered, '1001'), 'Never match fabricated list-position number');
+      assert(!matchesPatientDirectoryQuery(unnumbered, '555999'), 'Insurance number is not a file number');
+      assert(!matchesPatientDirectoryQuery(patient, 'نام نامرتبط'), 'Unrelated patient must not match');
+    }),
     await runCase('GE-0019B: eight favorites preserve legacy order and cap, with role-aware visibility', () => {
       assert(HOME_SERVICES_LIMIT === 8 && HOME_SERVICES_PAGE_SIZE === 4, 'Eight favorites, four per page');
       const ids = normalizeSelectedHomeServices(['patients', 'finance', 'patients', 'invalid', 'appointments', 'lab', 'implants', 'inventory', 'reminders', 'messages', 'staff']);
