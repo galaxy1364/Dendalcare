@@ -286,9 +286,19 @@ function wrapMutationBuilder(
       }
     }
 
+    // Installment CAS must never be reduced to an ID-only offline replay.
+    const requiresInstallmentReconciliation = table === 'installments' && operation === 'UPDATE' && Object.prototype.hasOwnProperty.call(eqFilters, 'paid_months');
+    const reconciliationRequired = () => ({
+      data: null,
+      error: { code: 'MINA_INSTALLMENT_RECONCILIATION_REQUIRED', message: 'وضعیت قسط تأیید نشده است؛ قبل از اقدام مجدد، وصول و برنامه اقساط را تطبیق دهید.' },
+      queuedOffline: false,
+      serverConfirmed: false,
+    });
+
     // 2. Offline Write-Ahead Queue when browser is offline
     const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
     if (isOffline && (operation === 'INSERT' || operation === 'UPDATE' || operation === 'DELETE')) {
+      if (requiresInstallmentReconciliation) return reconciliationRequired();
       const queuedPayload =
         operation === 'DELETE'
           ? { id: eqFilters.id }
@@ -336,6 +346,7 @@ function wrapMutationBuilder(
           : builder;
       const result = await targetBuilder;
       if (result?.error && isNetworkFailure(result.error) && (operation === 'INSERT' || operation === 'UPDATE')) {
+        if (requiresInstallmentReconciliation) return reconciliationRequired();
         const queuedPayload =
           operation === 'UPDATE' && eqFilters.id && payload && typeof payload === 'object'
             ? { ...payload, id: eqFilters.id }
@@ -381,6 +392,7 @@ function wrapMutationBuilder(
       return { ...result, queuedOffline: false, serverConfirmed: false };
     } catch (err: any) {
       if (isNetworkFailure(err) && (operation === 'INSERT' || operation === 'UPDATE')) {
+        if (requiresInstallmentReconciliation) return reconciliationRequired();
         const queuedPayload =
           operation === 'UPDATE' && eqFilters.id && payload && typeof payload === 'object'
             ? { ...payload, id: eqFilters.id }
