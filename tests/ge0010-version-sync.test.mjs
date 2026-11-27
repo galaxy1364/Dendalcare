@@ -72,3 +72,22 @@ test('GE-0013: debug and unverified signatures remain distinguishable', () => {
   assert.equal(parseApksignerOutput(header + newSigner.replace('CN=MinaDental, O=MinaDental, C=LU', 'CN=Android Debug, O=Android, C=US')).isDebugCertificate, true);
   assert.equal(parseApksignerOutput(header.replace('Verifies', 'DOES NOT VERIFY') + newSigner).verified, false);
 });
+
+import { archiveTag } from '../scripts/archive-android-release.mjs';
+test('GE-0014: stable archives have distinct immutable version tags', () => {
+  const m = {versionName: '4.18.0', releaseSequence: 306, versionCode: 306, gitCommit: 'a'.repeat(40), sha256: 'b'.repeat(64), signingCertSha256: 'c'.repeat(64), signingMode: 'release_upload_keystore'};
+  assert.equal(archiveTag(m), 'android-v4.18.0-306');
+  assert.equal(archiveTag({...m, releaseSequence: 307, versionCode: 307}), 'android-v4.18.0-307');
+  for (const bad of [{versionCode: 305}, {signingMode: 'qa_debug_preview_keystore'}, {releaseSequence: 0}, {sha256: 'bad'}, {gitCommit: 'main'}]) {
+    assert.throws(() => archiveTag({...m, ...bad}), /Invalid stable release identity/);
+  }
+});
+test('GE-0014: both pipelines archive before touching latest alias', () => {
+  const root = new URL('../', import.meta.url);
+  for (const name of ['deploy.yml', 'android-apk.yml']) {
+    const s = fs.readFileSync(new URL('.github/workflows/' + name, root), 'utf8');
+    assert.ok(s.indexOf('node scripts/archive-android-release.mjs') >= 0);
+    assert.ok(s.indexOf('node scripts/archive-android-release.mjs') < s.indexOf('gh release upload "$RELEASE_TAG"'));
+    assert.ok(s.includes('[Download APK / دانلود مستقیم]'));
+  }
+});
