@@ -36,3 +36,29 @@ export function matchesPatientDirectoryQuery(patient: DirectoryIdentity, query: 
   if (!compact) return false;
   return [patient.phone, patient.national_id].some(field => field && normalizePatientQuery(field).replace(/[^0-9]/g, '').includes(compact));
 }
+
+/** Legacy notes-tag storage until a verified dedicated server identity contract exists. */
+export function preparePatientFileNotes(fileNo: string, notes: string): { ok: true; notes: string | null } | { ok: false; message: string } {
+  const reference = fileNo.trim();
+  if (/[\[\]\r\n]/.test(reference) || /\[پرونده\s*:/.test(notes)) {
+    return { ok: false, message: 'شماره پرونده را فقط در کادر اختصاصی وارد کنید.' };
+  }
+  const value = (reference ? `[پرونده: ${reference}] ${notes.trim()}` : notes.trim()).trim();
+  return { ok: true, notes: value || null };
+}
+
+/** Best-effort check of visible records only; not a server uniqueness guarantee. */
+export function findVisiblePatientIdentityConflict(
+  records: readonly (DirectoryIdentity & { id: string })[],
+  candidate: { fileNo?: string | null; nationalId?: string | null },
+  editingId?: string
+): 'file' | 'national_id' | null {
+  const file = normalizePatientQuery(candidate.fileNo ?? '');
+  const national = normalizePatientQuery(candidate.nationalId ?? '').replace(/\s|-/g, '');
+  for (const record of records) {
+    if (record.id === editingId) continue;
+    if (file && normalizePatientQuery(getRecordedPatientFileNo(record) ?? '') === file) return 'file';
+    if (national && normalizePatientQuery(record.national_id ?? '').replace(/\s|-/g, '') === national) return 'national_id';
+  }
+  return null;
+}
