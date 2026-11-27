@@ -32,6 +32,7 @@ import {
 import { PatientForm } from '@/features/patients/PatientClinicalTabs';
 import { LAB_STATUS, IMPLANT_STAGES } from '@/features/patients/PatientFinanceAndSpecialtyTabs';
 import { PatientDetail } from '@/features/patients/PatientDetailHub';
+import { getRecordedPatientFileNo, matchesPatientDirectoryQuery } from '@/features/patients/patientDirectorySearch';
 
 export function Patients() {
   const { data: patients, refresh } = useRealtimeTable<Patient>('patients');
@@ -61,13 +62,6 @@ export function Patients() {
   const [printOpen, setPrintOpen] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
 
-  const getPatientFileNo = (p: Patient, idx?: number) => {
-    const match = p.notes?.match(/\[پرونده:\s*([^\]]+)\]/);
-    if (match?.[1]) return match[1].trim();
-    if (p.insurance_number?.trim()) return p.insurance_number.trim();
-    if (p.national_id?.trim()) return `P-${p.national_id.slice(-4)}`;
-    return `${1001 + (idx ?? 0)}`;
-  };
 
   useEffect(() => {
     return subscribeGlobalFocus('patients', (payload) => {
@@ -94,14 +88,7 @@ export function Patients() {
         return cost - paid > 0;
       });
     }
-    const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((p, idx) =>
-      `${p.first_name} ${p.last_name}`.toLowerCase().includes(q) ||
-      p.phone?.includes(q) ||
-      p.national_id?.includes(q) ||
-      getPatientFileNo(p, idx).toLowerCase().includes(q)
-    );
+    return list.filter(patient => matchesPatientDirectoryQuery(patient, search));
   }, [patients, treatments, labOrders, implants, installments, checks, payments, search, chipFilter]);
 
   const handleSave = async (data: Partial<Patient>): Promise<boolean> => {
@@ -157,13 +144,13 @@ export function Patients() {
   };
 
   const handleExportCsv = () => {
-    const rows = patients.map((p, idx) => {
+    const rows = patients.map((p) => {
       const pTreatments = treatments.filter((t) => t.patient_id === p.id);
       const pPayments = payments.filter((pay) => pay.patient_id === p.id);
       const totalPaid = pPayments.reduce((s, pay) => s + Number(pay.amount), 0);
       const totalCost = pTreatments.reduce((s, t) => s + Number(t.total_cost), 0);
       return {
-        file_no: getPatientFileNo(p, idx),
+        file_no: getRecordedPatientFileNo(p) ?? '',
         first_name: p.first_name,
         last_name: p.last_name,
         national_id: p.national_id || '',
@@ -197,9 +184,10 @@ export function Patients() {
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setSearchOpen(!searchOpen)}
-            className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 transition-all haptic ${searchOpen || search ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+            className={`min-w-[44px] min-h-[44px] rounded-2xl flex items-center justify-center shrink-0 transition-all haptic ${searchOpen || search ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
             title="جستجوی سریع بیمار، موبایل یا شماره پرونده"
             aria-label="جستجوی بیمار"
+            aria-expanded={searchOpen}
           >
             <Search size={17} />
           </button>
@@ -246,7 +234,7 @@ export function Patients() {
           <div className="mt-2 pt-2 border-t border-gray-100 animate-slide-down">
             <div className="relative">
               <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-600" />
-              <Input autoFocus placeholder="جستجو با نام، شماره پرونده، موبایل یا کد ملی..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9 text-xs" />
+              <Input autoFocus aria-label="جستجو با نام، شماره پرونده، موبایل یا کد ملی" type="search" placeholder="جستجو با نام، شماره پرونده، موبایل یا کد ملی..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-9 text-xs" />
             </div>
           </div>
         )}
@@ -256,10 +244,10 @@ export function Patients() {
       {actionSuccess && <p className="text-xs text-emerald-700 bg-emerald-50 rounded-xl p-2.5 border border-emerald-200">{actionSuccess}</p>}
 
       {filtered.length === 0 ? (
-        <EmptyState icon={<Users size={28} />} title="پرونده‌ای یافت نشد" subtitle="برای تشکیل پرونده جدید روی دکمه + بزنید" color="#10B981" />
+        <EmptyState icon={<Users size={28} />} title="پرونده‌ای یافت نشد" subtitle={search.trim() || chipFilter !== 'all' ? 'عبارت جستجو یا فیلتر را تغییر دهید.' : 'برای تشکیل پرونده جدید روی دکمه + بزنید'} color="#10B981" />
       ) : (
         <div className="space-y-2.5 stagger">
-          {filtered.map((patient, idx) => {
+          {filtered.map((patient) => {
             const pAppointments = appointments.filter((a) => a.patient_id === patient.id);
             const pTreatments = treatments.filter((t) => t.patient_id === patient.id);
             const pPayments = payments.filter((p) => p.patient_id === patient.id);
@@ -272,7 +260,7 @@ export function Patients() {
             const pInstallments = installments.filter((i) => i.patient_id === patient.id && i.status === 'active');
             const pChecks = checks.filter((c) => c.patient_id === patient.id && c.status === 'pending');
             const allergySafety = assessPatientAllergySafety(patient);
-            const fileNo = getPatientFileNo(patient, idx);
+            const fileNo = getRecordedPatientFileNo(patient);
             const isExpanded = expandedCardId === patient.id;
 
             const clinicalJourney = computePatientClinicalJourney({
@@ -310,7 +298,7 @@ export function Patients() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center flex-wrap gap-1.5">
                           <h3 className="text-sm font-black text-slate-800 truncate">{patient.first_name} {patient.last_name}</h3>
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">پرونده #{fileNo}</span>
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">{fileNo ? `پرونده #${fileNo}` : 'شماره پرونده ثبت نشده'}</span>
                           {patient.status === 'inactive' && <span className="text-[9.5px] font-extrabold px-1.5 py-0.5 rounded-lg bg-slate-200 text-slate-700">آرشیوشده</span>}
                           {allergySafety.assistiveFreeTextAlerts.length > 0 && (
                             <span className="flex items-center gap-0.5 text-[9.5px] font-extrabold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-lg shrink-0">
