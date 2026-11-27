@@ -38,6 +38,17 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0021D: receivables dashboard withholds incomplete totals and prevents new actions', () => {
+      const root = fs.readFileSync(path.join(ROOT, 'src/components/sections/Finance.tsx'), 'utf8');
+      const tab = fs.readFileSync(path.join(ROOT, 'src/features/finance/FinanceDebtorsTab.tsx'), 'utf8');
+      const overview = fs.readFileSync(path.join(ROOT, 'src/features/finance/FinanceDebtorsSummaryCard.tsx'), 'utf8');
+      assert(root.includes('!read.isStale && !read.truncated') && root.includes('transactionsRead].every(completeRead)'), 'Fresh complete inputs required');
+      assert(tab.includes('{receivablesReady && <>') && tab.includes('finance_incomplete_reads'), 'No provisional zero totals');
+      assert(tab.includes('if (!remindersReady || syncingReminders) return;') && tab.includes('if (!receivablesReady) { setQuickPayError'), 'No new financial actions on incomplete inputs');
+      assert(tab.includes('saving={savingQuickPay || !receivablesReady}') && tab.includes('finance: transactions'), 'Quick pay disabled without fresh data and anomalies use treasury records');
+      assert(overview.includes('summary.aging.unscheduledDueDateAmount') && overview.includes('summary.aging.over_90'), 'Aging must show unscheduled and oldest balances');
+      assert(overview.includes('disabled={syncingReminders || !remindersReady}'), 'Reminder action requires ready inputs');
+    }),
     await runCase('GE-0021B: both installment collection surfaces require confirmed receipt before advancing schedule', () => {
       for (const [file, action] of [
         ['src/features/finance/FinanceInstallmentsTab.tsx', 'recordPayment'],
