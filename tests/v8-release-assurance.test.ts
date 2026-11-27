@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { isOfficialAndroidApkUrl } from '../src/services/updates/adapters/nativePlatformAdapter';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -720,6 +721,17 @@ export async function runAllV8ReleaseAssuranceTests(): Promise<V8TestResult[]> {
     );
     assert.equal(androidAdapter.getCapabilities().supportsStoreDeepLink, false);
     assert.equal(iosAdapter.getCapabilities().supportsStoreDeepLink, false);
+    const apk = 'https://github.com/galaxy1364/Dendalcare/releases/download/android-v4.18.0-308/MinaDental-android.apk';
+    assert.equal(isOfficialAndroidApkUrl(apk), true);
+    assert.equal(isOfficialAndroidApkUrl(apk.replace('android-v4.18.0-308', 'android-latest')), true);
+    for (const invalid of [apk.replace('https:', 'http:'), apk.replace('github.com', 'github.com.evil.test'), apk.replace('galaxy1364', 'other'), apk + '?redirect=bad', apk.replace('MinaDental-android.apk', 'other.apk')]) {
+      assert.equal(isOfficialAndroidApkUrl(invalid), false);
+    }
+    const ledger = new UpdateLedger(new MemoryStorage());
+    assert.equal(ledger.isAutoUpdateEnabled(), true);
+    const webview = fs.readFileSync(path.resolve(process.cwd(), 'app/src/main/java/com/example/ui/DentalCareWebView.kt'), 'utf8');
+    assert.ok(webview.includes('Intent(Intent.ACTION_VIEW, destination)') && webview.includes('destination.authority == "github.com"'), 'Native update handoff must use system browser for restricted release URL');
+
   });
 
   // V8-10: V8.1 Incident P0 boot resilience (independent #boot-error, early listener, watchdog cancellation, milestones, auth timeout)

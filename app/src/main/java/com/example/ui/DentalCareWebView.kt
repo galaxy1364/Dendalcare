@@ -151,15 +151,15 @@ fun DentalCareWebView(
                         javaScriptEnabled = true
                         domStorageEnabled = true
                         databaseEnabled = true
-                        allowFileAccess = true
+                        allowFileAccess = false
                         allowContentAccess = true
-                        allowFileAccessFromFileURLs = true
-                        allowUniversalAccessFromFileURLs = true
+                        allowFileAccessFromFileURLs = false
+                        allowUniversalAccessFromFileURLs = false
                         loadWithOverviewMode = true
                         useWideViewPort = true
                         setSupportZoom(false)
                         cacheMode = WebSettings.LOAD_NO_CACHE
-                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     }
                     clearCache(true)
 
@@ -233,6 +233,22 @@ fun DentalCareWebView(
                         }
 
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                            val destination = request?.url ?: return false
+                            if (request.isForMainFrame &&
+                                destination.scheme == "https" &&
+                                destination.authority == "github.com" &&
+                                destination.query == null && destination.fragment == null &&
+                                Regex("""/galaxy1364/Dendalcare/releases/download/android-(latest|v\d+\.\d+\.\d+-\d+)/MinaDental-android\.apk""").matches(destination.encodedPath ?: "")
+                            ) {
+                                // Let the system browser download the signed APK; Android's
+                                // package installer retains user confirmation and signature checks.
+                                try {
+                                    ctx.startActivity(Intent(Intent.ACTION_VIEW, destination).addCategory(Intent.CATEGORY_BROWSABLE))
+                                } catch (_: android.content.ActivityNotFoundException) {
+                                    android.widget.Toast.makeText(ctx, "مرورگر برای دریافت نسخه رسمی در دسترس نیست", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                                return true
+                            }
                             return false
                         }
 
