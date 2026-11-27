@@ -156,6 +156,7 @@ CREATE POLICY service_charges_update ON public.service_charges
 -- 3. Extend Legacy Financial Tables Safely (Idempotent ALTERs)
 -- ----------------------------------------------------------------------------
 ALTER TABLE public.payments
+  ADD COLUMN IF NOT EXISTS created_by uuid,
   ADD COLUMN IF NOT EXISTS currency_unit text NOT NULL DEFAULT 'IRR_TOMAN',
   ADD COLUMN IF NOT EXISTS unapplied_amount bigint NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS cleared_at timestamptz,
@@ -165,6 +166,7 @@ ALTER TABLE public.payments
   ADD COLUMN IF NOT EXISTS reversal_reason text;
 
 ALTER TABLE public.finance_transactions
+  ADD COLUMN IF NOT EXISTS created_by uuid,
   ADD COLUMN IF NOT EXISTS posting_status text NOT NULL DEFAULT 'posted'
     CHECK (posting_status IN ('draft', 'posted', 'reversed')),
   ADD COLUMN IF NOT EXISTS reversal_of_tx_id uuid REFERENCES public.finance_transactions(id) ON DELETE RESTRICT,
