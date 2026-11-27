@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, CreditCard, Plus, Trash2 } from 'lucide-react';
 import { supabase, type Installment, type Patient } from '@/lib/supabase';
 import { ConfirmDialog, Sheet } from '@/components/ui/Sheet';
@@ -24,6 +24,9 @@ export function FinanceInstallmentsTab({
   const today = todayGregorian();
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const collectionLock = useRef(false);
+  const [collecting, setCollecting] = useState(false);
+  const [collectionMessage, setCollectionMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -116,35 +119,49 @@ export function FinanceInstallmentsTab({
   };
 
   const recordPayment = async (inst: Installment) => {
-    if (!inst.patient_id) return;
-    const payRes = await postPatientPaymentCommand({
-      patientId: inst.patient_id,
-      amountInput: Number(inst.monthly_amount),
-      paymentMethod: 'installment',
-      businessDate: today,
-      description: `دریافت قسط شماره ${inst.paid_months + 1}`,
-      installmentId: inst.id,
-      idempotencyKey: `inst_${inst.id}_m_${inst.paid_months + 1}`,
-    });
-    if (!payRes.ok && payRes.resolution !== 'queued') {
-      HapticEngine.error();
-      return;
-    }
-    const newPaid = Number(inst.paid_amount) + Number(inst.monthly_amount);
-    const newMonths = inst.paid_months + 1;
-    const isComplete = newPaid >= Number(inst.total_amount);
-    const nextDue = addDaysToIso(inst.next_due_date || today, 30);
-    await supabase
-      .from('installments')
-      .update({
-        paid_amount: newPaid,
-        paid_months: newMonths,
+    if (collectionLock.current || inst.status !== 'active' || !inst.patient_id) return;
+    collectionLock.current = true;
+    setCollecting(true);
+    setCollectionMessage(null);
+    try {
+      const payRes = await postPatientPaymentCommand({
+        patientId: inst.patient_id,
+        amountInput: Number(inst.monthly_amount),
+        paymentMethod: 'installment',
+        businessDate: today,
+        description: `دریافت قسط شماره ${inst.paid_months + 1}`,
+        installmentId: inst.id,
+        idempotencyKey: `inst_${inst.id}_m_${inst.paid_months + 1}`,
+      });
+      // Queued/unknown/rejected requests are not confirmed receipts.
+      if (!payRes.ok || payRes.resolution !== 'confirmed') {
+        setCollectionMessage(payRes.messageFa + ' وضعیت قسط تغییر نکرد؛ پیش از تلاش مجدد دریافت وجه را بررسی کنید.');
+        return;
+      }
+      const newPaid = Number(inst.paid_amount) + Number(inst.monthly_amount);
+      const newMonths = inst.paid_months + 1;
+      const isComplete = newPaid >= Number(inst.total_amount);
+      const nextDue = addDaysToIso(inst.next_due_date || today, 30);
+      // This remains a separate write; never describe partial completion as atomic.
+      const updated = await supabase.from('installments').update({
+        paid_amount: newPaid, paid_months: newMonths,
         next_due_date: isComplete ? null : nextDue,
         status: isComplete ? 'completed' : 'active',
-      })
-      .eq('id', inst.id);
-    HapticEngine.success();
-    refresh();
+      }).eq('id', inst.id).eq('paid_months', inst.paid_months);
+      if (getMutationOutcome(updated) !== 'confirmed') {
+        setCollectionMessage('دریافت وجه تأیید شد، اما وضعیت قسط نیازمند تطبیق است. وجه را دوباره ثبت نکنید.');
+        refresh();
+        return;
+      }
+      HapticEngine.success();
+      refresh();
+      setCollectionMessage('دریافت وجه و به‌روزرسانی وضعیت قسط تأیید شد.');
+    } catch {
+      setCollectionMessage('نتیجه عملیات نامشخص است؛ پیش از ثبت مجدد، دفتر کل و وضعیت قسط را بررسی کنید.');
+    } finally {
+      collectionLock.current = false;
+      setCollecting(false);
+    }
   };
 
   const del = async (id: string) => {
@@ -154,6 +171,7 @@ export function FinanceInstallmentsTab({
 
   return (
     <>
+      {collectionMessage && <p role="status" className="text-sm text-slate-700 dark:text-slate-200 p-2">{collectionMessage}</p>}
       <div className="glass-card p-3" style={{ borderTop: '3px solid #22C55E' }}>
         <div className="flex items-center justify-between">
           <div>
@@ -215,8 +233,8 @@ export function FinanceInstallmentsTab({
                 </div>
                 <div className="prog-track h-2 mb-2"><div className="prog-fill" style={{ width: `${progress}%`, background: '#22C55E' }} /></div>
                 {balance > 0 && inst.status === 'active' && (
-                  <button onClick={() => recordPayment(inst)} className="w-full py-2 rounded-xl bg-green-500 text-white text-xs font-bold flex items-center justify-center gap-1">
-                    <CheckCircle2 size={14} /> ثبت وصول اتمیک قسط ({fmtToman(Number(inst.monthly_amount))} ت)
+                  <button disabled={collecting} onClick={() => recordPayment(inst)} className="w-full py-2 rounded-xl bg-green-500 text-white text-xs font-bold flex items-center justify-center gap-1">
+                    <CheckCircle2 size={14} /> ثبت وصول قسط ({fmtToman(Number(inst.monthly_amount))} ت)
                   </button>
                 )}
               </div>
