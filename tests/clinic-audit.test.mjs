@@ -777,7 +777,7 @@ describe('Phase 11 [TRC-MINA-IOS27-V2-9011-K]: V2 Viewport-Based No-Scroll Home,
   const root = process.cwd();
   const read = (rel) => readProjectFileWithShellModules(root, rel);
 
-  test('35. IOS27-OVERRIDE.fa.md lock & Strict No-Scroll Home Screen Caps (4 Indicators, 4 Services, 1 Summary, 1 Priority, 1 Conditional Next Appointment)', () => {
+  test('35. IOS27-OVERRIDE.fa.md lock & Strict No-Scroll Home Screen Caps (4 Indicators, 8 Services (4 per page), 1 Summary, 1 Priority, 1 Conditional Next Appointment)', () => {
     const overrideDoc = read('IOS27-OVERRIDE.fa.md');
     const dashSrc = read('src/features/dashboard/DashboardPage.tsx');
     const useDashSrc = read('src/features/dashboard/useDashboard.ts');
@@ -798,7 +798,9 @@ describe('Phase 11 [TRC-MINA-IOS27-V2-9011-K]: V2 Viewport-Based No-Scroll Home,
     assert.ok(dashSrc.includes('data-testid="no_scroll_home_viewport"'), 'DashboardPage must mark no_scroll_home_viewport');
     assert.ok(dashSrc.includes('<SmartBrief') && read('src/features/dashboard/SmartBrief.tsx').includes('data-testid="dashboard_smart_summary"'), 'Dashboard must render single Smart Summary');
     assert.ok(dashSrc.includes('<PriorityAction') && read('src/features/dashboard/PriorityAction.tsx').includes('data-testid="dashboard_priority_action"'), 'Dashboard must render single Priority Action');
-    assert.ok(useDashSrc.includes('selectedServices.slice(0, 4)') && favSrc.includes('selectedServices.slice(0, 4)'), 'Dashboard must strictly cap home selected services at 4');
+    assert.ok(dashSrc.includes('data-home-cap-services="8"') && favSrc.includes('selectedServices.slice(0, HOME_SERVICES_LIMIT)') && favSrc.includes('HOME_SERVICES_PAGE_SIZE'), 'Dashboard caps favorites at eight, four per page');
+    assert.ok(favSrc.includes('canAccessRoute(userRole, secId)') && useDashSrc.includes('userRole: effectiveRole'), 'Favorite routes must respect effective authorization');
+    assert.ok(favSrc.includes('snap-x snap-mandatory') && favSrc.includes('dir="rtl"') && favSrc.includes('scrollIntoView'), 'Favorite rail must support RTL swipe and explicit page navigation');
     assert.ok(favSrc.includes('home_open_all_services_btn') && favSrc.includes("onNavigate('services')"), 'FavoriteModules must link to independent services screen');
     assert.ok(dashSrc.includes('<QuickActionsRow') && dashSrc.includes('ResizeObserver') && dashSrc.includes('showPriorityAlert'), 'Dashboard must include 5 Quick Actions and dynamically gate PriorityAction via ResizeObserver fit (FIX 06)');
     assert.ok(dashSrc.includes('const priorityVisible = metrics.priorityAction.urgent || showPriorityAlert;'), 'Urgent actions must remain visible regardless of measured viewport height');
@@ -1299,9 +1301,9 @@ describe('Phase 14 [TRC-MINA-THIRD-AUDIT-9014-N]: Third Audit Final Correction (
 
     // FIX 05: Pure 3-column QBank Service Launcher + dedicated CustomizeServicesPage
     assert.ok(servicesSrc.includes('grid-cols-3') && servicesSrc.includes('services_search_input') && servicesSrc.includes('services_bottom_back_btn') && servicesSrc.includes('canAccessRoute('), 'AllServicesScreen must render RBAC-filtered 3-column grid with sticky bottom search and Back button');
-    assert.ok(customizerSrc.includes('customize_services_page') && customizerSrc.includes('services_home_customizer'), 'CustomizeServicesPage must provide dedicated 4-favorite selector & drag-and-drop reorder');
+    assert.ok(customizerSrc.includes('customize_services_page') && customizerSrc.includes('services_home_customizer'), 'CustomizeServicesPage must provide dedicated favorite selector & drag-and-drop reorder');
 
-    // FIX 06: Final Home layout (Smart Clinic Overview + 5 Quick Actions + 4 QBankTiles + ResizeObserver PriorityAction, no CompactKPIGrid)
+    // FIX 06: Final Home layout (Smart Clinic Overview + 5 Quick Actions + 8 home shortcuts (4 per page) + ResizeObserver PriorityAction, no CompactKPIGrid)
     assert.ok(quickSrc.includes('DASHBOARD_QUICK_ACTIONS') && quickSrc.includes('new_appointment') && quickSrc.includes('new_patient') && quickSrc.includes('receive_payment') && quickSrc.includes('reminders') && quickSrc.includes('search'), 'QuickActionsRow must expose all 5 clinic quick actions');
     assert.ok(dashSrc.includes('<QuickActionsRow') && dashSrc.includes('data-home-fits-viewport') && !dashSrc.includes('CompactKPIGrid'), 'DashboardPage must render QuickActionsRow and measure viewport fit without CompactKPIGrid');
 
