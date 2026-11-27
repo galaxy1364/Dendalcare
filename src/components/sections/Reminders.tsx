@@ -365,7 +365,7 @@ export function Reminders() {
 
   useEffect(() => {
     if (rules.autoPilotEnabled && liveAlerts.length > 0 && reminders.length === 0) {
-      syncLiveAlertsToDatabaseReminders(liveAlerts, reminders).then(() => refresh());
+      void handleSyncToDatabase();
     }
   }, [rules.autoPilotEnabled, liveAlerts.length]);
 
