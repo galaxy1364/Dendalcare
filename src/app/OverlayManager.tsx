@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import { useFocusTrap } from '@/platform/focusEngine';
 import {
   Archive,
   BellRing,
@@ -110,6 +111,12 @@ export function OverlayManager() {
   } = useClinicShell();
 
   const { navigate } = useNavigation();
+  const shortcutsDialogRef = useRef<HTMLDivElement>(null);
+  const workflowDialogRef = useRef<HTMLDivElement>(null);
+  const shortcutsTitleId = useId();
+  const workflowTitleId = useId();
+  useFocusTrap(shortcutsDialogRef, shortcutsOpen, { onEscape: () => setShortcutsOpen(false) });
+  useFocusTrap(workflowDialogRef, Boolean(smartWorkflowPopup), { onEscape: () => setSmartWorkflowPopup(null) });
 
   const [addingNewUser, setAddingNewUser] = useState(false);
   const [newUserForm, setNewUserForm] = useState({
@@ -145,19 +152,24 @@ export function OverlayManager() {
           onClick={() => setShortcutsOpen(false)}
         >
           <div
-            className="w-full max-w-lg bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] shadow-2xl rounded-[20px] p-4 animate-scale-in text-[#14283B] dark:text-[#F1F5F9]"
+            ref={shortcutsDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={shortcutsTitleId}
+            tabIndex={-1}
+            className="w-full max-w-lg max-h-[calc(100dvh-5rem)] overflow-y-auto bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] shadow-2xl rounded-[20px] p-4 animate-scale-in text-[#14283B] dark:text-[#F1F5F9]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Keyboard size={17} className="text-[#087C76]" />
-                <h3 className="text-sm font-bold">کلیدهای میانبر سریع کلینیک</h3>
+                <h3 id={shortcutsTitleId} className="text-sm font-bold">کلیدهای میانبر سریع کلینیک</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShortcutsOpen(false)}
                 aria-label="بستن راهنمای کلیدها"
-                className="w-10 h-10 rounded-[12px] bg-[#EEF3F7] dark:bg-[#162738] border border-[#D8E2EA] dark:border-[#25394D] flex items-center justify-center"
+                className="w-12 h-12 rounded-[12px] bg-[#EEF3F7] dark:bg-[#162738] border border-[#D8E2EA] dark:border-[#25394D] flex items-center justify-center"
               >
                 <X size={16} />
               </button>
@@ -173,7 +185,8 @@ export function OverlayManager() {
                 { key: 'F7', desc: 'پرونده ایمپلنت' },
                 { key: 'F8', desc: 'سفارشات لابراتوار' },
                 { key: 'F9', desc: 'تقویم دائمی فارسی' },
-                { key: 'Esc', desc: 'بستن پنجره‌ها' },
+                { key: 'Ctrl/⌘+K', desc: 'جستجوی سریع' },
+                { key: 'Esc', desc: 'بستن پنجره فعال' },
               ].map((sc) => (
                 <div
                   key={sc.key}
@@ -201,7 +214,7 @@ export function OverlayManager() {
                 className="w-full min-h-[44px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-[12px] bg-[#087C76] hover:bg-[#065A56] text-white text-xs font-bold shadow-sm active:scale-95"
               >
                 <Download size={15} />
-                دانلود فایل پشتیبان آفلاین کلینیک (JSON)
+                خروجی یادآوری‌ها و پیام‌ها (JSON)
               </button>
             </div>
           </div>
@@ -983,7 +996,7 @@ export function OverlayManager() {
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#142E43]/60 animate-fade-in"
           data-testid="smart_workflow_popup"
         >
-          <div className="w-full max-w-md rounded-[24px] bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] shadow-2xl overflow-hidden animate-scale-in">
+          <div ref={workflowDialogRef} role="dialog" aria-modal="true" aria-labelledby={workflowTitleId} tabIndex={-1} className="w-full max-w-md max-h-[calc(100dvh-2rem)] rounded-[24px] bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] shadow-2xl overflow-y-auto animate-scale-in">
             <div
               className="p-4 text-white flex items-start justify-between gap-3"
               style={{
@@ -996,7 +1009,7 @@ export function OverlayManager() {
                   <BellRing size={11} />
                   {smartWorkflowPopup.targetRolesLabel}
                 </span>
-                <h3 className="text-sm font-bold leading-snug">{smartWorkflowPopup.title}</h3>
+                <h3 id={workflowTitleId} className="text-sm font-bold leading-snug">{smartWorkflowPopup.title}</h3>
                 <p className="text-[11px] text-white/85 leading-relaxed">
                   {smartWorkflowPopup.subtitle}
                 </p>
@@ -1006,7 +1019,7 @@ export function OverlayManager() {
                 onClick={() => setSmartWorkflowPopup(null)}
                 aria-label="بستن پنجره اطلاع‌رسانی"
                 data-testid="smart_workflow_popup_close"
-                className="w-9 h-9 rounded-[10px] bg-white/15 hover:bg-white/25 flex items-center justify-center shrink-0"
+                className="w-12 h-12 rounded-[10px] bg-white/15 hover:bg-white/25 flex items-center justify-center shrink-0"
               >
                 <X size={16} />
               </button>
