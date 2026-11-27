@@ -254,9 +254,9 @@ export async function postPatientPaymentCommand(
           replaySafe,
         });
         return {
-          resolution: 'queued',
+          resolution: replaySafe ? 'queued' : 'unknown',
           ok: false,
-          errorCode: 'OFFLINE_QUEUED_UNCONFIRMED',
+          errorCode: replaySafe ? 'OFFLINE_QUEUED_UNCONFIRMED' : 'PENDING_PAYMENT_RECONCILIATION_REQUIRED',
           messageFa: replaySafe ? 'اتصال اینترنت برقرار نیست؛ پیش‌نویس پرداخت در صف آفلاین ذخیره شد و تا همگام‌سازی جزء وصول تاییدشده نیست.' : 'وضعیت پرداخت تأیید نشده است؛ درخواست برای تطبیق نگهداری شد و خودکار ارسال مجدد نمی‌شود.',
           data: {
             amountToman: parsedAmount.amount,
@@ -328,9 +328,9 @@ export async function postPatientPaymentCommand(
         replaySafe,
       });
       return {
-        resolution: 'queued',
+        resolution: replaySafe ? 'queued' : 'unknown',
         ok: false,
-        errorCode: 'OFFLINE_QUEUED_UNCONFIRMED',
+        errorCode: replaySafe ? 'OFFLINE_QUEUED_UNCONFIRMED' : 'PENDING_PAYMENT_RECONCILIATION_REQUIRED',
         messageFa: replaySafe ? 'دستگاه آفلاین است؛ پیش‌نویس در صف همگام‌سازی ذخیره شد (تایید نشده).' : 'وضعیت پرداخت تأیید نشده است؛ درخواست برای تطبیق نگهداری شد و خودکار ارسال مجدد نمی‌شود.',
       };
     }
