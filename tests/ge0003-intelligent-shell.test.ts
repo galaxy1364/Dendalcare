@@ -38,6 +38,19 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0024D: release review guards hidden workflow dialogs and incomplete finance', () => {
+      const overlay = fs.readFileSync(path.join(ROOT, 'src/app/OverlayManager.tsx'), 'utf8');
+      const reminders = fs.readFileSync(path.join(ROOT, 'src/components/sections/Reminders.tsx'), 'utf8');
+      const hub = fs.readFileSync(path.join(ROOT, 'src/features/patients/PatientDetailHub.tsx'), 'utf8');
+      const patients = fs.readFileSync(path.join(ROOT, 'src/components/sections/Patients.tsx'), 'utf8');
+      assert(overlay.includes('useFocusTrap(workflowDialogRef, showWorkflowDialog') && overlay.includes('{showWorkflowDialog && smartWorkflowPopup && ('), 'Workflow render and focus ownership must agree');
+      assert(overlay.includes('![userModalOpen, projectFolderOpen, callerIdOpen, shortcutsOpen, roadmapModalOpen, installModalOpen, notifOpen, qbankMenuOpen].some(Boolean)'), 'Workflow defers to known active overlays');
+      assert(reminders.includes('void handleSyncToDatabase();') && !reminders.includes('syncLiveAlertsToDatabaseReminders(liveAlerts, reminders).then('), 'Autopilot shares guarded sync handler');
+      for (const tab of ['payments', 'installments', 'checks', 'safteh']) {
+        assert(hub.includes("financialReady && tab === '" + tab + "'"), 'Incomplete financial tab must not render: ' + tab);
+      }
+      assert(patients.includes('open={printOpen && canViewFinance && financialReady}') && hub.includes('canViewFinance && financialReady && <button onClick={onOpenPrint}'), 'Invoice printing requires complete financial inputs');
+    }),
     await runCase('GE-0023A: shared design primitives consume semantic platform and theme tokens', () => {
       const appearance = fs.readFileSync(path.join(ROOT, 'src/design-system/themes/appearance.ts'), 'utf8');
       const surfaces = fs.readFileSync(path.join(ROOT, 'src/design-system/primitives/Surface.tsx'), 'utf8');
