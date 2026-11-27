@@ -1,5 +1,12 @@
 # Gemini / Google AI Studio project instructions
 
+## Mandatory owner gate — Architecture First (2026-11-27)
+- Before any new module feature or detail work, complete and obtain explicit owner approval of the shared UI/UX architecture: coherent design tokens, reusable primitives, adaptive phone/tablet/desktop shell, RTL navigation, layout, typography, spacing, color/contrast, accessibility, interactions, motion and living-tooth states.
+- Preserve existing clinical and financial improvements. Until this gate is signed off, only architecture foundation work and necessary safety/security/regression repairs are permitted. Do not resume module-by-module feature expansion merely because CI is green.
+- Acceptance requires documented visual and functional evidence across the target viewport/device matrix, light/dark, RTL, keyboard, reduced motion, safe areas, text scaling and error/loading/empty/offline states, plus passing relevant CI. Clearly separate real device evidence from browser simulation; no unsupported native-platform claims.
+- Record the owner-approved acceptance in Issue #4 and the roadmap before lifting this gate. This instruction applies across sessions and to every engineering agent. It is a documented engineering rule, not an automatically enforced branch protection.
+
+
 Before editing Dendalcare, read and follow [AGENTS.md](AGENTS.md) and the [V12 handoff](docs/architecture/V12-development-coordination.md). These rules apply to every task and supersede ad-hoc conflicting implementation requests. Read the latest coordination issue at https://github.com/galaxy1364/Dendalcare/issues/4. Stop if another writer is active or local changes cannot be safely synchronized. Never assume an external action was performed without evidence.
 
 ## Persistent project context
