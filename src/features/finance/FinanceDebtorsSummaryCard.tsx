@@ -23,6 +23,7 @@ export function FinanceDebtorsOverview({
   leadDaysBefore,
   onChangeLeadDays,
   syncingReminders,
+  remindersReady,
   syncResultMsg,
   onSyncReminders,
 }: {
@@ -34,6 +35,7 @@ export function FinanceDebtorsOverview({
   leadDaysBefore: number;
   onChangeLeadDays: (d: number) => void;
   syncingReminders: boolean;
+  remindersReady: boolean;
   syncResultMsg: string | null;
   onSyncReminders: () => void;
 }) {
@@ -50,9 +52,9 @@ export function FinanceDebtorsOverview({
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-900 text-[10px] font-extrabold mb-1">
               <ShieldAlert size={11} className="text-emerald-700" />
-              <span>مرکز کنترل مطالبات قطعی مطب • واحد رسمی: تومان</span>
+              <span>مرکز کنترل مطالبات مطب • تومان</span>
             </div>
-            <p className="text-xs font-semibold text-slate-600">کل مطالبات و بدهی‌های تاییدشده بیماران</p>
+            <p className="text-xs font-semibold text-slate-600">مانده مطالبات بر اساس اطلاعات دریافت‌شده</p>
             <p className="text-2xl font-black text-slate-900 tracking-tight mt-0.5 tabular-nums" data-testid="finance_total_receivables">
               {fmtToman(summary.totalReceivables)} <span className="text-xs font-bold text-emerald-700">تومان</span>
             </p>
@@ -68,7 +70,7 @@ export function FinanceDebtorsOverview({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-emerald-200/70">
+        <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2 pt-2 border-t border-emerald-200/70">
           <div className="bg-white border border-rose-200 rounded-xl p-2">
             <p className="text-[9px] text-rose-800 font-bold">بدهی باز بدون چک/قسط</p>
             <p className="text-xs font-black text-slate-900 mt-0.5 tabular-nums">{fmtToman(summary.totalUncovered)} ت</p>
@@ -83,20 +85,34 @@ export function FinanceDebtorsOverview({
           </div>
         </div>
 
-        <div className="mt-2 pt-2 border-t border-emerald-200/60 flex items-center justify-between gap-1 text-[9.5px] overflow-x-auto no-scrollbar">
-          <span className="px-2 py-0.5 rounded-lg bg-white border border-emerald-100 text-slate-700 whitespace-nowrap">جاری: <b>{fmtToman(summary.aging.current)}</b></span>
-          <span className="px-2 py-0.5 rounded-lg bg-white border border-amber-100 text-amber-800 whitespace-nowrap">۱-۳۰ روز: <b>{fmtToman(summary.aging.days_1_30)}</b></span>
-          <span className="px-2 py-0.5 rounded-lg bg-white border border-orange-100 text-orange-800 whitespace-nowrap">۳۱-۶۰ روز: <b>{fmtToman(summary.aging.days_31_60)}</b></span>
-          <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-rose-800 whitespace-nowrap">+۶۱ روز: <b>{fmtToman(summary.aging.days_61_90 + summary.aging.over_90)}</b></span>
-        </div>
+        <section aria-label="تحلیل سن مطالبات بر اساس نزدیک‌ترین سررسید بیمار" className="mt-3 pt-3 border-t border-emerald-200/60 space-y-2">
+          <h3 className="text-sm font-bold text-slate-800">سن مطالبات</h3>
+          <p className="text-xs text-slate-600">برآورد بر اساس نزدیک‌ترین سررسید هر بیمار؛ نه سن تک‌تک فاکتورها.</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" data-testid="finance_aging_buckets">
+            {[
+              { label: 'جاری', amount: summary.aging.current },
+              { label: '۱ تا ۳۰ روز', amount: summary.aging.days_1_30 },
+              { label: '۳۱ تا ۶۰ روز', amount: summary.aging.days_31_60 },
+              { label: '۶۱ تا ۹۰ روز', amount: summary.aging.days_61_90 },
+              { label: 'بیش از ۹۰ روز', amount: summary.aging.over_90 },
+              { label: 'بدون سررسید', amount: summary.aging.unscheduledDueDateAmount },
+            ].map(bucket => (
+              <div key={bucket.label} className="min-w-0 rounded-xl border border-slate-200 bg-white p-2">
+                <p className="text-xs text-slate-600">{bucket.label}</p>
+                <p className="text-sm font-bold tabular-nums break-words text-slate-900">{fmtToman(bucket.amount)} <span className="text-xs">ت</span></p>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
 
       {(arPriorities.length > 0 || anomalies.length > 0) && (
         <div className="glass-card p-3 border border-indigo-200/70">
           <button
             onClick={onToggleAuditDrawer}
+            aria-expanded={showAuditDrawer}
             data-testid="finance_ai_audit_toggle"
-            className="w-full flex items-center justify-between text-xs font-extrabold text-indigo-900"
+            className="w-full min-h-[48px] flex items-center justify-between gap-2 text-sm font-extrabold text-indigo-900"
           >
             <span className="flex items-center gap-1.5">
               <Sparkles size={15} className="text-indigo-600" />
@@ -131,8 +147,8 @@ export function FinanceDebtorsOverview({
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center"><BellRing size={16} /></div>
             <div>
-              <h3 className="text-xs font-extrabold text-gray-800">سیستم یادآور هوشمند مالی (بدون تکرار)</h3>
-              <p className="text-[10px] text-gray-500">محافظت حریم خصوصی در اعلان صفحه قفل + کلید یکتای هر سررسید</p>
+              <h3 className="text-xs font-extrabold text-gray-800">یادآور هوشمند مالی</h3>
+              <p className="text-[10px] text-gray-500">بررسی یادآورهای موجود پیش از ثبت</p>
             </div>
           </div>
           <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
@@ -149,12 +165,12 @@ export function FinanceDebtorsOverview({
         </div>
         <button
           onClick={onSyncReminders}
-          disabled={syncingReminders}
+          disabled={syncingReminders || !remindersReady}
           data-testid="sync_smart_finance_reminders_button"
           className="w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
         >
           <Sparkles size={15} />
-          {syncingReminders ? 'در حال ثبت یادآورها...' : `تولید یادآور چک، قسط و بدهی (${leadDaysBefore.toLocaleString('fa-IR')} روز قبل)`}
+          {!remindersReady ? 'در انتظار اطلاعات به‌روز یادآورها' : syncingReminders ? 'در حال ثبت یادآورها...' : `تولید یادآور چک، قسط و بدهی (${leadDaysBefore.toLocaleString('fa-IR')} روز قبل)`}
         </button>
         {syncResultMsg && (
           <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] flex items-center gap-1.5">

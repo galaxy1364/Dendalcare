@@ -12,12 +12,14 @@ import { useViewportMetrics } from '@/platform/safeArea';
 import { PlatformHapticAdapter } from '@/platform/haptics';
 import { getActiveClinicUser } from '@/lib/cloudSyncEngine';
 import { ACTIVE_TENANT_ID, getActiveBranchId } from '@/services/authentication/authService';
+import { useClinicShell } from '@/app/AppProviders';
 import { useNavigation } from '@/navigation/NavigationStack';
 import { useDashboardDataSources } from './dashboard.service';
 import { computeDashboardMetrics } from './dashboard.metrics';
 
 export function useDashboard() {
   const sources = useDashboardDataSources();
+  const { effectiveRole } = useClinicShell();
   const appearance = useAppearanceSettings();
   const viewport = useViewportMetrics();
   const { navigate } = useNavigation();
@@ -121,13 +123,13 @@ export function useDashboard() {
     sources,
     status: sources.status,
     refreshAll: sources.refreshAll,
-    selectedServices: selectedServices.slice(0, 4),
+    selectedServices,
     draggingIndex,
     setDraggingIndex,
     handleReorderDrop,
     handleMoveToFirst,
     showNextAppointmentCard,
     navigate,
-    userRole: activeUser.role,
+    userRole: effectiveRole,
   };
 }

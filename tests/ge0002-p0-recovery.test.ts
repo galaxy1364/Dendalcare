@@ -665,7 +665,12 @@ export async function runAllGe0002P0RecoveryTests(): Promise<Ge0002TestResult[]>
     const dock = readWorkspaceFile('src/navigation/FloatingDock.tsx');
     assert.ok(dock.includes('min-h-[58px]'), 'FloatingDock primary bar must align at 58px height');
     assert.ok(dock.includes('w-[58px] h-[58px]'), 'dock_more_button must match 58px circular geometry');
-    assert.ok(dock.includes('env(safe-area-inset-bottom'), 'FloatingDock must respect bottom safe-area inset');
+    const insetCss = readWorkspaceFile('src/index.css');
+    const shellLayout = readWorkspaceFile('src/app/AppShell.tsx');
+    const rootInsets = insetCss.match(/\.app-shell-viewport\s*\{([^}]+)\}/)?.[1] ?? '';
+    assert.ok(rootInsets.includes('padding-bottom: var(--safe-bottom);') && insetCss.includes('--safe-bottom: env(safe-area-inset-bottom, 0px);'), 'Root shell must own the physical bottom safe-area inset');
+    assert.ok(shellLayout.indexOf('app-shell-viewport relative') >= 0 && shellLayout.indexOf('app-shell-viewport relative') < shellLayout.indexOf('<FloatingDock'), 'FloatingDock must remain inside safe-area-owning shell');
+    assert.ok(!dock.includes('env(safe-area-inset-bottom'), 'Dock must not double-apply root-owned bottom inset');
 
     const settings = readWorkspaceFile('src/components/sections/SettingsSection.tsx');
     assert.ok(settings.includes('useClinicShell()'), 'SettingsSection must use authoritative AppProviders branch/role context');

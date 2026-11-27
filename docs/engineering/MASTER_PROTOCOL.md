@@ -1,10 +1,17 @@
 # MinaDental — protected engineering baseline
 
+## Mandatory owner gate — Architecture First (2026-11-27)
+- Before any new module feature or detail work, complete and obtain explicit owner approval of the shared UI/UX architecture: coherent design tokens, reusable primitives, adaptive phone/tablet/desktop shell, RTL navigation, layout, typography, spacing, color/contrast, accessibility, interactions, motion and living-tooth states.
+- Preserve existing clinical and financial improvements. Until this gate is signed off, only architecture foundation work and necessary safety/security/regression repairs are permitted. Do not resume module-by-module feature expansion merely because CI is green.
+- Acceptance requires documented visual and functional evidence across the target viewport/device matrix, light/dark, RTL, keyboard, reduced motion, safe areas, text scaling and error/loading/empty/offline states, plus passing relevant CI. Clearly separate real device evidence from browser simulation; no unsupported native-platform claims.
+- Record the owner-approved acceptance in Issue #4 and the roadmap before lifting this gate. This instruction applies across sessions and to every engineering agent. It is a documented engineering rule, not an automatically enforced branch protection.
+
+
 Canonical repository: galaxy1364/Dendalcare. Coordination: https://github.com/galaxy1364/Dendalcare/issues/4.
 
 ## Non-negotiable rules
 - Before any write, read AGENTS.md, GEMINI.md, this protocol, current main and the latest coordination record. Verify actual SHA, PR state, CI and release evidence; do not treat an AI Studio preview as canonical.
-- One writer at a time. ChatGPT owns the active GE-0015 branch until explicit release of the role. Gemini is read-only unless the owner assigns a new scope in the coordination record. Preserve/export unsynced AI Studio work before switching. Never push main, force-push or merge stale branches blindly.
+- One writer at a time. Current owner-authorized assignment: ChatGPT is the sole implementation writer for Architecture First on `feat/ge0019-adaptive-shell` (PR #17). Gemini is READ-ONLY; the old AI Studio snapshot must not sync or push. Latest Issue #4 supersedes earlier GE-0024 writer assignment. Follow [GE-0024 execution handoff](GE-0024-architecture-first-execution-handoff.md). At each phase boundary report real evidence for owner review; no main, merge, deploy, DB or signing changes. Latest Issue #4 governs writer ownership. Preserve/export unsynced AI Studio work before switching. Never push main, force-push or merge stale branches blindly.
 - Changes use isolated branches, reviewed PRs and passing required CI. Never remove or weaken tests/security to obtain a green check. Record exact head/base and live evidence. Repository rulesets/branch protection must be configured and independently verified by an administrator; these documents do not enforce a lock.
 - Preserve release fixes GE-0010 through GE-0014 (PRs #6–#9): monotonic sequence, version parity, pinned Gradle 9.3.1 compatible with AGP, real APK assembly, fail-closed apksigner verification, SHA-256 and version-specific release archives. Never replace the existing Android upload key or expose secrets. Stable APKs must not use debug signing. Never overwrite historical archives.
 - Shared source identity for Web/PWA, APK/AAB, future iOS/iPadOS and Windows. Apple signing/provisioning and AAB/IPA/MSIX are not yet verified production capabilities. Do not label web launchers or profiles as native binaries. Web update ECDSA signing is still pending independent verification; HTTPS/SHA-256 alone is not a signed manifest.

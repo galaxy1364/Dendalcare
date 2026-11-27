@@ -1,7 +1,7 @@
 import { BellRing, CalendarPlus, Search, UserPlus, Wallet } from 'lucide-react';
 import { PlatformHapticAdapter } from '@/platform/haptics';
 import { canAccessRoute } from '@/services/permissions/accessControl';
-import type { ClinicUserRole } from '@/lib/cloudSyncEngine';
+import type { EffectiveClinicRole } from '@/services/permissions/accessControl';
 import type { AppRouteId } from '@/lib/navigationStack';
 import type { DeepLinkPayload } from '@/navigation/DeepLinkHandler';
 
@@ -77,7 +77,7 @@ function renderQuickActionIcon(id: DashboardQuickActionItem['id'], color: string
 }
 
 interface QuickActionsRowProps {
-  userRole: ClinicUserRole;
+  userRole: EffectiveClinicRole;
   onNavigate: (route: AppRouteId, deepLink?: Omit<DeepLinkPayload, 'section'>) => void;
 }
 

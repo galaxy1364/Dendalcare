@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 const FOCUSABLE_SELECTOR = [
   'a[href]',
@@ -12,11 +12,16 @@ const FOCUSABLE_SELECTOR = [
 // Track stacked modal traps so only the topmost open overlay intercepts Escape/Tab
 const activeModalStack: symbol[] = [];
 
+export function hasActiveModalFocusTrap(): boolean {
+  return activeModalStack.length > 0;
+}
+
 export function getFocusableElements(container: HTMLElement | null): HTMLElement[] {
   if (!container) return [];
   const nodes = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
   return nodes.filter((el) => {
-    if (el.getAttribute('aria-hidden') === 'true') return false;
+    if (el.closest('[aria-hidden="true"], [inert], [hidden]')) return false;
+    if (el.tabIndex < 0 || el.getClientRects().length === 0) return false;
     const style = typeof window !== 'undefined' ? window.getComputedStyle(el) : null;
     if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
     return true;
@@ -41,6 +46,8 @@ export function useFocusTrap(
   options: FocusTrapOptions = {}
 ): void {
   const { onEscape, initialFocusRef, restoreFocus = true } = options;
+  const escapeRef = useRef(onEscape);
+  escapeRef.current = onEscape;
 
   useEffect(() => {
     if (!active || typeof document === 'undefined') return;
@@ -50,13 +57,14 @@ export function useFocusTrap(
     const previouslyFocused = document.activeElement as HTMLElement | null;
 
     const rafId = requestAnimationFrame(() => {
+      if (activeModalStack[activeModalStack.length - 1] !== token) return;
       if (initialFocusRef?.current) {
         initialFocusRef.current.focus({ preventScroll: true });
         return;
       }
       const focusables = getFocusableElements(containerRef.current);
-      if (focusables.length > 0 && !containerRef.current?.contains(document.activeElement)) {
-        focusables[0].focus({ preventScroll: true });
+      if (!containerRef.current?.contains(document.activeElement)) {
+        (focusables[0] ?? containerRef.current)?.focus({ preventScroll: true });
       }
     });
 
@@ -64,16 +72,20 @@ export function useFocusTrap(
       // Only topmost modal in stack processes Escape/Tab trapping
       if (activeModalStack[activeModalStack.length - 1] !== token) return;
 
-      if (e.key === 'Escape' && onEscape) {
+      if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        onEscape();
+        escapeRef.current?.();
         return;
       }
 
       if (e.key === 'Tab') {
         const focusables = getFocusableElements(containerRef.current);
-        if (focusables.length === 0) return;
+        if (focusables.length === 0) {
+          e.preventDefault();
+          containerRef.current?.focus({ preventScroll: true });
+          return;
+        }
 
         const first = focusables[0];
         const last = focusables[focusables.length - 1];
@@ -98,18 +110,20 @@ export function useFocusTrap(
     return () => {
       cancelAnimationFrame(rafId);
       window.removeEventListener('keydown', handleKeyDown, true);
+      const wasTop = activeModalStack[activeModalStack.length - 1] === token;
       const idx = activeModalStack.lastIndexOf(token);
       if (idx !== -1) activeModalStack.splice(idx, 1);
 
-      if (restoreFocus && previouslyFocused && typeof previouslyFocused.focus === 'function') {
+      const remainingTop = activeModalStack[activeModalStack.length - 1];
+      if (wasTop && restoreFocus && previouslyFocused && typeof previouslyFocused.focus === 'function') {
         requestAnimationFrame(() => {
-          if (document.contains(previouslyFocused)) {
+          if (activeModalStack[activeModalStack.length - 1] === remainingTop && document.contains(previouslyFocused)) {
             previouslyFocused.focus({ preventScroll: true });
           }
         });
       }
     };
-  }, [active, containerRef, initialFocusRef, onEscape, restoreFocus]);
+  }, [active, containerRef, initialFocusRef, restoreFocus]);
 }
 
 /**

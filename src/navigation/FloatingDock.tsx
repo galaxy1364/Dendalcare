@@ -97,7 +97,7 @@ export function FloatingDock({
     <nav
       aria-label="ناوبری اصلی پایین"
       data-testid="floating_bottom_dock"
-      className="shrink-0 z-30 md:hidden pl-[max(0.375rem,env(safe-area-inset-left))] pr-[max(0.375rem,env(safe-area-inset-right))] sm:px-2.5 pt-1 pb-[max(0.45rem,env(safe-area-inset-bottom))]"
+      className="shrink-0 z-30 md:hidden shell-content-gutter pt-1 pb-1.5"
     >
       <div className="w-full max-w-2xl mx-auto flex items-center gap-1.5 sm:gap-2 min-w-0" dir="rtl">
         {/* Main 4-Destination Role-Aware QBank Pill Bar */}

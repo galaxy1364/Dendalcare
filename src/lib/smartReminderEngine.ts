@@ -12,6 +12,7 @@ import {
   type Safteh,
 } from '@/lib/supabase';
 import { toJalaliStr, todayGregorian } from '@/lib/jalali';
+import { getMutationOutcome } from '@/lib/supabaseGuardian';
 
 export interface SmartReminderRules {
   checkLeadDays: number;
@@ -440,9 +441,13 @@ export async function syncLiveAlertsToDatabaseReminders(
 ): Promise<number> {
   const today = todayGregorian();
   let insertedCount = 0;
+  let unconfirmedCount = 0;
+  const attempted = new Set<string>();
 
   for (const alert of liveAlerts) {
     const refTag = buildReminderReferenceTag(alert.id);
+    if (attempted.has(refTag)) continue;
+    attempted.add(refTag);
     const exists = existingReminders.some((r) => {
       if (r.status !== 'pending') return false;
       if (r.description && r.description.includes(refTag)) return true;
@@ -476,7 +481,7 @@ export async function syncLiveAlertsToDatabaseReminders(
 
     const targetDate = alert.dueDate < today ? today : alert.dueDate;
 
-    const { error } = await supabase.from('reminders').insert({
+    const result = await supabase.from('reminders').insert({
       patient_id: alert.patientId,
       title: alert.title,
       description: `${alert.subtitle} ${refTag}`,
@@ -487,8 +492,10 @@ export async function syncLiveAlertsToDatabaseReminders(
       status: 'pending',
     });
 
-    if (!error) insertedCount++;
+    if (getMutationOutcome(result) === 'confirmed' && 'serverConfirmed' in result && result.serverConfirmed === true) insertedCount++;
+    else unconfirmedCount++;
   }
 
+  if (unconfirmedCount > 0) throw new Error('REMINDER_SYNC_UNCONFIRMED');
   return insertedCount;
 }

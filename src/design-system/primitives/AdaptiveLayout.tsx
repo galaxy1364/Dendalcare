@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { MascotTooth, type MascotMood } from '@/components/ui/MascotTooth';
 import { handleRovingToolbarKeyDown } from '@/platform/focusEngine';
+import { CardSurface, TouchButton } from './Surface';
 
 export interface AdaptiveGridProps {
   children: ReactNode;
@@ -38,7 +39,7 @@ export function AdaptiveGrid({
   return (
     <div
       data-testid={testId}
-      className={`grid ${GRID_CLASS_MAP[columns]} gap-[var(--md-density-row-gap,10px)] ${className}`}
+      className={`grid min-w-0 ${GRID_CLASS_MAP[columns]} gap-[var(--md-density-row-gap,10px)] ${className}`}
     >
       {children}
     </div>
@@ -68,13 +69,13 @@ export function AdaptiveSplitView({
   return (
     <div
       data-testid={testId}
-      className={`grid grid-cols-1 ${
+      className={`grid min-w-0 grid-cols-1 ${
         hasDetail ? 'lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]' : ''
       } gap-[var(--md-density-section-gap,12px)] items-start ${className}`}
     >
       <div className="min-w-0">{primary}</div>
       {hasDetail && detail && (
-        <aside className="min-w-0 lg:sticky lg:top-2 rounded-[22px] bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] p-[var(--md-density-card-pad,14px)] shadow-sm">
+        <aside className="min-w-0 lg:sticky lg:top-2 rounded-[var(--radius-card,20px)] bg-[var(--md-surface)] border border-[var(--md-border)] p-[var(--md-density-card-pad,14px)] shadow-sm">
           {detail}
         </aside>
       )}
@@ -114,10 +115,10 @@ export function UnifiedStateView({
   testId,
 }: UnifiedStateViewProps) {
   return (
-    <div
+    <CardSurface
       data-testid={testId || `unified_state_${kind}`}
       role={kind === 'error' || kind === 'unauthorized' ? 'alert' : 'status'}
-      className="flex flex-col items-center justify-center text-center py-8 px-5 rounded-[24px] bg-white dark:bg-[#11202E] border border-[#D8E2EA] dark:border-[#25394D] shadow-sm animate-fade-in"
+      className="flex flex-col items-center justify-center text-center py-8 px-5 motion-safe:animate-fade-in"
     >
       <div className="mb-3">
         <MascotTooth mood={STATE_MASCOT_MOOD[kind]} size={56} interactive={false} />
@@ -127,26 +128,25 @@ export function UnifiedStateView({
         {kind === 'loading' && <Loader2 size={16} className="animate-spin text-indigo-600 dark:text-indigo-400" />}
         {kind === 'error' && <ShieldAlert size={16} className="text-rose-600 dark:text-rose-400" />}
         {kind === 'offline' && <CloudOff size={16} className="text-amber-600 dark:text-amber-400" />}
-        <h3 className="text-sm font-black text-[#14283B] dark:text-[#F1F5F9]">{title}</h3>
+        <h3 className="text-base font-bold text-[var(--md-text)]">{title}</h3>
       </div>
 
       {subtitle && (
-        <p className="text-xs font-medium text-[#526779] dark:text-[#9FB1C1] max-w-sm leading-relaxed">
+        <p className="text-sm font-medium text-[var(--md-secondary)] max-w-sm leading-relaxed break-words">
           {subtitle}
         </p>
       )}
 
       {actionLabel && onAction && (
-        <button
-          type="button"
+        <TouchButton
           onClick={onAction}
-          className="mt-4 min-h-[44px] px-4 py-2 rounded-2xl bg-[#087C76] hover:bg-[#066560] text-white text-xs font-extrabold inline-flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform"
+          className="mt-4 text-sm"
         >
           <RefreshCw size={14} />
           <span>{actionLabel}</span>
-        </button>
+        </TouchButton>
       )}
-    </div>
+    </CardSurface>
   );
 }
 
@@ -188,7 +188,7 @@ export function ContextualToolbar({
       aria-label={`ابزارهای سریع ${sectionLabel}`}
       data-testid="smart_contextual_toolbar"
       onKeyDown={(e) => handleRovingToolbarKeyDown(e)}
-      className="rounded-[18px] bg-white/95 dark:bg-[#11202E]/95 border border-[#D8E2EA] dark:border-[#25394D] px-2.5 py-1.5 flex items-center justify-between gap-2 shadow-xs"
+      className="rounded-[var(--radius-card,20px)] bg-[var(--md-surface)] border border-[var(--md-border)] px-2.5 py-1.5 flex items-center justify-between gap-2 min-w-0 shadow-sm"
     >
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 py-0.5">
         {actions.map((action) => (
@@ -197,7 +197,7 @@ export function ContextualToolbar({
             type="button"
             data-testid={`contextual_action_${action.id}`}
             onClick={action.onClick}
-            className="min-h-[36px] px-2.5 py-1 rounded-[12px] bg-[#F4F7F9] dark:bg-[#162738] hover:bg-[#E7EFF5] dark:hover:bg-[#1E3348] border border-[#D8E2EA] dark:border-[#25394D] text-[#14283B] dark:text-[#F1F5F9] text-[11px] font-extrabold whitespace-nowrap inline-flex items-center gap-1.5 shrink-0 transition-colors active:scale-95"
+            className="min-h-[48px] px-2.5 py-1 rounded-[var(--radius-btn,12px)] bg-[var(--md-muted-surface)] border border-[var(--md-border)] text-[var(--md-text)] text-xs font-extrabold whitespace-nowrap inline-flex items-center gap-1.5 shrink-0 transition-colors active:scale-95"
           >
             <span
               className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0"
@@ -224,7 +224,7 @@ export function ContextualToolbar({
             ? `${offlineQueueCount} مورد در صف همگام‌سازی`
             : 'همگام‌سازی ابری متصل'
         }
-        className={`min-h-[34px] px-2.5 py-1 rounded-full text-[10px] font-black inline-flex items-center gap-1 shrink-0 border transition-colors ${
+        className={`min-h-[48px] px-2.5 py-1 rounded-full text-[10px] font-black inline-flex items-center gap-1 shrink-0 border transition-colors ${
           !isOnline
             ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300'
             : offlineQueueCount > 0

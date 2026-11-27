@@ -7,6 +7,9 @@ import {
 } from '@/design-system/themes/appearance';
 import { normalizePersianDigits } from '@/design-system/primitives/FormEngine';
 import { readViewportMetrics } from '@/platform/safeArea';
+import { HOME_SERVICES_LIMIT, HOME_SERVICES_PAGE_SIZE, normalizeSelectedHomeServices, reorderSelectedHomeServices, loadSelectedHomeServices, saveSelectedHomeServices } from '@/lib/navigationStack';
+import { canAccessRoute } from '@/services/permissions/accessControl';
+import { getRecordedPatientFileNo, matchesPatientDirectoryQuery, preparePatientFileNotes, findVisiblePatientIdentityConflict } from '@/features/patients/patientDirectorySearch';
 
 export interface Ge0003TestResult {
   name: string;
@@ -35,6 +38,126 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0023A: shared design primitives consume semantic platform and theme tokens', () => {
+      const appearance = fs.readFileSync(path.join(ROOT, 'src/design-system/themes/appearance.ts'), 'utf8');
+      const surfaces = fs.readFileSync(path.join(ROOT, 'src/design-system/primitives/Surface.tsx'), 'utf8');
+      const layout = fs.readFileSync(path.join(ROOT, 'src/design-system/primitives/AdaptiveLayout.tsx'), 'utf8');
+      for (const token of ['--md-muted-surface', '--md-on-primary', '--md-on-critical', '--md-on-navy']) {
+        assert(appearance.includes(token) && surfaces.includes(token), 'Theme and surface must share ' + token);
+      }
+      assert(surfaces.includes('var(--radius-card,20px)') && surfaces.includes('var(--radius-btn,12px)'), 'Platform geometry is shared');
+      assert(surfaces.includes('min-h-[48px] min-w-[48px]') && surfaces.includes('focus-visible:outline-offset-2'), 'Shared controls retain accessible target and focus');
+      assert(layout.includes('<CardSurface') && layout.includes('<TouchButton') && layout.includes('grid min-w-0'), 'State and layout primitives reuse common surfaces without overflow');
+    }),
+    await runCase('GE-0022A: reminder financial shortcuts never bypass ledger and sync requires server confirmation', () => {
+      const page = fs.readFileSync(path.join(ROOT, 'src/components/sections/Reminders.tsx'), 'utf8');
+      const engine = fs.readFileSync(path.join(ROOT, 'src/lib/smartReminderEngine.ts'), 'utf8');
+      assert(!page.includes("supabase.from('checks').update") && !page.includes("supabase.from('installments').update"), 'Reminder cards must not modify financial state directly');
+      assert(page.includes("canAccessRoute(effectiveRole, 'finance')") && page.includes("emitGlobalFocus({ section: 'finance', subTab })"), 'Financial shortcuts navigate only with permission');
+      assert(page.includes('if (scanLock.current) return;') && page.includes('scanLock.current = false'), 'Prevent simultaneous scans in one view');
+      assert(engine.includes('attempted.has(refTag)') && engine.includes('attempted.add(refTag)'), 'Same-run duplicate alerts must be skipped');
+      assert(engine.includes("getMutationOutcome(result) === 'confirmed' && 'serverConfirmed' in result && result.serverConfirmed === true") && engine.includes('REMINDER_SYNC_UNCONFIRMED'), 'Queued or failed insert must never count as confirmed');
+    }),
+    await runCase('GE-0021D: receivables dashboard withholds incomplete totals and prevents new actions', () => {
+      const root = fs.readFileSync(path.join(ROOT, 'src/components/sections/Finance.tsx'), 'utf8');
+      const tab = fs.readFileSync(path.join(ROOT, 'src/features/finance/FinanceDebtorsTab.tsx'), 'utf8');
+      const overview = fs.readFileSync(path.join(ROOT, 'src/features/finance/FinanceDebtorsSummaryCard.tsx'), 'utf8');
+      assert(root.includes('!read.isStale && !read.truncated') && root.includes('transactionsRead].every(completeRead)'), 'Fresh complete inputs required');
+      assert(tab.includes('{receivablesReady && <>') && tab.includes('finance_incomplete_reads'), 'No provisional zero totals');
+      assert(tab.includes('if (!remindersReady || syncingReminders) return;') && tab.includes('if (!receivablesReady) { setQuickPayError'), 'No new financial actions on incomplete inputs');
+      assert(tab.includes('saving={savingQuickPay || !receivablesReady}') && tab.includes('finance: transactions'), 'Quick pay disabled without fresh data and anomalies use treasury records');
+      assert(overview.includes('summary.aging.unscheduledDueDateAmount') && overview.includes('summary.aging.over_90'), 'Aging must show unscheduled and oldest balances');
+      assert(overview.includes('disabled={syncingReminders || !remindersReady}'), 'Reminder action requires ready inputs');
+    }),
+    await runCase('GE-0021B: both installment collection surfaces require confirmed receipt before advancing schedule', () => {
+      for (const [file, action] of [
+        ['src/features/finance/FinanceInstallmentsTab.tsx', 'recordPayment'],
+        ['src/features/patients/PatientFinanceAndSpecialtyTabs.tsx', 'payInstallment'],
+      ]) {
+        const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
+        const start = source.indexOf('const ' + action + ' = async');
+        const end = source.indexOf('const del =', start);
+        assert(start >= 0 && end > start, 'Installment action must exist');
+        const body = source.slice(start, end);
+        const lock = body.indexOf('collectionLock.current = true');
+        const rpc = body.indexOf('await postPatientPaymentCommand');
+        const guard = body.indexOf("if (!payRes.ok || payRes.resolution !== 'confirmed')");
+        const write = body.indexOf("await supabase.from('installments').update");
+        assert(lock >= 0 && lock < rpc && rpc < guard && guard < write, 'Lock and confirmed receipt gate must precede schedule write');
+        assert(body.slice(guard, write).includes('return;'), 'Unconfirmed receipt must exit before schedule write');
+        assert(body.includes(".eq('paid_months', inst.paid_months)"), 'Follow-up write must compare prior schedule version');
+        assert(body.includes("getMutationOutcome(updated) !== 'confirmed'") && body.includes('وجه را دوباره ثبت نکنید'), 'Partial result requires reconciliation rather than success');
+        assert(body.includes('finally') && body.includes('collectionLock.current = false'), 'Lock must be released even on failure');
+      }
+    }),
+    await runCase('GE-0021A: financial directory and record summaries use shared ledger and reject incomplete reads', () => {
+      const list = fs.readFileSync(path.join(ROOT, 'src/components/sections/Patients.tsx'), 'utf8');
+      const detail = fs.readFileSync(path.join(ROOT, 'src/features/patients/PatientDetailHub.tsx'), 'utf8');
+      assert(list.includes('computePatientFinancialLedger({ patient, treatments, payments, installments, checks, safteh })'), 'Directory must reuse ledger');
+      assert(!list.includes('balance = totalCost - totalPaid'), 'No competing raw balance arithmetic');
+      assert(list.includes("canAccessRoute(effectiveRole, 'finance')") && list.includes('!read.isStale && !read.truncated'), 'Role and freshness gates');
+      assert(list.includes('if (!financialReady) return;') && list.includes('مانده حساب نامشخص'), 'Partial or unauthorized financial export and false zero must be prevented');
+      assert(detail.includes('canViewFinance || !financialTabs.includes(t.id)') && detail.includes('!canViewFinance && financialTabs.includes(requestedTab)'), 'Denied financial tabs must not render, including selected tab after role change');
+      assert(detail.includes('canViewFinance && (financialReady ?') && detail.includes('اطلاعات مالی کامل و به‌روز در دسترس نیست.'), 'Unknown financial summary must not render as zero');
+    }),
+    await runCase('GE-0020C: explicit file references and visible duplicate identity checks', () => {
+      const record = { id: 'synthetic-1', first_name: 'آزمایشی', last_name: 'الف', phone: null, national_id: '۰۰۱۲۳۴۵۶۷۸', notes: '[پرونده: ۴۲۱۷]', insurance_number: '999' };
+      const prepared = preparePatientFileNotes('4217', 'یادداشت');
+      assert(prepared.ok && prepared.notes === '[پرونده: 4217] یادداشت', 'Explicit reference encoded separately');
+      const blank = preparePatientFileNotes('', 'یادداشت');
+      assert(blank.ok && blank.notes === 'یادداشت', 'Blank reference does not invent identity');
+      assert(!preparePatientFileNotes('12]', '').ok && !preparePatientFileNotes('12', '[پرونده: 99]').ok, 'Reject ambiguous tags');
+      assert(findVisiblePatientIdentityConflict([record], { fileNo: '4217' }) === 'file', 'Digit-normalized duplicate file reference');
+      assert(findVisiblePatientIdentityConflict([record], { nationalId: '0012345678' }) === 'national_id', 'Digit-normalized duplicate national ID');
+      assert(findVisiblePatientIdentityConflict([record], { fileNo: '4217' }, record.id) === null, 'Exclude own record during edit');
+      assert(findVisiblePatientIdentityConflict([record], { fileNo: '999' }) === null, 'Insurance is not a file reference');
+    }),
+    await runCase('GE-0020B: patient workspace is adaptive and retains keyboard navigation and identity boundaries', () => {
+      const detail = fs.readFileSync(path.join(ROOT, 'src/features/patients/PatientDetailHub.tsx'), 'utf8');
+      const list = fs.readFileSync(path.join(ROOT, 'src/components/sections/Patients.tsx'), 'utf8');
+      const sheet = fs.readFileSync(path.join(ROOT, 'src/components/ui/Sheet.tsx'), 'utf8');
+      assert(sheet.includes("layout = 'form'") && sheet.includes("layout === 'workspace' ? 'max-w-7xl' : 'max-w-2xl'"), 'Wide workspace must be opt-in, ordinary forms unchanged');
+      assert(list.includes('<Sheet layout="workspace" open={!!detailPatient}') && list.includes('key={detailPatient.id}'), 'Patient selection must remount workspace for the selected identity');
+      assert(detail.includes('patient_record_adaptive_layout') && detail.includes('lg:flex-col') && detail.includes('minmax(0,1fr)'), 'Wide record must have navigation and flexible content panes');
+      assert(detail.includes('aria-current={tab === t.id') && detail.includes('min-h-[48px]'), 'Record navigation must expose current section and touch targets');
+      assert(list.includes('aria-expanded={isExpanded}') && list.includes("e.key === 'Enter'"), 'Patient cards must support keyboard and expansion semantics');
+    }),
+    await runCase('GE-0020A: patient search normalizes Persian/Arabic scripts without fabricating file IDs', () => {
+      const patient = { first_name: 'علي', last_name: 'كريمي', phone: '۰۹۱۲-۱۲۳۴۵۶۷', national_id: '۰۰۱۲۳۴۵۶۷۸', notes: '[پرونده: ۴۲۱۷] synthetic', insurance_number: '555999' };
+      assert(getRecordedPatientFileNo(patient) === '۴۲۱۷', 'Recorded file number remains unchanged');
+      for (const query of ['علی کریمی', 'کریمی علی', '09121234567', '٠٩١٢١٢٣٤٥٦٧', '4217', '۰۰۱۲۳۴۵۶۷۸']) {
+        assert(matchesPatientDirectoryQuery(patient, query), 'Normalized search must match: ' + query);
+      }
+      const unnumbered = { ...patient, notes: null };
+      assert(getRecordedPatientFileNo(unnumbered) === null, 'Missing reference must remain missing');
+      assert(!matchesPatientDirectoryQuery(unnumbered, '1001'), 'Never match fabricated list-position number');
+      assert(!matchesPatientDirectoryQuery(unnumbered, '555999'), 'Insurance number is not a file number');
+      assert(!matchesPatientDirectoryQuery(patient, 'نام نامرتبط'), 'Unrelated patient must not match');
+    }),
+    await runCase('GE-0019B: eight favorites preserve legacy order and cap, with role-aware visibility', () => {
+      assert(HOME_SERVICES_LIMIT === 8 && HOME_SERVICES_PAGE_SIZE === 4, 'Eight favorites, four per page');
+      const ids = normalizeSelectedHomeServices(['patients', 'finance', 'patients', 'invalid', 'appointments', 'lab', 'implants', 'inventory', 'reminders', 'messages', 'staff']);
+      assert(ids.length === 8 && ids[0] === 'patients' && ids[1] === 'finance' && !ids.includes('staff'), 'Valid unique cap and order');
+      assert(normalizeSelectedHomeServices(['patients']).length === 1, 'Intentional short list persists');
+      assert(reorderSelectedHomeServices(ids, 7, 0)[0] === 'messages', 'Reordering must retain all eight positions');
+      assert(ids.filter(id => canAccessRoute('assistant', id)).every(id => id !== 'finance'), 'Assistant must not see finance shortcuts');
+      assert(ids.filter(id => canAccessRoute('unauthorized', id)).length === 0, 'Unauthorized role has no shortcuts');
+      const entries = new Map([['minadental_home_selected_services_v2', JSON.stringify(['finance', 'patients', 'lab', 'appointments'])]]);
+      const oldWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+      const oldStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+      try {
+        Object.defineProperty(globalThis, 'window', { configurable: true, value: { dispatchEvent: () => true } });
+        Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (key: string) => entries.get(key) ?? null, setItem: (key: string, value: string) => entries.set(key, value) } });
+        const migrated = loadSelectedHomeServices();
+        assert(migrated.length === 8 && migrated.slice(0, 4).join(',') === 'finance,patients,lab,appointments', 'Legacy four selections retained at front');
+        saveSelectedHomeServices(['patients']);
+        assert(loadSelectedHomeServices().join(',') === 'patients', 'New preferences take precedence');
+        assert(entries.get('minadental_home_selected_services_v2') === JSON.stringify(['finance', 'patients', 'lab', 'appointments']), 'Legacy preferences untouched');
+      } finally {
+        if (oldWindow) Object.defineProperty(globalThis, 'window', oldWindow); else Reflect.deleteProperty(globalThis, 'window');
+        if (oldStorage) Object.defineProperty(globalThis, 'localStorage', oldStorage); else Reflect.deleteProperty(globalThis, 'localStorage');
+      }
+    }),
     await runCase('GE-0003 #1: Dead duplicate navigation files (BottomDock, DesktopSidebar) are removed', () => {
       assert(!fs.existsSync(path.join(ROOT, 'src/components/BottomDock.tsx')), 'BottomDock.tsx must be deleted');
       assert(!fs.existsSync(path.join(ROOT, 'src/components/DesktopSidebar.tsx')), 'DesktopSidebar.tsx must be deleted');
