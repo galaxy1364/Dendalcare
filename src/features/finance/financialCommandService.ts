@@ -257,7 +257,7 @@ export async function postPatientPaymentCommand(
           resolution: 'queued',
           ok: false,
           errorCode: 'OFFLINE_QUEUED_UNCONFIRMED',
-          messageFa: 'اتصال اینترنت برقرار نیست؛ پیش‌نویس پرداخت در صف آفلاین ذخیره شد و تا همگام‌سازی جزء وصول تاییدشده نیست.',
+          messageFa: replaySafe ? 'اتصال اینترنت برقرار نیست؛ پیش‌نویس پرداخت در صف آفلاین ذخیره شد و تا همگام‌سازی جزء وصول تاییدشده نیست.' : 'وضعیت پرداخت تأیید نشده است؛ درخواست برای تطبیق نگهداری شد و خودکار ارسال مجدد نمی‌شود.',
           data: {
             amountToman: parsedAmount.amount,
             allocatedAmountToman: allocTotal,
@@ -331,7 +331,7 @@ export async function postPatientPaymentCommand(
         resolution: 'queued',
         ok: false,
         errorCode: 'OFFLINE_QUEUED_UNCONFIRMED',
-        messageFa: 'دستگاه آفلاین است؛ پیش‌نویس در صف همگام‌سازی ذخیره شد (تایید نشده).',
+        messageFa: replaySafe ? 'دستگاه آفلاین است؛ پیش‌نویس در صف همگام‌سازی ذخیره شد (تایید نشده).' : 'وضعیت پرداخت تأیید نشده است؛ درخواست برای تطبیق نگهداری شد و خودکار ارسال مجدد نمی‌شود.',
       };
     }
     return {
