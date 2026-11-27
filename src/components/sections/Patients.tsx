@@ -39,25 +39,25 @@ import { getRecordedPatientFileNo, matchesPatientDirectoryQuery, findVisiblePati
 export function Patients() {
   const { effectiveRole } = useClinicShell();
   const canViewFinance = canAccessRoute(effectiveRole, 'finance');
-  const patientsRead = useRealtimeTable<Patient>('patients');
+  const patientsRead = useRealtimeTable<Patient>('patients', undefined, null, { fetchAllPages: true });
   const { data: patients, refresh } = patientsRead;
   const { data: appointments } = useRealtimeTable<Appointment>('appointments');
-  const treatmentsRead = useRealtimeTable<Treatment>('treatments');
+  const treatmentsRead = useRealtimeTable<Treatment>('treatments', undefined, null, { fetchAllPages: true });
   const { data: treatments } = treatmentsRead;
-  const paymentsRead = useRealtimeTable<Payment>('payments');
+  const paymentsRead = useRealtimeTable<Payment>('payments', undefined, null, { fetchAllPages: true });
   const { data: payments } = paymentsRead;
   const { data: labOrders } = useRealtimeTable<LabOrder>('lab_orders');
   const { data: implants } = useRealtimeTable<Implant>('implants');
   const { data: reminders } = useRealtimeTable<Reminder>('reminders');
-  const installmentsRead = useRealtimeTable<Installment>('installments');
+  const installmentsRead = useRealtimeTable<Installment>('installments', undefined, null, { fetchAllPages: true });
   const { data: installments } = installmentsRead;
-  const checksRead = useRealtimeTable<CheckType>('checks');
+  const checksRead = useRealtimeTable<CheckType>('checks', undefined, null, { fetchAllPages: true });
   const { data: checks } = checksRead;
-  const saftehRead = useRealtimeTable<Safteh>('safteh');
+  const saftehRead = useRealtimeTable<Safteh>('safteh', undefined, null, { fetchAllPages: true });
   const { data: safteh } = saftehRead;
 
   const financialReady = canViewFinance && [patientsRead, treatmentsRead, paymentsRead, installmentsRead, checksRead, saftehRead].every(read =>
-    (read.status === 'ready' || read.status === 'empty') && !read.loading && !read.isStale && !read.truncated
+    (read.status === 'ready' || read.status === 'empty') && !read.loading && !read.isStale && !read.truncated && read.serverComplete
   );
   const ledgers = useMemo(() => financialReady ? new Map(patients.map(patient => [
     patient.id, computePatientFinancialLedger({ patient, treatments, payments, installments, checks, safteh }),
