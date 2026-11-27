@@ -641,7 +641,11 @@ describe('Phase 9 [TRC-MINA-XPLAT-9009-I]: 4-Platform Engine (iPhone/Android/iPa
     assert.ok(!dashSrc.includes('dashboard_active_ui_libs_strip') && !dashSrc.includes('dashboard_module_phase_roadmap'), 'Dashboard must remain 100% pure clinical UI');
     assert.ok(kpiSrc.includes('dashboard_global_kpi_strip') && reportsSrc.includes('reports_morning_huddle') && allServicesSrc.includes('all_services_screen'), 'CompactKPIGrid + Morning Huddle live in ReportsPage and AllServicesScreen is a pure launcher');
 
-    assert.ok(patientsSrc.includes('getPatientFileNo') && patientsSrc.includes('insurance_number') && patientsSrc.includes('expandedCardId') && patientsSrc.includes('searchOpen'), 'Patients must support sliding chip bar, animated search lens, collapsible cards, and editable patient file number');
+    const patientSearchSrc = read('src/features/patients/patientDirectorySearch.ts');
+    const patientFormSrc = read('src/features/patients/PatientClinicalTabs.tsx');
+    assert.ok(patientsSrc.includes('getRecordedPatientFileNo(patient)') && patientsSrc.includes('matchesPatientDirectoryQuery(patient, search)') && patientsSrc.includes('expandedCardId') && patientsSrc.includes('searchOpen'), 'Patients must support collapsible cards, normalized search and recorded file references');
+    assert.ok(patientSearchSrc.includes('normalizePatientQuery') && patientSearchSrc.includes('patient.notes?.match') && !patientSearchSrc.includes('1001 +') && !patientSearchSrc.includes('patient.insurance_number'), 'Directory file identity must not be fabricated from list position or insurance number');
+    assert.ok(patientFormSrc.includes('شماره پرونده (دستی/اتوماتیک)') && patientFormSrc.includes('setFileNo(e.target.value)') && patientFormSrc.includes('شماره بیمه'), 'Patient form must retain editable file number and insurance field');
     assert.ok(treatmentsSrc.includes('PalmerChart') && treatmentsSrc.includes('TreatmentForm') && treatmentsSrc.includes('searchOpen'), 'Treatments must implement authentic Palmer Notation dental chart and treatment form');
     assert.ok(labSrc.includes('loadLaboratories') && labSrc.includes('expandedId') && labSrc.includes('searchOpen'), 'Lab must support fixed/removable laboratory definitions, chip filter, and collapsible stage timeline');
     assert.ok(implantsSrc.includes('loadImplantBrands') && implantsSrc.includes('osseointegration_date') && implantsSrc.includes('abutment_date') && implantsSrc.includes('crown_date'), 'Implants must track full multi-stage implant timeline with dates and reminders');
