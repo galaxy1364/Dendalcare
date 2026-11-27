@@ -840,6 +840,12 @@ describe('Phase 11 [TRC-MINA-IOS27-V2-9011-K]: V2 Viewport-Based No-Scroll Home,
     }
     assert.ok(hapticsSrc.includes('AndroidBridge') && hapticsSrc.includes('performHaptic'), 'platform/haptics.ts must invoke AndroidBridge.performHaptic');
     assert.ok(ktSrc.includes('class AndroidHapticBridge') && ktSrc.includes('@JavascriptInterface') && ktSrc.includes('fun performHaptic') && ktSrc.includes('"AndroidBridge"'), 'DentalCareWebView.kt must register native AndroidHapticBridge');
+    for (const setting of ['allowFileAccess', 'allowFileAccessFromFileURLs', 'allowUniversalAccessFromFileURLs']) {
+      assert.ok(ktSrc.includes(setting + ' = false'), setting + ' must be disabled');
+      assert.ok(!ktSrc.includes(setting + ' = true'), setting + ' must not be re-enabled');
+    }
+    assert.ok(ktSrc.includes('WebSettings.MIXED_CONTENT_NEVER_ALLOW'), 'WebView must reject mixed content');
+    assert.ok(!ktSrc.includes('WebSettings.MIXED_CONTENT_ALWAYS_ALLOW'), 'WebView must not permit mixed content globally');
     assert.ok(ktSrc.includes('Build.VERSION.SDK_INT >= Build.VERSION_CODES.R'), 'AndroidHapticBridge must guard API 30+ CONFIRM/REJECT constants behind SDK_INT >= R');
     assert.ok(guardianSrc.includes('export function verifyServerMutation') && guardianSrc.includes('export function getMutationOutcome'), 'supabaseGuardian.ts must export server mutation confirmation helpers');
 

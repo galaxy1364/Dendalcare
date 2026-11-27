@@ -146,8 +146,9 @@ export async function runAllV10ArchitectureTests(): Promise<V10ArchitectureTestR
     assert(unified[1].patientName === 'علی کریمی', 'Patient name resolution mismatch');
     assert(unified[1].urgency === 'critical', 'Urgent priority must map to critical urgency');
     assert(computeNotificationCount(1, 2, 3) === 5, 'computeNotificationCount parity mismatch');
-    assert(computeMascotMood(liveAlerts, 1) === 'sad', 'Mascot mood must be sad on today/critical alert');
-    assert(computeMascotMood([], 0) === 'happy', 'Mascot mood must be happy when clear');
+    assert(computeMascotMood(liveAlerts, 1) === 'neutral', 'Unknown authorization must not imply a verified task state');
+    assert(computeMascotMood(liveAlerts, 1, { isAuthorized: true, isDataReady: true }) === (liveAlerts.some(a => a.urgency === 'critical') ? 'sad' : 'concerned'), 'Verified critical and pending signals must remain distinct');
+    assert(computeMascotMood([], 0, { isAuthorized: true, isDataReady: true }) === 'happy', 'Mascot mood must be happy only when verified clear');
   });
 
   // V10-ARCH-04: Modular Provider Composition in AppProviders Facade

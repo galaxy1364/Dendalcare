@@ -15,6 +15,18 @@ import type {
 } from './types';
 import { readDomRuntimeReleaseIdentity } from './webPwaAdapter';
 
+/** Only official repository APK release URLs may trigger a native browser handoff. */
+export function isOfficialAndroidApkUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    return url.origin === 'https://github.com' &&
+      !url.username && !url.password && !url.search && !url.hash &&
+      /^\/galaxy1364\/Dendalcare\/releases\/download\/android-(?:latest|v\d+\.\d+\.\d+-\d+)\/MinaDental-android\.apk$/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 export interface NativeAndroidBridgeInfo {
   packageName: string;
   versionName: string;
@@ -256,8 +268,14 @@ export class NativePlatformUpdateAdapter implements PlatformUpdateAdapter {
     if (typeof window === 'undefined') return;
     const caps = this.getCapabilities();
     const target = manifest.downloadUrl || caps.storeUrl;
-    if (target && isAllowedReleaseUrl(target)) {
-      window.open(target, '_blank', 'noopener,noreferrer');
+    if (!target || !isAllowedReleaseUrl(target)) return;
+    if (this.platform === 'android' && manifest.downloadUrl) {
+      if (!isOfficialAndroidApkUrl(target)) return;
+      // Bundled Android WebView intercepts same-frame APK navigation and opens
+      // the official HTTPS URL in the system browser; no silent install.
+      window.location.assign(target);
+      return;
     }
+    window.open(target, '_blank', 'noopener,noreferrer');
   }
 }

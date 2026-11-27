@@ -2,7 +2,7 @@
  * MinaDental Zero-Loss Global Reminder & Real Device OS Notification Engine
  * Trace ID: TRC-MINA-QBANK-9008-H / TRC-MINA-XPLAT-9009-I
  *
- * Guarantees 0% lost notifications or reminders via a dual-channel architecture:
+ * Best-effort reminder tracking via a dual-channel architecture:
  * 1. Persistent Zero-Loss Ledger in localStorage (tracks unacknowledged, snoozed, and acknowledged alerts across reloads/offline).
  * 2. Real Device OS Notification Bridge (ServiceWorkerRegistration.showNotification + Web Notification API).
  * 3. Internal iOS 27 Dynamic Island / Live Activity Popup Queue with Snooze (15m / 1h) and Explicit Acknowledgement.
@@ -92,7 +92,7 @@ export async function sendRealDeviceNotification(params: {
   if (Notification.permission !== 'granted') return false;
 
   const options: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {
-    body: params.body,
+    body: 'برای مشاهده جزئیات، وارد برنامه شوید.',
     icon: './icon-192.png',
     badge: './icon-192.png',
     tag: params.tag || `minadental-${Date.now()}`,
@@ -107,7 +107,7 @@ export async function sendRealDeviceNotification(params: {
     if ('serviceWorker' in navigator) {
       const reg = await navigator.serviceWorker.getRegistration();
       if (reg && typeof reg.showNotification === 'function') {
-        await reg.showNotification(params.title, options);
+        await reg.showNotification('مینادنتال — یادآوری کلینیک', options);
         return true;
       }
     }
@@ -116,7 +116,7 @@ export async function sendRealDeviceNotification(params: {
   }
 
   try {
-    new Notification(params.title, options);
+    new Notification('مینادنتال — یادآوری کلینیک', options);
     return true;
   } catch {
     return false;
@@ -143,11 +143,47 @@ function saveSentTags(map: Record<string, string>): void {
 /**
  * Loads the persistent Zero-Loss Notification Ledger from localStorage.
  */
+// Keep only acknowledgement metadata. Never persist alert text or patient/financial details.
+function minimizeLedger(ledger: unknown): Record<string, ZeroLossLedgerEntry> {
+  const result: Record<string, ZeroLossLedgerEntry> = Object.create(null);
+  if (!ledger || typeof ledger !== 'object' || Array.isArray(ledger)) return result;
+  for (const [key, value] of Object.entries(ledger)) {
+    if (!value || typeof value !== 'object') continue;
+    const entry = value as Partial<ZeroLossLedgerEntry>;
+    if (typeof entry.alertId !== 'string' ||
+        typeof entry.firstSeenAt !== 'string' ||
+        typeof entry.lastSurfacedAt !== 'string' ||
+        (entry.status !== 'unacknowledged' && entry.status !== 'snoozed' && entry.status !== 'acknowledged')) continue;
+    result[key] = {
+      alertId: entry.alertId,
+      title: '',
+      subtitle: '',
+      domain: 'general',
+      urgency: 'today',
+      targetSection: 'reminders',
+      firstSeenAt: entry.firstSeenAt,
+      lastSurfacedAt: entry.lastSurfacedAt,
+      status: entry.status,
+      snoozeUntil: typeof entry.snoozeUntil === 'number' && Number.isFinite(entry.snoozeUntil) ? entry.snoozeUntil : undefined,
+      acknowledgedAt: typeof entry.acknowledgedAt === 'string' ? entry.acknowledgedAt : undefined,
+      osDispatched: entry.osDispatched === true,
+    };
+  }
+  return result;
+}
+
 export function loadZeroLossLedger(): Record<string, ZeroLossLedgerEntry> {
   if (typeof window === 'undefined') return {};
   try {
     const raw = localStorage.getItem(ZERO_LOSS_LEDGER_KEY);
-    return raw ? JSON.parse(raw) : {};
+    if (!raw) return Object.create(null);
+    const minimized = minimizeLedger(JSON.parse(raw));
+    const serialized = JSON.stringify(minimized);
+    // In-place migration preserves acknowledgement and snooze state.
+    if (serialized !== raw) {
+      try { localStorage.setItem(ZERO_LOSS_LEDGER_KEY, serialized); } catch { /* storage unavailable */ }
+    }
+    return minimized;
   } catch {
     return {};
   }
@@ -156,7 +192,7 @@ export function loadZeroLossLedger(): Record<string, ZeroLossLedgerEntry> {
 export function saveZeroLossLedger(ledger: Record<string, ZeroLossLedgerEntry>): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(ZERO_LOSS_LEDGER_KEY, JSON.stringify(ledger));
+    localStorage.setItem(ZERO_LOSS_LEDGER_KEY, JSON.stringify(minimizeLedger(ledger)));
   } catch {
     // ignore storage errors
   }
@@ -196,15 +232,11 @@ export function reconcileZeroLossAlerts<
     if (!existing) {
       ledger[key] = {
         alertId: alert.id,
-        title: alert.title,
-        subtitle: alert.subtitle,
-        domain: alert.domain,
-        urgency: alert.urgency,
-        targetSection: alert.targetSection,
-        patientName: alert.patientName,
-        patientPhone: alert.patientPhone,
-        amount: alert.amount,
-        dueDate: alert.dueDate,
+        title: '',
+        subtitle: '',
+        domain: 'general',
+        urgency: 'today',
+        targetSection: 'reminders',
         firstSeenAt: nowIso,
         lastSurfacedAt: nowIso,
         status: 'unacknowledged',
@@ -325,8 +357,8 @@ export async function syncSmartAlertsToDeviceNotifications(
     const dedupKey = `${alert.id}_${todayKey}`;
     if (sent[dedupKey]) continue;
     const ok = await sendRealDeviceNotification({
-      title: `مینادنتال • ${alert.title}`,
-      body: alert.subtitle,
+      title: 'مینادنتال — یادآوری کلینیک',
+      body: 'برای مشاهده جزئیات، وارد برنامه شوید.',
       tag: dedupKey,
       urgent: alert.urgency === 'critical',
     });
