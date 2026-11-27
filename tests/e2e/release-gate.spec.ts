@@ -14,6 +14,7 @@ const VIEWPORT_MATRIX = [
 test.describe('MinaDental V6 Release Gate E2E', () => {
   test('GE-0019C: asymmetric physical insets, narrow RTL chrome and Material touch targets', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
+    await page.addInitScript(() => localStorage.setItem('minadental_appearance_platform_design_v1', 'material'));
     await page.goto('/#/', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
     await page.evaluate(() => {
@@ -21,8 +22,8 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
       root.style.setProperty('--safe-left', '7px');
       root.style.setProperty('--safe-right', '19px');
       root.style.setProperty('--safe-bottom', '23px');
-      root.setAttribute('data-platform-design', 'material');
     });
+    await expect(page.locator('html')).toHaveAttribute('data-platform-design', 'material');
     const shell = page.locator('.app-shell-viewport');
     await expect(shell).toHaveCSS('padding-left', '7px');
     await expect(shell).toHaveCSS('padding-right', '19px');
@@ -53,6 +54,24 @@ test.describe('MinaDental V6 Release Gate E2E', () => {
     expect(layout.header).toBe('wrap');
     expect(layout.overflow).toBe(false);
     expect(layout.headerGutter).toBe(layout.mainGutter);
+  });
+
+  test('GE-0024A: theme focus and browser refresh contract with visual evidence', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => localStorage.setItem('minadental_appearance_theme_v2', 'dark'));
+    await page.goto('/#/', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__minaAppMounted === true, null, { timeout: 12_000 });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    const control = page.getByTestId('topbar_global_search_button');
+    await expect(control).toBeVisible();
+    await page.keyboard.press('Tab');
+    await control.focus();
+    await expect(control).toHaveCSS('outline-color', 'rgb(45, 212, 191)');
+    const refreshNotIntercepted = await page.evaluate(() =>
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F5', cancelable: true, bubbles: true }))
+    );
+    expect(refreshNotIntercepted).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('ge0024a-dark-focus.png'), animations: 'disabled' });
   });
 
   test('cold & warm boot + reload reach SHELL_READY with valid window.__minaBuildId and zero 404/syntax errors', async ({ page }) => {
