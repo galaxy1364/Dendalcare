@@ -72,6 +72,8 @@ jobs:
           path: |
             test-results/**/ge0024a-dark-focus.png
             test-results/**/viewport-*.png
+            test-results/**/ge0004-evidence/dashboard-*.png
+            test-results/**/ge0004-evidence/settings-*.png
           if-no-files-found: ignore
           retention-days: 14
 
