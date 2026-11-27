@@ -801,6 +801,9 @@ describe('Phase 11 [TRC-MINA-IOS27-V2-9011-K]: V2 Viewport-Based No-Scroll Home,
     assert.ok(useDashSrc.includes('selectedServices.slice(0, 4)') && favSrc.includes('selectedServices.slice(0, 4)'), 'Dashboard must strictly cap home selected services at 4');
     assert.ok(favSrc.includes('home_open_all_services_btn') && favSrc.includes("onNavigate('services')"), 'FavoriteModules must link to independent services screen');
     assert.ok(dashSrc.includes('<QuickActionsRow') && dashSrc.includes('ResizeObserver') && dashSrc.includes('showPriorityAlert'), 'Dashboard must include 5 Quick Actions and dynamically gate PriorityAction via ResizeObserver fit (FIX 06)');
+    assert.ok(dashSrc.includes('const priorityVisible = metrics.priorityAction.urgent || showPriorityAlert;'), 'Urgent actions must remain visible regardless of measured viewport height');
+    assert.ok(dashSrc.includes("metrics.priorityAction.urgent ? 'block' : 'hidden lg:block'"), 'Urgent action must precede quick actions on mobile and stay visible on desktop');
+    assert.ok(dashSrc.includes('priorityVisible && !metrics.priorityAction.urgent'), 'Mobile nonurgent slot must not duplicate urgent action');
     assert.ok(!dashSrc.includes('dashboard_morning_huddle_bar') && !dashSrc.includes('dashboard_qbank_slide_banner') && !dashSrc.includes('<CompactKPIGrid'), 'Dashboard must not nest full modules, multi-day lists, or 4-card KPI grid');
 
     assert.ok(cssSrc.includes('.no-scroll-home-shell') && cssSrc.includes('.main-no-scroll-home'), 'index.css must define viewport-fit no-scroll home rules');
