@@ -26,3 +26,7 @@ Official reference sources (reviewed 2026-11-27):
 
 ## Work discipline
 Each PR includes exact base/head, source diff, tests, CI links, limitations, owner handoff and rollback plan. One writer, no main/production/DB changes without authorization, no blind merges. Keep Google AI Studio read-only until explicitly handed off and reconcile unsynced files before changing its source. First candidate GE-0019A is isolated from #16, reconcile before any release.
+
+## GE-0019C — shared adaptive shell foundation
+- Physical safe-area insets are owned once by the root shell and must not swap in RTL. Header, body and dock use shared responsive gutters (8/16/20/24 CSS px); density sets content gaps, existing semantic platform tokens set chrome radius. Header controls wrap at <=359px or large text, instead of reducing hit areas; header target 44 CSS px, Material 48 CSS px (not a native dp/pt certification).
+- Browser regression checks asymmetric insets, 320px RTL header bounds, matching gutters and Material control dimensions. Physical landscape, virtual keyboard, screen readers, native device and visual review still required. This is shell-level migration only, not proof all module components have migrated.
