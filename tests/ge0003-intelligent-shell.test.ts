@@ -7,6 +7,8 @@ import {
 } from '@/design-system/themes/appearance';
 import { normalizePersianDigits } from '@/design-system/primitives/FormEngine';
 import { readViewportMetrics } from '@/platform/safeArea';
+import { HOME_SERVICES_LIMIT, HOME_SERVICES_PAGE_SIZE, normalizeSelectedHomeServices, reorderSelectedHomeServices, loadSelectedHomeServices, saveSelectedHomeServices } from '@/lib/navigationStack';
+import { canAccessRoute } from '@/services/permissions/accessControl';
 
 export interface Ge0003TestResult {
   name: string;
@@ -35,6 +37,30 @@ const ROOT = process.cwd();
 
 export async function runAllGe0003IntelligentShellTests(): Promise<Ge0003TestResult[]> {
   return [
+    await runCase('GE-0019B: eight favorites preserve legacy order and cap, with role-aware visibility', () => {
+      assert(HOME_SERVICES_LIMIT === 8 && HOME_SERVICES_PAGE_SIZE === 4, 'Eight favorites, four per page');
+      const ids = normalizeSelectedHomeServices(['patients', 'finance', 'patients', 'invalid', 'appointments', 'lab', 'implants', 'inventory', 'reminders', 'messages', 'staff']);
+      assert(ids.length === 8 && ids[0] === 'patients' && ids[1] === 'finance' && !ids.includes('staff'), 'Valid unique cap and order');
+      assert(normalizeSelectedHomeServices(['patients']).length === 1, 'Intentional short list persists');
+      assert(reorderSelectedHomeServices(ids, 7, 0)[0] === 'messages', 'Reordering must retain all eight positions');
+      assert(ids.filter(id => canAccessRoute('assistant', id)).every(id => id !== 'finance'), 'Assistant must not see finance shortcuts');
+      assert(ids.filter(id => canAccessRoute('unauthorized', id)).length === 0, 'Unauthorized role has no shortcuts');
+      const entries = new Map([['minadental_home_selected_services_v2', JSON.stringify(['finance', 'patients', 'lab', 'appointments'])]]);
+      const oldWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+      const oldStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+      try {
+        Object.defineProperty(globalThis, 'window', { configurable: true, value: { dispatchEvent: () => true } });
+        Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (key: string) => entries.get(key) ?? null, setItem: (key: string, value: string) => entries.set(key, value) } });
+        const migrated = loadSelectedHomeServices();
+        assert(migrated.length === 8 && migrated.slice(0, 4).join(',') === 'finance,patients,lab,appointments', 'Legacy four selections retained at front');
+        saveSelectedHomeServices(['patients']);
+        assert(loadSelectedHomeServices().join(',') === 'patients', 'New preferences take precedence');
+        assert(entries.get('minadental_home_selected_services_v2') === JSON.stringify(['finance', 'patients', 'lab', 'appointments']), 'Legacy preferences untouched');
+      } finally {
+        if (oldWindow) Object.defineProperty(globalThis, 'window', oldWindow); else Reflect.deleteProperty(globalThis, 'window');
+        if (oldStorage) Object.defineProperty(globalThis, 'localStorage', oldStorage); else Reflect.deleteProperty(globalThis, 'localStorage');
+      }
+    }),
     await runCase('GE-0003 #1: Dead duplicate navigation files (BottomDock, DesktopSidebar) are removed', () => {
       assert(!fs.existsSync(path.join(ROOT, 'src/components/BottomDock.tsx')), 'BottomDock.tsx must be deleted');
       assert(!fs.existsSync(path.join(ROOT, 'src/components/DesktopSidebar.tsx')), 'DesktopSidebar.tsx must be deleted');
