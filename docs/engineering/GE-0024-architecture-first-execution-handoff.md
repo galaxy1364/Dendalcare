@@ -1,6 +1,6 @@
 # GE-0024 — Architecture First execution order and independent review
 
-Owner directive 2026-11-27: ChatGPT = architecture/research/quality authority; Google AI Studio/Gemini = sole implementation writer during delegated scope. User = final visual approval. This is a documented handoff, not an enforced GitHub permission change.
+Owner directive updated 2026-11-27: ChatGPT = sole implementation writer on PR #18 (integration/ge0024-release-candidate), plus architecture/research. Gemini = read-only. Independent review must be performed by a separate reviewer (CodeRabbit or another qualified reviewer named in Issue #4); user = final visual approval. Latest Issue #4 supersedes historical assignments. This is a documented handoff, not an enforced GitHub permission change.
 
 ## Canonical evidence (do not overwrite)
 - Repository galaxy1364/Dendalcare. Main ce63cb6b9ae2108bcc4dcb7bbc0f4a98e00c009e. PR #17 feat/ge0019-adaptive-shell input head 6d1759f94e04f3e4956086a8df3ab3469a7f96cc; subsequent commits are handoff docs. Read latest Issue #4 and exact head again before work.
